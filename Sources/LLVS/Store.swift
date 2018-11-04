@@ -7,45 +7,34 @@
 
 import Foundation
 
-open class Store {
+public final class Store {
+    
+    enum Error: Swift.Error {
+        case attemptToLocateUnversionedValue
+    }
     
     public let rootDirectoryURL: URL
-    
     public let valuesDirectoryURL: URL
     public let versionsDirectoryURL: URL
-    public let viewsDirectoryURL: URL
+    public let filtersDirectoryURL: URL
     
-    private let fileManager = FileManager()
-    private let encoder = JSONEncoder()
-    private let decoder = JSONDecoder()
+    fileprivate let fileManager = FileManager()
+    fileprivate let encoder = JSONEncoder()
+    fileprivate let decoder = JSONDecoder()
     
     public init(rootDirectoryURL: URL) {
         self.rootDirectoryURL = rootDirectoryURL
         self.valuesDirectoryURL = rootDirectoryURL.appendingPathComponent("values")
         self.versionsDirectoryURL = rootDirectoryURL.appendingPathComponent("versions")
-        self.viewsDirectoryURL = rootDirectoryURL.appendingPathComponent("views")
+        self.filtersDirectoryURL = rootDirectoryURL.appendingPathComponent("filters")
         try? fileManager.createDirectory(at: self.rootDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.valuesDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.versionsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
-        try? fileManager.createDirectory(at: self.viewsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
-    }
-        
-    private func createDirectory(_ relativePath: String) {
-        try? fileManager.createDirectory(atPath: relativePath, withIntermediateDirectories: true, attributes: nil)
+        try? fileManager.createDirectory(at: self.filtersDirectoryURL, withIntermediateDirectories: true, attributes: nil)
     }
     
-    private func directoryURL(for identifier: Value.Identifier) -> URL {
-        let identifier = identifier.identifierString
-        let index = identifier.index(identifier.startIndex, offsetBy: 2)
-        let prefix = String(identifier[..<index])
-        let postfix = String(identifier[index...])
-        let directory = valuesDirectoryURL.appendingPathComponent(prefix).appendingPathComponent(postfix)
-        return directory
-    }
-    
-    public func addVersion(includingUpdatedValues values: inout [Value], basedOn predecessors: Version.Predecessors?) throws -> Version {
+    public func addVersion(saving values: inout [Value], basedOn predecessors: Version.Predecessors?) throws -> Version {
         let version = Version(predecessors: predecessors)
-
         values = values.map { value in
             var newValue = value
             newValue.version = version
@@ -56,21 +45,60 @@ open class Store {
             try self.store(value)
         }
         
-        store(version)
+        try store(version)
         
         return version
     }
     
     private func store(_ value: Value) throws {
-        let directoryURL = self.directoryURL(for: value.identifier)
-        let file = directoryURL.appendingPathComponent(value.version!.identifier.identifierString + ".json")
-        try? fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true, attributes: nil)
+        let (dir, file) = try fileSystemLocation(for: value)
+        try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
         let data = try encoder.encode(value)
         try data.write(to: file)
     }
     
-    private func store(_ version: Version) {
-        // TBW
+    private func fileSystemLocation(for value: Value) throws -> (directoryURL: URL, fileURL: URL) {
+        guard let version = value.version else { throw Error.attemptToLocateUnversionedValue }
+        let valueDirectoryURL = itemURL(forRoot: valuesDirectoryURL, name: value.identifier.identifierString)
+        let versionName = version.identifier.identifierString + ".json"
+        let fileURL = itemURL(forRoot: valueDirectoryURL, name: versionName, subDirectoryNameLength: 1)
+        let directoryURL = fileURL.deletingLastPathComponent()
+        return (directoryURL: directoryURL, fileURL: fileURL)
+    }
+    
+    private func store(_ version: Version) throws {
+        let (dir, file) = fileSystemLocation(for: version)
+        try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
+        let data = try encoder.encode(version)
+        try data.write(to: file)
+    }
+    
+    private func fileSystemLocation(for version: Version) -> (directoryURL: URL, fileURL: URL) {
+        let fileURL = itemURL(forRoot: versionsDirectoryURL, name: version.identifier.identifierString)
+        let directoryURL = fileURL.deletingLastPathComponent()
+        return (directoryURL: directoryURL, fileURL: fileURL)
+    }
+}
+
+
+fileprivate extension Store {
+    
+    func createDirectory(_ relativePath: String) {
+        try? fileManager.createDirectory(atPath: relativePath, withIntermediateDirectories: true, attributes: nil)
+    }
+    
+    func itemURL(forRoot rootDirectoryURL: URL, name: String, subDirectoryNameLength: UInt = 2) -> URL {
+        guard name.count > subDirectoryNameLength else {
+            return rootDirectoryURL.appendingPathComponent(name)
+        }
+        
+        // Embed a subdirectory
+        let index = name.index(name.startIndex, offsetBy: Int(subDirectoryNameLength))
+        let prefix = String(name[..<index])
+        let postfix = String(name[index...])
+        let directory = rootDirectoryURL.appendingPathComponent(prefix).appendingPathComponent(postfix)
+        
+        return directory
     }
     
 }
