@@ -7,11 +7,12 @@
 
 import Foundation
 
-public struct Identifier: Codable {
-    public var identifierString: String = UUID().uuidString
-}
-
 public struct Value: Codable {
+    
+    public struct Identifier: StringIdentifiable, Codable {
+        public var identifierString: String = UUID().uuidString
+    }
+    
     var identifier: Identifier
     var version: Version?
     var properties: [String:String] = [:]

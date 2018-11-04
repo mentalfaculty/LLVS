@@ -10,8 +10,11 @@ import Foundation
 open class Store {
     
     public let rootDirectoryURL: URL
+    
     public let valuesDirectoryURL: URL
-    public let snapshotsDirectoryURL: URL
+    public let versionsDirectoryURL: URL
+    public let viewsDirectoryURL: URL
+    
     private let fileManager = FileManager()
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
@@ -19,17 +22,19 @@ open class Store {
     public init(rootDirectoryURL: URL) {
         self.rootDirectoryURL = rootDirectoryURL
         self.valuesDirectoryURL = rootDirectoryURL.appendingPathComponent("values")
-        self.snapshotsDirectoryURL = rootDirectoryURL.appendingPathComponent("snapshots")
+        self.versionsDirectoryURL = rootDirectoryURL.appendingPathComponent("versions")
+        self.viewsDirectoryURL = rootDirectoryURL.appendingPathComponent("views")
         try? fileManager.createDirectory(at: self.rootDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.valuesDirectoryURL, withIntermediateDirectories: true, attributes: nil)
-        try? fileManager.createDirectory(at: self.snapshotsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
+        try? fileManager.createDirectory(at: self.versionsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
+        try? fileManager.createDirectory(at: self.viewsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
     }
         
     private func createDirectory(_ relativePath: String) {
         try? fileManager.createDirectory(atPath: relativePath, withIntermediateDirectories: true, attributes: nil)
     }
     
-    private func directoryURL(for identifier: Identifier) -> URL {
+    private func directoryURL(for identifier: Value.Identifier) -> URL {
         let identifier = identifier.identifierString
         let index = identifier.index(identifier.startIndex, offsetBy: 2)
         let prefix = String(identifier[..<index])
@@ -38,9 +43,9 @@ open class Store {
         return directory
     }
     
-    public func snapshot(_ values: inout [Value], basedOn parentage: (Version, Version?)?) throws -> Version {
-        let version = Version()
-        
+    public func addVersion(includingUpdatedValues values: inout [Value], basedOn predecessors: Version.Predecessors?) throws -> Version {
+        let version = Version(predecessors: predecessors)
+
         values = values.map { value in
             var newValue = value
             newValue.version = version
@@ -51,21 +56,20 @@ open class Store {
             try self.store(value)
         }
         
-        let snap = Snapshot(version: version, parentage: parentage)
-        store(snap)
+        store(version)
         
         return version
     }
     
     private func store(_ value: Value) throws {
         let directoryURL = self.directoryURL(for: value.identifier)
-        let file = directoryURL.appendingPathComponent(value.version!.identifier + ".json")
+        let file = directoryURL.appendingPathComponent(value.version!.identifier.identifierString + ".json")
         try? fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true, attributes: nil)
         let data = try encoder.encode(value)
         try data.write(to: file)
     }
     
-    private func store(_ snapshot: Snapshot) {
+    private func store(_ version: Version) {
         // TBW
     }
     

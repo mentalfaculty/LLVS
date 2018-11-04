@@ -8,10 +8,23 @@
 import Foundation
 
 public struct Version: Codable {
-    public var identifier: String = UUID().uuidString
-}
-
-public struct Snapshot {
-    public var version: Version
-    public var parentage: (Version, Version?)?
+    
+    public struct Identifier: StringIdentifiable, Codable {
+        public var identifierString: String
+        public init(identifierString: String = UUID().uuidString) {
+            self.identifierString = identifierString
+        }
+    }
+    
+    public struct Predecessors: Codable {
+        public var identifierOfFirst: Identifier
+        public var identifierOfSecond: Identifier?
+    }
+    
+    public var identifier: Identifier = .init()
+    public var predecessors: Predecessors?
+    
+    public init(identifier: Identifier = .init(), predecessors: Predecessors? = nil) {
+        
+    }
 }
