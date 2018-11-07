@@ -7,16 +7,16 @@
 
 import Foundation
 
-public struct Version: Codable {
+public struct Version: Codable, Hashable {
     
-    public struct Identifier: StringIdentifiable, Codable {
+    public struct Identifier: StringIdentifiable, Codable, Hashable {
         public var identifierString: String
         public init(identifierString: String = UUID().uuidString) {
             self.identifierString = identifierString
         }
     }
     
-    public struct Predecessors: Codable {
+    public struct Predecessors: Codable, Hashable {
         public var identifierOfFirst: Identifier
         public var identifierOfSecond: Identifier?
     }
@@ -25,6 +25,8 @@ public struct Version: Codable {
     public var predecessors: Predecessors?
     
     public init(identifier: Identifier = .init(), predecessors: Predecessors? = nil) {
-        
+        self.identifier = identifier
+        self.predecessors = predecessors
     }
+    
 }

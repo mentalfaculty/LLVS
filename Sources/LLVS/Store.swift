@@ -33,7 +33,7 @@ public final class Store {
         try? fileManager.createDirectory(at: self.filtersDirectoryURL, withIntermediateDirectories: true, attributes: nil)
     }
     
-    public func addVersion(saving values: inout [Value], basedOn predecessors: Version.Predecessors?) throws -> Version {
+    @discardableResult public func addVersion(basedOn predecessors: Version.Predecessors?, saving values: inout [Value]) throws -> Version {
         let version = Version(predecessors: predecessors)
         values = values.map { value in
             var newValue = value
@@ -82,10 +82,6 @@ public final class Store {
 
 
 fileprivate extension Store {
-    
-    func createDirectory(_ relativePath: String) {
-        try? fileManager.createDirectory(atPath: relativePath, withIntermediateDirectories: true, attributes: nil)
-    }
     
     func itemURL(forRoot rootDirectoryURL: URL, name: String, subDirectoryNameLength: UInt = 2) -> URL {
         guard name.count > subDirectoryNameLength else {

@@ -1,15 +1,33 @@
 import XCTest
+import Foundation
 @testable import LLVS
 
 final class StoreSetupTests: XCTestCase {
-    func testExample() {
-        // This is an example of a functional test case.
-        // Use XCTAssert and related functions to verify your tests produce the correct
-        // results.
-        XCTAssertEqual("Blah", "Hello, World!")
+    
+    var store: Store!
+    var rootURL: URL!
+    
+    override func setUp() {
+        super.setUp()
+        rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        store = Store(rootDirectoryURL: rootURL)
+    }
+    
+    override func tearDown() {
+        try? FileManager.default.removeItem(at: rootURL)
+        super.tearDown()
+    }
+    
+    func testStoreCreatesDirectories() {
+        let fm = FileManager.default
+        let root = rootURL.path as NSString
+        XCTAssert(fm.fileExists(atPath: root as String))
+        XCTAssert(fm.fileExists(atPath: root.appendingPathComponent("versions")))
+        XCTAssert(fm.fileExists(atPath: root.appendingPathComponent("values")))
+        XCTAssert(fm.fileExists(atPath: root.appendingPathComponent("filters")))
     }
 
     static var allTests = [
-        ("testExample", testExample),
+        ("testStoreCreatesDirectories", testStoreCreatesDirectories),
     ]
 }
