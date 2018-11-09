@@ -57,10 +57,21 @@ public final class Store {
         try data.write(to: file)
     }
     
+    internal func fetchValue(identifiedBy valueIdentifier: Value.Identifier, savedAtVersionIdentifiedBy versionIdentifier: Version.Identifier) throws -> Value? {
+        let (_, file) = try fileSystemLocation(for: valueIdentifier, atVersionIdentifiedBy: versionIdentifier)
+        guard let data = try? Data(contentsOf: file) else { return nil }
+        let value = try decoder.decode(Value.self, from: data)
+        return value
+    }
+    
     private func fileSystemLocation(for value: Value) throws -> (directoryURL: URL, fileURL: URL) {
         guard let version = value.version else { throw Error.attemptToLocateUnversionedValue }
-        let valueDirectoryURL = itemURL(forRoot: valuesDirectoryURL, name: value.identifier.identifierString)
-        let versionName = version.identifier.identifierString + ".json"
+        return try fileSystemLocation(for: value.identifier, atVersionIdentifiedBy: version.identifier)
+    }
+    
+    private func fileSystemLocation(for valueIdentifier: Value.Identifier, atVersionIdentifiedBy versionIdentifier: Version.Identifier) throws -> (directoryURL: URL, fileURL: URL) {
+        let valueDirectoryURL = itemURL(forRoot: valuesDirectoryURL, name: valueIdentifier.identifierString)
+        let versionName = versionIdentifier.identifierString + ".json"
         let fileURL = itemURL(forRoot: valueDirectoryURL, name: versionName, subDirectoryNameLength: 1)
         let directoryURL = fileURL.deletingLastPathComponent()
         return (directoryURL: directoryURL, fileURL: fileURL)
@@ -78,6 +89,7 @@ public final class Store {
         let directoryURL = fileURL.deletingLastPathComponent()
         return (directoryURL: directoryURL, fileURL: fileURL)
     }
+
 }
 
 
