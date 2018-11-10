@@ -64,6 +64,19 @@ public final class Store {
         return value
     }
     
+    internal func fetchAllValues(identifiedBy valueIdentifier: Value.Identifier) throws -> [Value] {
+        let valueDirectoryURL = itemURL(forRoot: valuesDirectoryURL, name: valueIdentifier.identifierString)
+        let enumerator = fileManager.enumerator(at: valueDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
+        var values: [Value] = []
+        for any in enumerator {
+            guard let url = any as? URL, !url.hasDirectoryPath else { continue }
+            guard let data = try? Data(contentsOf: url) else { continue }
+            let value = try decoder.decode(Value.self, from: data)
+            values.append(value)
+        }
+        return values
+    }
+    
     private func fileSystemLocation(for value: Value) throws -> (directoryURL: URL, fileURL: URL) {
         guard let version = value.version else { throw Error.attemptToLocateUnversionedValue }
         return try fileSystemLocation(for: value.identifier, atVersionIdentifiedBy: version.identifier)

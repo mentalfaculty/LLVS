@@ -66,10 +66,26 @@ final class ValueTests: XCTestCase {
         XCTAssertEqual(value!.properties["name"]!, "Bob")
     }
     
+    func testFetchingAllVersionOfValue() {
+        let newValue = Value(identifier: .init(identifierString: "ABCDEF"), version: nil, properties: ["name":"Dave"])
+        var values = [newValue]
+        let predecessor = Version.Predecessors(identifierOfFirst: version.identifier, identifierOfSecond: nil)
+        let newVersion = try! store.addVersion(basedOn: predecessor, saving: &values)
+
+        let fetchedValues = try! store.fetchAllValues(identifiedBy: newValue.identifier)
+        
+        XCTAssertEqual(fetchedValues.count, 2)
+        
+        let versions: Set<Version.Identifier> = [version!.identifier, newVersion.identifier]
+        let fetchedVersions = Set(fetchedValues.map({ $0.version!.identifier }))
+        XCTAssertEqual(versions, fetchedVersions)
+    }
+    
     static var allTests = [
         ("testSavingValueCreatesSubDirectoriesAndFile", testSavingValueCreatesSubDirectoriesAndFile),
         ("testSavedFileContainsValue", testSavedFileContainsValue),
         ("testFetchingNonExistentVersionOfValueGivesNil", testFetchingNonExistentVersionOfValueGivesNil),
         ("testFetchingSavedVersionOfValue", testFetchingSavedVersionOfValue),
+        ("testFetchingAllVersionOfValue", testFetchingAllVersionOfValue),
         ]
 }
