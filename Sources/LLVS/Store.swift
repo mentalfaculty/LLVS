@@ -77,6 +77,22 @@ public final class Store {
         return values
     }
     
+    internal func allVersionIdentifiers(forValueIdentifiedBy valueIdentifier: Value.Identifier) throws -> [Version.Identifier] {
+        let valueDirectoryURL = itemURL(forRoot: valuesDirectoryURL, name: valueIdentifier.identifierString)
+        let enumerator = fileManager.enumerator(at: valueDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
+        var versionIdentifiers: [Version.Identifier] = []
+        for any in enumerator {
+            guard let url = any as? URL, !url.hasDirectoryPath else { continue }
+            guard url.pathExtension == "json" else { continue }
+            let valueDirComponents = valueDirectoryURL.standardizedFileURL.pathComponents
+            let allComponents = url.standardizedFileURL.deletingPathExtension().pathComponents
+            let versionComponents = allComponents[valueDirComponents.count...]
+            let versionString = versionComponents.joined()
+            versionIdentifiers.append(.init(identifierString: versionString))
+        }
+        return versionIdentifiers
+    }
+    
     private func fileSystemLocation(for value: Value) throws -> (directoryURL: URL, fileURL: URL) {
         guard let version = value.version else { throw Error.attemptToLocateUnversionedValue }
         return try fileSystemLocation(for: value.identifier, atVersionIdentifiedBy: version.identifier)
