@@ -88,7 +88,7 @@ public final class Store {
             let allComponents = url.standardizedFileURL.deletingPathExtension().pathComponents
             let versionComponents = allComponents[valueDirComponents.count...]
             let versionString = versionComponents.joined()
-            versionIdentifiers.append(.init(identifierString: versionString))
+            versionIdentifiers.append(.init(versionString))
         }
         return versionIdentifiers
     }

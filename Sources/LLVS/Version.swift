@@ -11,7 +11,7 @@ public struct Version: Codable, Hashable {
     
     public struct Identifier: StringIdentifiable, Codable, Hashable {
         public var identifierString: String
-        public init(identifierString: String = UUID().uuidString) {
+        public init(_ identifierString: String = UUID().uuidString) {
             self.identifierString = identifierString
         }
     }
@@ -23,6 +23,11 @@ public struct Version: Codable, Hashable {
             var result = [identifierOfFirst]
             if let second = identifierOfSecond { result.append(second) }
             return result
+        }
+        
+        public init(identifierOfFirst: Identifier, identifierOfSecond: Identifier?) {
+            self.identifierOfFirst = identifierOfFirst
+            self.identifierOfSecond = identifierOfSecond
         }
     }
     

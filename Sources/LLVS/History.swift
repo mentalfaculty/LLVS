@@ -9,6 +9,11 @@ import Foundation
 
 public final class History {
     
+    public enum Error: Swift.Error {
+        case attemptToAddPreexistingVersion(identifier: String)
+        case nonExistentVersionEncountered(identifier: String)
+    }
+    
     private var versionsByIdentifier: [Version.Identifier:Version] = [:]
     private var referencedVersionIdentifiers: Set<Version.Identifier> = [] // Any version that is a predecessor
     public var headIdentifiers: Set<Version.Identifier> = [] // Versions that are not predecessors of other versions
@@ -21,8 +26,10 @@ public final class History {
         return versionsByIdentifier[identifier]
     }
     
-    internal func add(_ version: Version) {
-        precondition(versionsByIdentifier[version.identifier] == nil)
+    internal func add(_ version: Version) throws {
+        guard versionsByIdentifier[version.identifier] == nil else {
+            throw Error.attemptToAddPreexistingVersion(identifier: version.identifier.identifierString)
+        }
         versionsByIdentifier[version.identifier] = version
         for predecessor in version.predecessors?.identifiers ?? [] {
             referencedVersionIdentifiers.insert(predecessor)
@@ -33,36 +40,38 @@ public final class History {
         }
     }
     
-    public func greatestCommonAncestor(ofVersionsIdentifiedBy identifiers: (Version.Identifier, Version.Identifier)) -> Version.Identifier? {
+    public func greatestCommonAncestor(ofVersionsIdentifiedBy identifiers: (Version.Identifier, Version.Identifier)) throws -> Version.Identifier? {
         // Find all ancestors of first Version. Determine how many generations back each Version is.
         // We take the shortest path to any given Version, ie, the minimum of possible paths.
         var generationById = [Version.Identifier:Int]()
         var firstFront: Set<Version.Identifier> = [identifiers.0]
         
-        func propagateFront() {
+        func propagateFront(front: inout Set<Version.Identifier>) throws {
             var newFront = Set<Version.Identifier>()
-            for identifier in firstFront {
-                let frontVersion = self.version(identifiedBy: identifier)!
+            for identifier in front {
+                guard let frontVersion = self.version(identifiedBy: identifier) else {
+                    throw Error.nonExistentVersionEncountered(identifier: identifier.identifierString)
+                }
                 newFront.formUnion(frontVersion.predecessors?.identifiers ?? [])
             }
-            firstFront = newFront
+            front = newFront
         }
         
         var generation = 0
         while firstFront.count > 0 {
             firstFront.forEach { generationById[$0] = min(generationById[$0] ?? Int.max, generation) }
-            propagateFront()
+            try propagateFront(front: &firstFront)
             generation += 1
         }
         
         // Now go through ancestors of second version until we find the first in common with the first ancestors
-        let secondFront = [identifiers.1]
+        var secondFront: Set<Version.Identifier> = [identifiers.1]
         let ancestorsOfFirst = Set(generationById.keys)
         while secondFront.count > 0 {
             let common = ancestorsOfFirst.intersection(secondFront)
             let sorted = common.sorted { generationById[$0]! < generationById[$1]! }
             if let mostRecentCommon = sorted.first { return mostRecentCommon }
-            propagateFront()
+            try propagateFront(front: &secondFront)
         }
         
         return nil
