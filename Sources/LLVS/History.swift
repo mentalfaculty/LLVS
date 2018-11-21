@@ -16,7 +16,7 @@ public final class History {
     
     private var versionsByIdentifier: [Version.Identifier:Version] = [:]
     private var referencedVersionIdentifiers: Set<Version.Identifier> = [] // Any version that is a predecessor
-    public var headIdentifiers: Set<Version.Identifier> = [] // Versions that are not predecessors of other versions
+    public private(set) var headIdentifiers: Set<Version.Identifier> = [] // Versions that are not predecessors of other versions
     
     public var mostRecentHead: Version? {
         return headIdentifiers.map({ version(identifiedBy: $0)! }).sorted(by: { $0.timestamp < $1.timestamp }).last
@@ -24,6 +24,18 @@ public final class History {
     
     public func version(identifiedBy identifier: Version.Identifier) -> Version? {
         return versionsByIdentifier[identifier]
+    }
+    
+    public func version(prevailingFromCandidates candidates: [Version.Identifier], atVersionIdentifiedBy versionIdentifier: Version.Identifier) -> Version? {
+        let candidateSet = Set<Version.Identifier>(candidates)
+        var predecessors: [Version] = [versionIdentifier].compactMap { self.version(identifiedBy: $0) }
+        while !predecessors.isEmpty, candidateSet.isDisjoint(with: predecessors.map({ $0.identifier })) {
+            predecessors = predecessors.flatMap { (predecessor) -> [Version] in
+                let new = predecessor.predecessors?.identifiers ?? []
+                return new.compactMap { self.version(identifiedBy: $0) }
+            }
+        }
+        return predecessors.first { candidateSet.contains($0.identifier) }
     }
     
     internal func add(_ version: Version) throws {

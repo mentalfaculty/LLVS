@@ -18,11 +18,13 @@ public final class Store {
     public let versionsDirectoryURL: URL
     public let filtersDirectoryURL: URL
     
+    public let history = History()
+    
     fileprivate let fileManager = FileManager()
     fileprivate let encoder = JSONEncoder()
     fileprivate let decoder = JSONDecoder()
     
-    public init(rootDirectoryURL: URL) {
+    public init(rootDirectoryURL: URL) throws {
         self.rootDirectoryURL = rootDirectoryURL
         self.valuesDirectoryURL = rootDirectoryURL.appendingPathComponent("values")
         self.versionsDirectoryURL = rootDirectoryURL.appendingPathComponent("versions")
@@ -31,6 +33,13 @@ public final class Store {
         try? fileManager.createDirectory(at: self.valuesDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.versionsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.filtersDirectoryURL, withIntermediateDirectories: true, attributes: nil)
+        try loadHistory()
+    }
+    
+    private func loadHistory() throws {
+        for version in try versions() {
+            try history.add(version)
+        }
     }
     
     @discardableResult public func addVersion(basedOn predecessors: Version.Predecessors?, saving values: inout [Value]) throws -> Version {
@@ -57,14 +66,22 @@ public final class Store {
         try data.write(to: file)
     }
     
-    internal func fetchValue(identifiedBy valueIdentifier: Value.Identifier, savedAtVersionIdentifiedBy versionIdentifier: Version.Identifier) throws -> Value? {
+    public func value(identifiedBy valueIdentifier: Value.Identifier, prevailingAtVersionIdentifiedBy versionIdentifier: Version.Identifier) throws -> Value? {
+        let candidateVersionIdentifiers = try versionIdentifiers(forValueIdentifiedBy: valueIdentifier)
+        let prevailingVersion = history.version(prevailingFromCandidates: candidateVersionIdentifiers, atVersionIdentifiedBy: versionIdentifier)
+        return try prevailingVersion.flatMap {
+            try value(identifiedBy: valueIdentifier, savedAtVersionIdentifiedBy: $0.identifier)
+        }
+    }
+    
+    internal func value(identifiedBy valueIdentifier: Value.Identifier, savedAtVersionIdentifiedBy versionIdentifier: Version.Identifier) throws -> Value? {
         let (_, file) = try fileSystemLocation(for: valueIdentifier, atVersionIdentifiedBy: versionIdentifier)
         guard let data = try? Data(contentsOf: file) else { return nil }
         let value = try decoder.decode(Value.self, from: data)
         return value
     }
     
-    internal func fetchAllValues(identifiedBy valueIdentifier: Value.Identifier) throws -> [Value] {
+    internal func values(identifiedBy valueIdentifier: Value.Identifier) throws -> [Value] {
         let valueDirectoryURL = itemURL(forRoot: valuesDirectoryURL, name: valueIdentifier.identifierString)
         let enumerator = fileManager.enumerator(at: valueDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
         var values: [Value] = []
@@ -77,14 +94,14 @@ public final class Store {
         return values
     }
     
-    internal func allVersionIdentifiers(forValueIdentifiedBy valueIdentifier: Value.Identifier) throws -> [Version.Identifier] {
+    internal func versionIdentifiers(forValueIdentifiedBy valueIdentifier: Value.Identifier) throws -> [Version.Identifier] {
         let valueDirectoryURL = itemURL(forRoot: valuesDirectoryURL, name: valueIdentifier.identifierString)
         let enumerator = fileManager.enumerator(at: valueDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
+        let valueDirComponents = valueDirectoryURL.standardizedFileURL.pathComponents
         var versionIdentifiers: [Version.Identifier] = []
         for any in enumerator {
             guard let url = any as? URL, !url.hasDirectoryPath else { continue }
             guard url.pathExtension == "json" else { continue }
-            let valueDirComponents = valueDirectoryURL.standardizedFileURL.pathComponents
             let allComponents = url.standardizedFileURL.deletingPathExtension().pathComponents
             let versionComponents = allComponents[valueDirComponents.count...]
             let versionString = versionComponents.joined()
@@ -107,14 +124,27 @@ public final class Store {
     }
     
     private func store(_ version: Version) throws {
-        let (dir, file) = fileSystemLocation(for: version)
+        let (dir, file) = fileSystemLocation(forVersionIdentifiedBy: version.identifier)
         try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
         let data = try encoder.encode(version)
         try data.write(to: file)
     }
     
-    private func fileSystemLocation(for version: Version) -> (directoryURL: URL, fileURL: URL) {
-        let fileURL = itemURL(forRoot: versionsDirectoryURL, name: version.identifier.identifierString)
+    private func versions() throws -> [Version] {
+        let enumerator = fileManager.enumerator(at: versionsDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
+        var versions: [Version] = []
+        for any in enumerator {
+            guard let url = any as? URL, !url.hasDirectoryPath else { continue }
+            guard url.pathExtension == "json" else { continue }
+            let data = try Data(contentsOf: url)
+            let version = try decoder.decode(Version.self, from: data)
+            versions.append(version)
+        }
+        return versions
+    }
+    
+    private func fileSystemLocation(forVersionIdentifiedBy identifier: Version.Identifier) -> (directoryURL: URL, fileURL: URL) {
+        let fileURL = itemURL(forRoot: versionsDirectoryURL, name: identifier.identifierString)
         let directoryURL = fileURL.deletingLastPathComponent()
         return (directoryURL: directoryURL, fileURL: fileURL)
     }

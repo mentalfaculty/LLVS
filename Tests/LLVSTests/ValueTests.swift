@@ -54,12 +54,12 @@ final class ValueTests: XCTestCase {
     
     func testFetchingNonExistentVersionOfValueGivesNil() {
         let version = Version(identifier: .init(UUID().uuidString), predecessors: nil)
-        let fetchedValue = try! store.fetchValue(identifiedBy: originalValue.identifier, savedAtVersionIdentifiedBy: version.identifier)
+        let fetchedValue = try! store.value(identifiedBy: originalValue.identifier, savedAtVersionIdentifiedBy: version.identifier)
         XCTAssertNil(fetchedValue)
     }
     
     func testFetchingSavedVersionOfValue() {
-        let value = try! store.fetchValue(identifiedBy: originalValue.identifier, savedAtVersionIdentifiedBy: version.identifier)
+        let value = try! store.value(identifiedBy: originalValue.identifier, savedAtVersionIdentifiedBy: version.identifier)
         XCTAssertNotNil(value)
         XCTAssertEqual(value!.identifier.identifierString, originalValue.identifier.identifierString)
         XCTAssertEqual(value!.version!, version!)
@@ -72,7 +72,7 @@ final class ValueTests: XCTestCase {
         let predecessor = Version.Predecessors(identifierOfFirst: version.identifier, identifierOfSecond: nil)
         let newVersion = try! store.addVersion(basedOn: predecessor, saving: &values)
 
-        let fetchedValues = try! store.fetchAllValues(identifiedBy: newValue.identifier)
+        let fetchedValues = try! store.allValues(identifiedBy: newValue.identifier)
         
         XCTAssertEqual(fetchedValues.count, 2)
         
@@ -86,7 +86,7 @@ final class ValueTests: XCTestCase {
         var values = [newValue]
         let newVersion = try! store.addVersion(basedOn: nil, saving: &values)
         
-        let versionIdentifiers = try! store.allVersionIdentifiers(forValueIdentifiedBy: newValue.identifier)
+        let versionIdentifiers = try! store.versionIdentifiers(forValueIdentifiedBy: newValue.identifier)
         
         XCTAssertEqual(versionIdentifiers.count, 2)
         

@@ -7,15 +7,16 @@ LLVS is the little store that could. It's a simple file based storage system, wh
 ### Simple
 - Works with ubiquitous format (JSON)
 - Only stores arrays, dictionaries and strings
-- No types, model versioning, or migration included, but features to build these.
+- No types, model versioning, or migration included, but facilities to build these.
 
 ### Very robust
-- It is inexcusable that a crash can render a store unreadable.
+- A crash should not render a store unusable. At worst, the most recent changes may be lost.
 - LLVS should be resilient to all but deliberate tampering and disk level corruption.
 - Corrupted SQLite databases caused by an unlucky crash during saving should be a thing of the past.
 
 ### Append Only
 - Files in LLVS are immutable. No file should ever be updated once created.
+- Merging two stores is equivalent to just taking the union of all files and directories.
 
 ### Versioned
 - Works with versioned history.
@@ -33,6 +34,8 @@ LLVS is the little store that could. It's a simple file based storage system, wh
 
 ### Programming Language, Operating System Agnostic
 - Can create a store using any language, on any device, and with any operating system
+- Can even author stores by hand if you really want to
 
-### Fetching of Versioned Objects
-- Can fetch a snapshot of data, given 
+### Indexing
+- Support for basic indexes
+- Indexes are versioned along with the values
