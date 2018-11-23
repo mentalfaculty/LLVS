@@ -10,7 +10,7 @@ final class StoreSetupTests: XCTestCase {
     override func setUp() {
         super.setUp()
         rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
-        store = Store(rootDirectoryURL: rootURL)
+        store = try! Store(rootDirectoryURL: rootURL)
     }
     
     override func tearDown() {

@@ -16,7 +16,7 @@ final class ValueTests: XCTestCase {
         super.setUp()
         rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         valuesURL = rootURL.appendingPathComponent("values")
-        store = Store(rootDirectoryURL: rootURL)
+        store = try! Store(rootDirectoryURL: rootURL)
         
         originalValue = Value(identifier: .init(identifierString: "ABCDEF"), version: nil, properties: ["name":"Bob"])
         var values = [originalValue!]
@@ -72,7 +72,7 @@ final class ValueTests: XCTestCase {
         let predecessor = Version.Predecessors(identifierOfFirst: version.identifier, identifierOfSecond: nil)
         let newVersion = try! store.addVersion(basedOn: predecessor, saving: &values)
 
-        let fetchedValues = try! store.allValues(identifiedBy: newValue.identifier)
+        let fetchedValues = try! store.values(identifiedBy: newValue.identifier)
         
         XCTAssertEqual(fetchedValues.count, 2)
         
