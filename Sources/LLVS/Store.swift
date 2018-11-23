@@ -56,6 +56,8 @@ public final class Store {
         
         try store(version)
         
+        try history.add(version)
+        
         return version
     }
     
