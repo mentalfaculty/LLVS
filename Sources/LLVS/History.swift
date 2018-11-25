@@ -27,7 +27,7 @@ public struct History {
     }
     
     internal func version(prevailingFromCandidates candidates: [Version.Identifier], at versionIdentifier: Version.Identifier) -> Version? {
-        let sortedIdentifiers = topologicallySortedVersionIdentifiers()
+        let sortedIdentifiers = sortedVersionIdentifiers()
         let index = sortedIdentifiers.first { candidates.contains($0) }
         
 //        guard let root = version(identifiedBy: versionIdentifier) else { return nil }
@@ -117,15 +117,21 @@ public struct History {
         
         return nil
     }
-
     
-    /// Returns a topological sort order of the history. Note that there are many possible orders that satisfy this.
+    /// Enumerates whole history in a topological sorted order. Note that there are many possible orders that satisfy this.
     /// Most recent versions are ordered first (ie heads).
+    /// Return false from block to stop.
     /// Uses Kahn algorithm to generate the order. https://en.wikipedia.org/wiki/Topological_sorting
-    func topologicallySortedVersionIdentifiers() -> [Version.Identifier] {
+    func enumerate(executingForEachVersion block:(Version)->Bool) {
         var predecessors: Set<Version> = Set(headIdentifiers.map { version(identifiedBy: $0)! })
+        
+        // Visit head versions
+        for p in predecessors {
+            if !block(p) { return }
+        }
+    
+        // Move through whole tree, stepping back to the previous version one at a time.
         var referenceCountByIdentfier: [Version.Identifier:Int] = [:]
-        var result: [Version.Identifier] = Array(headIdentifiers)
         while !predecessors.isEmpty {
             // Note that a version can appear more than once in newPredecessors
             var newPredecessors = predecessors.flatMap { (predecessor) -> [Version] in
@@ -143,11 +149,25 @@ public struct History {
                 referenceCountByIdentfier[$0.identifier] == $0.successors.identifiers.count
             }
             
-            // Add to result
-            result.append(contentsOf: newPredecessors.identifiers)
+            // Visit new versions
+            for p in newPredecessors {
+                if !block(p) { return }
+            }
             
             // Update set of predecessors (removes duplicates)
             predecessors = Set(newPredecessors)
+        }
+    }
+
+    
+    /// Returns a topological sort order of the history. Note that there are many possible orders that satisfy this.
+    /// Most recent versions are ordered first (ie heads).
+    /// Uses Kahn algorithm to generate the order. https://en.wikipedia.org/wiki/Topological_sorting
+    func sortedVersionIdentifiers() -> [Version.Identifier] {
+        var result: [Version.Identifier] = Array(headIdentifiers)
+        enumerate { version in
+            result.append(version.identifier)
+            return true
         }
         return result
     }
