@@ -18,7 +18,7 @@ public final class Store {
     public let versionsDirectoryURL: URL
     public let filtersDirectoryURL: URL
     
-    public let history = History()
+    public private(set) var history = History()
     
     fileprivate let fileManager = FileManager()
     fileprivate let encoder = JSONEncoder()
@@ -38,11 +38,18 @@ public final class Store {
     
     private func loadHistory() throws {
         for version in try versions() {
-            try history.add(version)
+            try history.add(version, updatingPredecessorVersions: false)
         }
     }
     
-    @discardableResult public func addVersion(basedOn predecessors: Version.Predecessors?, saving values: inout [Value]) throws -> Version {
+}
+
+
+// MARK:- Storing Values
+
+extension Store {
+    
+    @discardableResult public func addVersion(basedOn predecessors: Version.Predecessors?, storing values: inout [Value]) throws -> Version {
         let version = Version(predecessors: predecessors)
         values = values.map { value in
             var newValue = value
@@ -56,7 +63,7 @@ public final class Store {
         
         try store(version)
         
-        try history.add(version)
+        try history.add(version, updatingPredecessorVersions: true)
         
         return version
     }
@@ -67,23 +74,29 @@ public final class Store {
         let data = try encoder.encode(value)
         try data.write(to: file)
     }
+}
+
+
+// MARK:- Fetching Values
+
+extension Store {
     
-    public func value(identifiedBy valueIdentifier: Value.Identifier, prevailingAtVersionIdentifiedBy versionIdentifier: Version.Identifier) throws -> Value? {
-        let candidateVersionIdentifiers = try versionIdentifiers(forValueIdentifiedBy: valueIdentifier)
-        let prevailingVersion = history.version(prevailingFromCandidates: candidateVersionIdentifiers, atVersionIdentifiedBy: versionIdentifier)
+    public func value(_ valueIdentifier: Value.Identifier, prevailingAt versionIdentifier: Version.Identifier) throws -> Value? {
+        let candidateVersionIdentifiers = try versionIdentifiers(for: valueIdentifier)
+        let prevailingVersion = history.version(prevailingFromCandidates: candidateVersionIdentifiers, at: versionIdentifier)
         return try prevailingVersion.flatMap {
-            try value(identifiedBy: valueIdentifier, savedAtVersionIdentifiedBy: $0.identifier)
+            try value(valueIdentifier, storedAt: $0.identifier)
         }
     }
     
-    internal func value(identifiedBy valueIdentifier: Value.Identifier, savedAtVersionIdentifiedBy versionIdentifier: Version.Identifier) throws -> Value? {
+    internal func value(_ valueIdentifier: Value.Identifier, storedAt versionIdentifier: Version.Identifier) throws -> Value? {
         let (_, file) = try fileSystemLocation(for: valueIdentifier, atVersionIdentifiedBy: versionIdentifier)
         guard let data = try? Data(contentsOf: file) else { return nil }
         let value = try decoder.decode(Value.self, from: data)
         return value
     }
     
-    internal func values(identifiedBy valueIdentifier: Value.Identifier) throws -> [Value] {
+    internal func values(_ valueIdentifier: Value.Identifier) throws -> [Value] {
         let valueDirectoryURL = itemURL(forRoot: valuesDirectoryURL, name: valueIdentifier.identifierString)
         let enumerator = fileManager.enumerator(at: valueDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
         var values: [Value] = []
@@ -95,8 +108,22 @@ public final class Store {
         }
         return values
     }
+}
+
+
+// MARK:- Storing and Fetching Versions
+
+extension Store {
     
-    internal func versionIdentifiers(forValueIdentifiedBy valueIdentifier: Value.Identifier) throws -> [Version.Identifier] {
+    
+    fileprivate func store(_ version: Version) throws {
+        let (dir, file) = fileSystemLocation(forVersionIdentifiedBy: version.identifier)
+        try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
+        let data = try encoder.encode(version)
+        try data.write(to: file)
+    }
+    
+    internal func versionIdentifiers(for valueIdentifier: Value.Identifier) throws -> [Version.Identifier] {
         let valueDirectoryURL = itemURL(forRoot: valuesDirectoryURL, name: valueIdentifier.identifierString)
         let enumerator = fileManager.enumerator(at: valueDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
         let valueDirComponents = valueDirectoryURL.standardizedFileURL.pathComponents
@@ -112,27 +139,7 @@ public final class Store {
         return versionIdentifiers
     }
     
-    private func fileSystemLocation(for value: Value) throws -> (directoryURL: URL, fileURL: URL) {
-        guard let version = value.version else { throw Error.attemptToLocateUnversionedValue }
-        return try fileSystemLocation(for: value.identifier, atVersionIdentifiedBy: version.identifier)
-    }
-    
-    private func fileSystemLocation(for valueIdentifier: Value.Identifier, atVersionIdentifiedBy versionIdentifier: Version.Identifier) throws -> (directoryURL: URL, fileURL: URL) {
-        let valueDirectoryURL = itemURL(forRoot: valuesDirectoryURL, name: valueIdentifier.identifierString)
-        let versionName = versionIdentifier.identifierString + ".json"
-        let fileURL = itemURL(forRoot: valueDirectoryURL, name: versionName, subDirectoryNameLength: 1)
-        let directoryURL = fileURL.deletingLastPathComponent()
-        return (directoryURL: directoryURL, fileURL: fileURL)
-    }
-    
-    private func store(_ version: Version) throws {
-        let (dir, file) = fileSystemLocation(forVersionIdentifiedBy: version.identifier)
-        try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
-        let data = try encoder.encode(version)
-        try data.write(to: file)
-    }
-    
-    private func versions() throws -> [Version] {
+    fileprivate func versions() throws -> [Version] {
         let enumerator = fileManager.enumerator(at: versionsDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
         var versions: [Version] = []
         for any in enumerator {
@@ -144,15 +151,36 @@ public final class Store {
         }
         return versions
     }
+
+}
+
+
+// MARK:- File System Locations
+
+fileprivate extension Store {
     
-    private func fileSystemLocation(forVersionIdentifiedBy identifier: Version.Identifier) -> (directoryURL: URL, fileURL: URL) {
+    func fileSystemLocation(for value: Value) throws -> (directoryURL: URL, fileURL: URL) {
+        guard let version = value.version else { throw Error.attemptToLocateUnversionedValue }
+        return try fileSystemLocation(for: value.identifier, atVersionIdentifiedBy: version.identifier)
+    }
+    
+    func fileSystemLocation(for valueIdentifier: Value.Identifier, atVersionIdentifiedBy versionIdentifier: Version.Identifier) throws -> (directoryURL: URL, fileURL: URL) {
+        let valueDirectoryURL = itemURL(forRoot: valuesDirectoryURL, name: valueIdentifier.identifierString)
+        let versionName = versionIdentifier.identifierString + ".json"
+        let fileURL = itemURL(forRoot: valueDirectoryURL, name: versionName, subDirectoryNameLength: 1)
+        let directoryURL = fileURL.deletingLastPathComponent()
+        return (directoryURL: directoryURL, fileURL: fileURL)
+    }
+    
+    func fileSystemLocation(forVersionIdentifiedBy identifier: Version.Identifier) -> (directoryURL: URL, fileURL: URL) {
         let fileURL = itemURL(forRoot: versionsDirectoryURL, name: identifier.identifierString)
         let directoryURL = fileURL.deletingLastPathComponent()
         return (directoryURL: directoryURL, fileURL: fileURL)
     }
-
 }
 
+
+// MARK:- Path Utilities
 
 fileprivate extension Store {
     

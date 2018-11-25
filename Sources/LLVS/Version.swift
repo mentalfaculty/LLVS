@@ -17,28 +17,45 @@ public struct Version: Codable, Hashable {
     }
     
     public struct Predecessors: Codable, Hashable {
-        public var identifierOfFirst: Identifier
-        public var identifierOfSecond: Identifier?
+        public internal(set) var identifierOfFirst: Identifier
+        public internal(set) var identifierOfSecond: Identifier?
         public var identifiers: [Identifier] {
             var result = [identifierOfFirst]
             if let second = identifierOfSecond { result.append(second) }
             return result
         }
         
-        public init(identifierOfFirst: Identifier, identifierOfSecond: Identifier?) {
+        internal init(identifierOfFirst: Identifier, identifierOfSecond: Identifier?) {
             self.identifierOfFirst = identifierOfFirst
             self.identifierOfSecond = identifierOfSecond
         }
     }
     
+    public struct Successors: Codable, Hashable {
+        public internal(set) var identifiers: Set<Identifier>
+        internal init(identifiers: Set<Identifier> = []) {
+            self.identifiers = identifiers
+        }
+    }
+    
     public var identifier: Identifier = .init()
     public var predecessors: Predecessors?
+    public var successors: Successors = .init()
     public var timestamp: TimeInterval
     
     public init(identifier: Identifier = .init(), predecessors: Predecessors? = nil) {
         self.identifier = identifier
         self.predecessors = predecessors
         self.timestamp = Date().timeIntervalSinceReferenceDate
+    }
+    
+}
+
+
+extension Collection where Element == Version {
+    
+    var identifiers: [Version.Identifier] {
+        return map { $0.identifier }
     }
     
 }

@@ -7,7 +7,7 @@
 
 import Foundation
 
-public final class History {
+public struct History {
     
     public enum Error: Swift.Error {
         case attemptToAddPreexistingVersion(identifier: String)
@@ -26,26 +26,55 @@ public final class History {
         return versionsByIdentifier[identifier]
     }
     
-    public func version(prevailingFromCandidates candidates: [Version.Identifier], atVersionIdentifiedBy versionIdentifier: Version.Identifier) -> Version? {
-        let candidateSet = Set<Version.Identifier>(candidates)
-        var predecessors: [Version] = [versionIdentifier].compactMap { self.version(identifiedBy: $0) }
-        while !predecessors.isEmpty, candidateSet.isDisjoint(with: predecessors.map({ $0.identifier })) {
-            predecessors = predecessors.flatMap { (predecessor) -> [Version] in
-                let new = predecessor.predecessors?.identifiers ?? []
-                return new.compactMap { self.version(identifiedBy: $0) }
-            }
-        }
-        return predecessors.first { candidateSet.contains($0.identifier) }
+    internal func version(prevailingFromCandidates candidates: [Version.Identifier], at versionIdentifier: Version.Identifier) -> Version? {
+        let sortedIdentifiers = topologicallySortedVersionIdentifiers()
+        let index = sortedIdentifiers.first { candidates.contains($0) }
+        
+//        guard let root = version(identifiedBy: versionIdentifier) else { return nil }
+//
+//        // Use Kahn algorithm to search back for the first candidate in our list. https://en.wikipedia.org/wiki/Topological_sorting
+//        let candidateSet = Set<Version.Identifier>(candidates)
+//        var predecessors: Set<Version> = Set([versionIdentifier].compactMap({ self.version(identifiedBy: $0) }))
+//        var countByIdentifier: [Version.Identifier:Int] = [versionIdentifier:root.successors.identifiers.count]
+//        while !predecessors.isEmpty, candidateSet.isDisjoint(with: predecessors.identifiers) {
+//            // Note that a version can appear more than once in newPredecessors
+//            var newPredecessors = predecessors.flatMap { (predecessor) -> [Version] in
+//                let new = predecessor.predecessors?.identifiers ?? []
+//                return new.compactMap { self.version(identifiedBy: $0) }
+//            }
+//
+//            // Increase visit count
+//            newPredecessors.forEach {
+//                countByIdentifier[$0.identifier] = (countByIdentifier[$0.identifier] ?? 0) + 1
+//            }
+//
+//            // Remove any new predecessors that have not been visited via all references
+//            newPredecessors = newPredecessors.filter({ countByIdentifier[$0.identifier] == $0.successors.identifiers.count })
+//
+//            // Update set of predecessors (removes duplicates)
+//            predecessors = Set(newPredecessors)
+//        }
+//        return predecessors.first { candidateSet.contains($0.identifier) }
     }
     
-    internal func add(_ version: Version) throws {
+    /// If updatingPredecessorVersions is true, the successors of other versions may be updated.
+    /// Use this when adding a new head when storing.
+    /// Pass in false if the versions alreeady have their successors up-to-date, for example,
+    /// when loading them to setup the History.
+    internal mutating func add(_ version: Version, updatingPredecessorVersions: Bool) throws {
         guard versionsByIdentifier[version.identifier] == nil else {
             throw Error.attemptToAddPreexistingVersion(identifier: version.identifier.identifierString)
         }
         versionsByIdentifier[version.identifier] = version
-        for predecessor in version.predecessors?.identifiers ?? [] {
-            referencedVersionIdentifiers.insert(predecessor)
-            headIdentifiers.remove(predecessor)
+        for predecessorIdentifier in version.predecessors?.identifiers ?? [] {
+            referencedVersionIdentifiers.insert(predecessorIdentifier)
+            headIdentifiers.remove(predecessorIdentifier)
+            if updatingPredecessorVersions, let predecessor = self.version(identifiedBy: predecessorIdentifier) {
+                var newPredecessor = predecessor
+                let newSuccessorIdentifiers = predecessor.successors.identifiers.union([version.identifier])
+                newPredecessor.successors = Version.Successors(identifiers: newSuccessorIdentifiers)
+                versionsByIdentifier[newPredecessor.identifier] = newPredecessor
+            }
         }
         if !referencedVersionIdentifiers.contains(version.identifier) {
             headIdentifiers.insert(version.identifier)
@@ -89,4 +118,37 @@ public final class History {
         return nil
     }
 
+    
+    /// Returns a topological sort order of the history. Note that there are many possible orders that satisfy this.
+    /// Most recent versions are ordered first (ie heads).
+    /// Uses Kahn algorithm to generate the order. https://en.wikipedia.org/wiki/Topological_sorting
+    func topologicallySortedVersionIdentifiers() -> [Version.Identifier] {
+        var predecessors: Set<Version> = Set(headIdentifiers.map { version(identifiedBy: $0)! })
+        var referenceCountByIdentfier: [Version.Identifier:Int] = [:]
+        var result: [Version.Identifier] = Array(headIdentifiers)
+        while !predecessors.isEmpty {
+            // Note that a version can appear more than once in newPredecessors
+            var newPredecessors = predecessors.flatMap { (predecessor) -> [Version] in
+                let new = predecessor.predecessors?.identifiers ?? []
+                return new.compactMap { self.version(identifiedBy: $0) }
+            }
+            
+            // Increase reference count for each
+            newPredecessors.forEach {
+                referenceCountByIdentfier[$0.identifier] = (referenceCountByIdentfier[$0.identifier] ?? 0) + 1
+            }
+            
+            // Remove any new predecessors that have not been visited via all references to them
+            newPredecessors = newPredecessors.filter {
+                referenceCountByIdentfier[$0.identifier] == $0.successors.identifiers.count
+            }
+            
+            // Add to result
+            result.append(contentsOf: newPredecessors.identifiers)
+            
+            // Update set of predecessors (removes duplicates)
+            predecessors = Set(newPredecessors)
+        }
+        return result
+    }
 }

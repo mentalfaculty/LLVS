@@ -22,21 +22,21 @@ class PrevailingValueTests: XCTestCase {
         func addVersion(withName name: String) {
             var values = [Value(identifier: valueIdentifier, version: nil, properties: ["name":name])]
             let predecessors = versions!.last.flatMap { Version.Predecessors(identifierOfFirst: $0.identifier, identifierOfSecond: nil) }
-            let version = try! store.addVersion(basedOn: predecessors, saving: &values)
+            let version = try! store.addVersion(basedOn: predecessors, storing: &values)
             versions.append(version)
         }
         
         func addEmptyVersion() {
             let predecessors = versions!.last.flatMap { Version.Predecessors(identifierOfFirst: $0.identifier, identifierOfSecond: nil) }
             var values: [Value] = []
-            let version = try! store.addVersion(basedOn: predecessors, saving: &values)
+            let version = try! store.addVersion(basedOn: predecessors, storing: &values)
             versions.append(version)
         }
         
         func addBranchVersion() {
             var values: [Value] = []
             let predecessors =  Version.Predecessors(identifierOfFirst: versions[0].identifier, identifierOfSecond: versions.last!.identifier)
-            let version = try! store.addVersion(basedOn: predecessors, saving: &values)
+            let version = try! store.addVersion(basedOn: predecessors, storing: &values)
             versions.append(version)
         }
         
@@ -64,26 +64,26 @@ class PrevailingValueTests: XCTestCase {
     }
     
     func testNoSavedVersionAtPrevailingVersion() {
-        XCTAssertNil(try store.value(identifiedBy: valueIdentifier, prevailingAtVersionIdentifiedBy: versions[0].identifier))
+        XCTAssertNil(try store.value(valueIdentifier, prevailingAt: versions[0].identifier))
     }
     
     func testSavedVersionMatchesPrevailingVersion() {
-        let value = try! store.value(identifiedBy: valueIdentifier, prevailingAtVersionIdentifiedBy: versions[1].identifier)
+        let value = try! store.value(valueIdentifier, prevailingAt: versions[1].identifier)
         XCTAssertEqual(value!.properties["name"]!, "1")
     }
     
     func testSavedVersionPrecedesPrevailingVersion() {
-        let value = try! store.value(identifiedBy: valueIdentifier, prevailingAtVersionIdentifiedBy: versions[5].identifier)
+        let value = try! store.value(valueIdentifier, prevailingAt: versions[5].identifier)
         XCTAssertEqual(value!.properties["name"]!, "3")
     }
     
     func testSavedVersionPrecedesMerge() {
-        let value = try! store.value(identifiedBy: valueIdentifier, prevailingAtVersionIdentifiedBy: versions[6].identifier)
+        let value = try! store.value(valueIdentifier, prevailingAt: versions[6].identifier)
         XCTAssertEqual(value!.properties["name"]!, "3")
     }
     
     func testSavedVersionFollowsMerge() {
-        let value = try! store.value(identifiedBy: valueIdentifier, prevailingAtVersionIdentifiedBy: versions[8].identifier)
+        let value = try! store.value(valueIdentifier, prevailingAt: versions[8].identifier)
         XCTAssertEqual(value!.properties["name"]!, "4")
     }
 
