@@ -27,7 +27,7 @@ class HistoryTests: XCTestCase {
     
     func testSingleVersion() {
         let version = Version(identifier: .init("ABCD"), predecessors: nil)
-        try! history.add(version)
+        try! history.add(version, updatingPredecessorVersions: true)
         XCTAssertEqual(history.headIdentifiers.count, 1)
         XCTAssertEqual(history.headIdentifiers.first?.identifierString, "ABCD")
         XCTAssertEqual(history.mostRecentHead?.identifier.identifierString, "ABCD")
@@ -38,16 +38,16 @@ class HistoryTests: XCTestCase {
     
     func testAddingVersionTwice() {
         let version = Version(identifier: .init("ABCD"), predecessors: nil)
-        try! history.add(version)
-        XCTAssertThrowsError(try history.add(version))
+        try! history.add(version, updatingPredecessorVersions: true)
+        XCTAssertThrowsError(try history.add(version, updatingPredecessorVersions: true))
     }
     
     func testUnrelatedVersions() {
         let version1 = Version(identifier: .init("ABCD"), predecessors: nil)
-        try! history.add(version1)
+        try! history.add(version1, updatingPredecessorVersions: true)
         
         let version2 = Version(identifier: .init("CDEF"), predecessors: nil)
-        try! history.add(version2)
+        try! history.add(version2, updatingPredecessorVersions: true)
         
         let sortedHeads = history.headIdentifiers.sorted { $0.identifierString < $1.identifierString }
         XCTAssertEqual(sortedHeads.count, 2)
@@ -61,11 +61,11 @@ class HistoryTests: XCTestCase {
     
     func testSimpleSerialHistory() {
         let version1 = Version(identifier: .init("ABCD"), predecessors: nil)
-        try! history.add(version1)
+        try! history.add(version1, updatingPredecessorVersions: true)
         
         let predecessors = Version.Predecessors(identifierOfFirst: version1.identifier, identifierOfSecond: nil)
         let version2 = Version(identifier: .init("CDEF"), predecessors: predecessors)
-        try! history.add(version2)
+        try! history.add(version2, updatingPredecessorVersions: true)
         
         let sortedHeads = history.headIdentifiers.sorted { $0.identifierString < $1.identifierString }
         XCTAssertEqual(sortedHeads.count, 1)
@@ -79,15 +79,15 @@ class HistoryTests: XCTestCase {
     
     func testSerialHistory() {
         let version1 = Version(identifier: .init("ABCD"), predecessors: nil)
-        try! history.add(version1)
+        try! history.add(version1, updatingPredecessorVersions: true)
         
         let predecessors2 = Version.Predecessors(identifierOfFirst: version1.identifier, identifierOfSecond: nil)
         let version2 = Version(identifier: .init("CDEF"), predecessors: predecessors2)
-        try! history.add(version2)
+        try! history.add(version2, updatingPredecessorVersions: true)
         
         let predecessors3 = Version.Predecessors(identifierOfFirst: version2.identifier, identifierOfSecond: nil)
         let version3 = Version(identifier: .init("GHIJ"), predecessors: predecessors3)
-        try! history.add(version3)
+        try! history.add(version3, updatingPredecessorVersions: true)
         
         let sortedHeads = history.headIdentifiers.sorted { $0.identifierString < $1.identifierString }
         XCTAssertEqual(sortedHeads.count, 1)
@@ -101,15 +101,15 @@ class HistoryTests: XCTestCase {
     
     func testBranch() {
         let version1 = Version(identifier: .init("ABCD"), predecessors: nil)
-        try! history.add(version1)
+        try! history.add(version1, updatingPredecessorVersions: true)
         
         let predecessors2 = Version.Predecessors(identifierOfFirst: version1.identifier, identifierOfSecond: nil)
         let version2 = Version(identifier: .init("CDEF"), predecessors: predecessors2)
-        try! history.add(version2)
+        try! history.add(version2, updatingPredecessorVersions: true)
         
         let predecessors3 = Version.Predecessors(identifierOfFirst: version1.identifier, identifierOfSecond: nil)
         let version3 = Version(identifier: .init("GHIJ"), predecessors: predecessors3)
-        try! history.add(version3)
+        try! history.add(version3, updatingPredecessorVersions: true)
         
         let sortedHeads = history.headIdentifiers.sorted { $0.identifierString < $1.identifierString }
         XCTAssertEqual(sortedHeads.count, 2)
@@ -123,19 +123,19 @@ class HistoryTests: XCTestCase {
     
     func testBranchAndMerge() {
         let version1 = Version(identifier: .init("ABCD"), predecessors: nil)
-        try! history.add(version1)
+        try! history.add(version1, updatingPredecessorVersions: true)
         
         let predecessors2 = Version.Predecessors(identifierOfFirst: version1.identifier, identifierOfSecond: nil)
         let version2 = Version(identifier: .init("CDEF"), predecessors: predecessors2)
-        try! history.add(version2)
+        try! history.add(version2, updatingPredecessorVersions: true)
         
         let predecessors3 = Version.Predecessors(identifierOfFirst: version1.identifier, identifierOfSecond: nil)
         let version3 = Version(identifier: .init("GHIJ"), predecessors: predecessors3)
-        try! history.add(version3)
+        try! history.add(version3, updatingPredecessorVersions: true)
         
         let predecessors4 = Version.Predecessors(identifierOfFirst: version2.identifier, identifierOfSecond: version3.identifier)
         let version4 = Version(identifier: .init("KLMN"), predecessors: predecessors4)
-        try! history.add(version4)
+        try! history.add(version4, updatingPredecessorVersions: true)
         
         let sortedHeads = history.headIdentifiers.sorted { $0.identifierString < $1.identifierString }
         XCTAssertEqual(sortedHeads.count, 1)

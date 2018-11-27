@@ -27,34 +27,24 @@ public struct History {
     }
     
     internal func version(prevailingFromCandidates candidates: [Version.Identifier], at versionIdentifier: Version.Identifier) -> Version? {
-        let sortedIdentifiers = sortedVersionIdentifiers()
-        let index = sortedIdentifiers.first { candidates.contains($0) }
+        if let candidate = candidates.first(where: { $0 == versionIdentifier }) {
+            return version(identifiedBy: candidate)
+        }
         
-//        guard let root = version(identifiedBy: versionIdentifier) else { return nil }
-//
-//        // Use Kahn algorithm to search back for the first candidate in our list. https://en.wikipedia.org/wiki/Topological_sorting
-//        let candidateSet = Set<Version.Identifier>(candidates)
-//        var predecessors: Set<Version> = Set([versionIdentifier].compactMap({ self.version(identifiedBy: $0) }))
-//        var countByIdentifier: [Version.Identifier:Int] = [versionIdentifier:root.successors.identifiers.count]
-//        while !predecessors.isEmpty, candidateSet.isDisjoint(with: predecessors.identifiers) {
-//            // Note that a version can appear more than once in newPredecessors
-//            var newPredecessors = predecessors.flatMap { (predecessor) -> [Version] in
-//                let new = predecessor.predecessors?.identifiers ?? []
-//                return new.compactMap { self.version(identifiedBy: $0) }
-//            }
-//
-//            // Increase visit count
-//            newPredecessors.forEach {
-//                countByIdentifier[$0.identifier] = (countByIdentifier[$0.identifier] ?? 0) + 1
-//            }
-//
-//            // Remove any new predecessors that have not been visited via all references
-//            newPredecessors = newPredecessors.filter({ countByIdentifier[$0.identifier] == $0.successors.identifiers.count })
-//
-//            // Update set of predecessors (removes duplicates)
-//            predecessors = Set(newPredecessors)
-//        }
-//        return predecessors.first { candidateSet.contains($0.identifier) }
+        var ancestors: Set<Version.Identifier> = [versionIdentifier]
+        for v in self {
+            // See if v is in our ancestry. If so, extend ancestry.
+            if ancestors.contains(v.identifier) {
+                ancestors.formUnion(v.predecessors?.identifiers ?? [])
+                ancestors.remove(v.identifier)
+            }
+            
+            if let candidate = candidates.first(where: { ancestors.contains($0) }) {
+                return version(identifiedBy: candidate)
+            }
+        }
+        
+        return nil
     }
     
     /// If updatingPredecessorVersions is true, the successors of other versions may be updated.
@@ -100,7 +90,7 @@ public struct History {
         
         var generation = 0
         while firstFront.count > 0 {
-            firstFront.forEach { generationById[$0] = min(generationById[$0] ?? Int.max, generation) }
+            firstFront.forEach { generationById[$0] = Swift.min(generationById[$0] ?? Int.max, generation) }
             try propagateFront(front: &firstFront)
             generation += 1
         }
@@ -117,58 +107,55 @@ public struct History {
         
         return nil
     }
+}
+
+
+extension History: Sequence {
     
-    /// Enumerates whole history in a topological sorted order. Note that there are many possible orders that satisfy this.
+    /// Enumerates history in a topological sorted order.
+    /// Note that there are many possible orders that satisfy this.
     /// Most recent versions are ordered first (ie heads).
     /// Return false from block to stop.
     /// Uses Kahn algorithm to generate the order. https://en.wikipedia.org/wiki/Topological_sorting
-    func enumerate(executingForEachVersion block:(Version)->Bool) {
-        var predecessors: Set<Version> = Set(headIdentifiers.map { version(identifiedBy: $0)! })
+    public struct TopologicalIterator: IteratorProtocol {
+        public typealias Element = Version
         
-        // Visit head versions
-        for p in predecessors {
-            if !block(p) { return }
+        public let history: History
+        
+        private var front: Set<Version>
+        private var referenceCountByIdentifier: [Version.Identifier:Int] = [:]
+        
+        init(toIterate history: History) {
+            self.history = history
+            let headVersions = history.headIdentifiers.map {
+                history.version(identifiedBy: $0)!
+            }
+            self.front = Set(headVersions)
         }
-    
-        // Move through whole tree, stepping back to the previous version one at a time.
-        var referenceCountByIdentfier: [Version.Identifier:Int] = [:]
-        while !predecessors.isEmpty {
-            // Note that a version can appear more than once in newPredecessors
-            var newPredecessors = predecessors.flatMap { (predecessor) -> [Version] in
-                let new = predecessor.predecessors?.identifiers ?? []
-                return new.compactMap { self.version(identifiedBy: $0) }
+        
+        public mutating func next() -> Version? {
+            guard let next = front.first(where: { version in
+                    let refCount = self.referenceCountByIdentifier[version.identifier] ?? 0
+                    let successorCount = version.successors.identifiers.count
+                    return refCount == successorCount
+                })
+                else {
+                    return nil
+                }
+            
+            for predecessorIdentifier in next.predecessors?.identifiers ?? [] {
+                let predecessor = history.version(identifiedBy: predecessorIdentifier)!
+                referenceCountByIdentifier[predecessor.identifier] = (referenceCountByIdentifier[predecessor.identifier] ?? 0) + 1
+                front.insert(predecessor)
             }
             
-            // Increase reference count for each
-            newPredecessors.forEach {
-                referenceCountByIdentfier[$0.identifier] = (referenceCountByIdentfier[$0.identifier] ?? 0) + 1
-            }
-            
-            // Remove any new predecessors that have not been visited via all references to them
-            newPredecessors = newPredecessors.filter {
-                referenceCountByIdentfier[$0.identifier] == $0.successors.identifiers.count
-            }
-            
-            // Visit new versions
-            for p in newPredecessors {
-                if !block(p) { return }
-            }
-            
-            // Update set of predecessors (removes duplicates)
-            predecessors = Set(newPredecessors)
+            front.remove(next)
+            return next
         }
     }
-
     
-    /// Returns a topological sort order of the history. Note that there are many possible orders that satisfy this.
-    /// Most recent versions are ordered first (ie heads).
-    /// Uses Kahn algorithm to generate the order. https://en.wikipedia.org/wiki/Topological_sorting
-    func sortedVersionIdentifiers() -> [Version.Identifier] {
-        var result: [Version.Identifier] = Array(headIdentifiers)
-        enumerate { version in
-            result.append(version.identifier)
-            return true
-        }
-        return result
+    public func makeIterator() -> History.TopologicalIterator {
+        return Iterator(toIterate: self)
     }
+    
 }
