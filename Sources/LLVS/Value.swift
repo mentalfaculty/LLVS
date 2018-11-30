@@ -9,6 +9,11 @@ import Foundation
 
 public struct Value: Codable {
     
+    struct Reference: Codable {
+        var identifier: Identifier
+        var version: Version
+    }
+    
     public struct Identifier: StringIdentifiable, Codable {
         public var identifierString: String = UUID().uuidString
     }

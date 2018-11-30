@@ -89,8 +89,10 @@ class PrevailingValueTests: XCTestCase {
 
     static var allTests = [
         ("testNoSavedVersionAtPrevailingVersion", testNoSavedVersionAtPrevailingVersion),
-        ("testSavedVersionPrecedesPrevailingVersion", testSavedVersionPrecedesPrevailingVersion),
         ("testSavedVersionMatchesPrevailingVersion", testSavedVersionMatchesPrevailingVersion),
+        ("testSavedVersionPrecedesPrevailingVersion", testSavedVersionPrecedesPrevailingVersion),
+        ("testSavedVersionPrecedesMerge", testSavedVersionPrecedesMerge),
+        ("testSavedVersionFollowsMerge", testSavedVersionFollowsMerge),
     ]
 
 }
