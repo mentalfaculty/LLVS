@@ -36,6 +36,6 @@ LLVS is the little store that could. It's a simple file based storage system, wh
 - Can create a store using any language, on any device, and with any operating system
 - Can even author stores by hand if you really want to
 
-### Indexing
-- Support for basic indexes
-- Indexes are versioned along with the values
+### FilterMaping
+- Support for basic mapes
+- FilterMapes are versioned along with the values

@@ -11,12 +11,15 @@ public final class Store {
     
     enum Error: Swift.Error {
         case attemptToLocateUnversionedValue
+        case attemptToStoreValueWithNoVersion
     }
     
     public let rootDirectoryURL: URL
     public let valuesDirectoryURL: URL
     public let versionsDirectoryURL: URL
     public let filtersDirectoryURL: URL
+
+    private let valuesZone: Zone
     
     public private(set) var history = History()
     
@@ -25,14 +28,15 @@ public final class Store {
     fileprivate let decoder = JSONDecoder()
     
     public init(rootDirectoryURL: URL) throws {
-        self.rootDirectoryURL = rootDirectoryURL
+        self.rootDirectoryURL = rootDirectoryURL.resolvingSymlinksInPath()
         self.valuesDirectoryURL = rootDirectoryURL.appendingPathComponent("values")
         self.versionsDirectoryURL = rootDirectoryURL.appendingPathComponent("versions")
-        self.filtersDirectoryURL = rootDirectoryURL.appendingPathComponent("filters")
+        self.filtersDirectoryURL = rootDirectoryURL.appendingPathComponent("maps")
         try? fileManager.createDirectory(at: self.rootDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.valuesDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.versionsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.filtersDirectoryURL, withIntermediateDirectories: true, attributes: nil)
+        valuesZone = Zone(rootDirectory: self.valuesDirectoryURL, fileExtension: "json")
         try loadHistory()
     }
     
@@ -45,7 +49,7 @@ public final class Store {
 }
 
 
-// MARK:- Storing Values
+// MARK:- Storing Values and Versions
 
 extension Store {
     
@@ -69,10 +73,9 @@ extension Store {
     }
     
     private func store(_ value: Value) throws {
-        let (dir, file) = try fileSystemLocation(for: value)
-        try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
+        guard let zoneRef = value.zoneReference else { throw Error.attemptToStoreValueWithNoVersion }
         let data = try encoder.encode(value)
-        try data.write(to: file)
+        try valuesZone.store(data, for: zoneRef)
     }
 }
 
@@ -90,23 +93,17 @@ extension Store {
     }
     
     internal func value(_ valueIdentifier: Value.Identifier, storedAt versionIdentifier: Version.Identifier) throws -> Value? {
-        let (_, file) = try fileSystemLocation(for: valueIdentifier, atVersionIdentifiedBy: versionIdentifier)
-        guard let data = try? Data(contentsOf: file) else { return nil }
+        guard let data = try valuesZone.data(for: .init(key: valueIdentifier.identifierString, version: versionIdentifier)) else { return nil }
         let value = try decoder.decode(Value.self, from: data)
         return value
     }
     
     internal func values(_ valueIdentifier: Value.Identifier) throws -> [Value] {
-        let valueDirectoryURL = itemURL(forRoot: valuesDirectoryURL, name: valueIdentifier.identifierString)
-        let enumerator = fileManager.enumerator(at: valueDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
-        var values: [Value] = []
-        for any in enumerator {
-            guard let url = any as? URL, !url.hasDirectoryPath else { continue }
-            guard let data = try? Data(contentsOf: url) else { continue }
-            let value = try decoder.decode(Value.self, from: data)
-            values.append(value)
+        let versionIdentifiers = try valuesZone.versionIdentifiers(for: valueIdentifier.identifierString)
+        return try versionIdentifiers.map { version in
+            let data = try valuesZone.data(for: .init(key: valueIdentifier.identifierString, version: version))!
+            return try decoder.decode(Value.self, from: data)
         }
-        return values
     }
 }
 
@@ -124,7 +121,7 @@ extension Store {
     }
     
     internal func versionIdentifiers(for valueIdentifier: Value.Identifier) throws -> [Version.Identifier] {
-        let valueDirectoryURL = itemURL(forRoot: valuesDirectoryURL, name: valueIdentifier.identifierString)
+        let valueDirectoryURL = fileManager.splitFilenameURL(forRoot: valuesDirectoryURL, name: valueIdentifier.identifierString)
         let enumerator = fileManager.enumerator(at: valueDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
         let valueDirComponents = valueDirectoryURL.standardizedFileURL.pathComponents
         var versionIdentifiers: [Version.Identifier] = []
@@ -159,21 +156,8 @@ extension Store {
 
 fileprivate extension Store {
     
-    func fileSystemLocation(for value: Value) throws -> (directoryURL: URL, fileURL: URL) {
-        guard let version = value.version else { throw Error.attemptToLocateUnversionedValue }
-        return try fileSystemLocation(for: value.identifier, atVersionIdentifiedBy: version.identifier)
-    }
-    
-    func fileSystemLocation(for valueIdentifier: Value.Identifier, atVersionIdentifiedBy versionIdentifier: Version.Identifier) throws -> (directoryURL: URL, fileURL: URL) {
-        let valueDirectoryURL = itemURL(forRoot: valuesDirectoryURL, name: valueIdentifier.identifierString)
-        let versionName = versionIdentifier.identifierString + ".json"
-        let fileURL = itemURL(forRoot: valueDirectoryURL, name: versionName, subDirectoryNameLength: 1)
-        let directoryURL = fileURL.deletingLastPathComponent()
-        return (directoryURL: directoryURL, fileURL: fileURL)
-    }
-    
     func fileSystemLocation(forVersionIdentifiedBy identifier: Version.Identifier) -> (directoryURL: URL, fileURL: URL) {
-        let fileURL = itemURL(forRoot: versionsDirectoryURL, name: identifier.identifierString)
+        let fileURL = fileManager.splitFilenameURL(forRoot: versionsDirectoryURL, name: identifier.identifierString)
         let directoryURL = fileURL.deletingLastPathComponent()
         return (directoryURL: directoryURL, fileURL: fileURL)
     }
@@ -182,9 +166,9 @@ fileprivate extension Store {
 
 // MARK:- Path Utilities
 
-fileprivate extension Store {
+internal extension FileManager {
     
-    func itemURL(forRoot rootDirectoryURL: URL, name: String, subDirectoryNameLength: UInt = 2) -> URL {
+    func splitFilenameURL(forRoot rootDirectoryURL: URL, name: String, subDirectoryNameLength: UInt = 2) -> URL {
         guard name.count > subDirectoryNameLength else {
             return rootDirectoryURL.appendingPathComponent(name)
         }

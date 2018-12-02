@@ -30,9 +30,9 @@ final class ValueTests: XCTestCase {
     
     func testSavingValueCreatesSubDirectoriesAndFile() {
         let v = version.identifier.identifierString
-        let index = v.index(v.startIndex, offsetBy: 1)
-        let versionSubDir = String(v[..<index])
-        let versionFile = String(v[index...])
+        let map = v.index(v.startIndex, offsetBy: 1)
+        let versionSubDir = String(v[..<map])
+        let versionFile = String(v[map...])
         XCTAssert(fm.fileExists(atPath: valuesURL.appendingPathComponent("AB").path))
         XCTAssert(fm.fileExists(atPath: valuesURL.appendingPathComponent("AB/CDEF").path))
         XCTAssert(fm.fileExists(atPath: valuesURL.appendingPathComponent("AB/CDEF/\(versionSubDir)").path))
@@ -41,9 +41,9 @@ final class ValueTests: XCTestCase {
     
     func testSavedFileContainsValue() {
         let v = version.identifier.identifierString
-        let index = v.index(v.startIndex, offsetBy: 1)
-        let versionSubDir = String(v[..<index])
-        let versionFile = String(v[index...])
+        let map = v.index(v.startIndex, offsetBy: 1)
+        let versionSubDir = String(v[..<map])
+        let versionFile = String(v[map...])
         let file = valuesURL.appendingPathComponent("AB/CDEF/\(versionSubDir)/\(versionFile).json")
         let decoder = JSONDecoder()
         let value = try! decoder.decode(Value.self, from: Data(contentsOf: file))

@@ -24,7 +24,7 @@ final class StoreSetupTests: XCTestCase {
         XCTAssert(fm.fileExists(atPath: root as String))
         XCTAssert(fm.fileExists(atPath: root.appendingPathComponent("versions")))
         XCTAssert(fm.fileExists(atPath: root.appendingPathComponent("values")))
-        XCTAssert(fm.fileExists(atPath: root.appendingPathComponent("filters")))
+        XCTAssert(fm.fileExists(atPath: root.appendingPathComponent("maps")))
     }
 
     static var allTests = [
