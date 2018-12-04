@@ -16,7 +16,7 @@ public struct Value: Codable {
     
     struct Reference: Codable, Hashable {
         var identifier: Identifier
-        var version: Version
+        var version: Version.Identifier
     }
     
     public struct Identifier: StringIdentifiable, Hashable, Codable {
