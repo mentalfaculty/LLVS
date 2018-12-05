@@ -112,7 +112,6 @@ extension Store {
 
 extension Store {
     
-    
     fileprivate func store(_ version: Version) throws {
         let (dir, file) = fileSystemLocation(forVersionIdentifiedBy: version.identifier)
         try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
@@ -126,7 +125,9 @@ extension Store {
         let valueDirComponents = valueDirectoryURL.standardizedFileURL.pathComponents
         var versionIdentifiers: [Version.Identifier] = []
         for any in enumerator {
-            guard let url = any as? URL, !url.hasDirectoryPath else { continue }
+            var isDirectory: ObjCBool = true
+            guard let url = any as? URL else { continue }
+            guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) && !isDirectory.boolValue else { continue }
             guard url.pathExtension == "json" else { continue }
             let allComponents = url.standardizedFileURL.deletingPathExtension().pathComponents
             let versionComponents = allComponents[valueDirComponents.count...]
@@ -140,7 +141,9 @@ extension Store {
         let enumerator = fileManager.enumerator(at: versionsDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
         var versions: [Version] = []
         for any in enumerator {
-            guard let url = any as? URL, !url.hasDirectoryPath else { continue }
+            var isDirectory: ObjCBool = true
+            guard let url = any as? URL else { continue }
+            guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) && !isDirectory.boolValue else { continue }
             guard url.pathExtension == "json" else { continue }
             let data = try Data(contentsOf: url)
             let version = try decoder.decode(Version.self, from: data)

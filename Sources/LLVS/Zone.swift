@@ -43,7 +43,9 @@ internal final class Zone {
         var versions: [Version.Identifier] = []
         let slash = Character("/")
         for any in enumerator {
-            guard let url = any as? URL, !url.hasDirectoryPath else { continue }
+            var isDirectory: ObjCBool = true
+            guard let url = any as? URL else { continue }
+            guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) && !isDirectory.boolValue else { continue }
             let path = url.resolvingSymlinksInPath().deletingPathExtension().path
             let index = path.index(path.startIndex, offsetBy: Int(valueDirLength))
             let version = String(path[index...]).filter { $0 != slash }
