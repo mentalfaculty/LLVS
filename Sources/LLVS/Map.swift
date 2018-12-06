@@ -20,6 +20,7 @@ final class Map {
         case encodingFailure(String)
         case unexpectedNodeContent
         case missingNode
+        case missingVersionRoot
     }
         
     let zone: Zone
@@ -27,6 +28,8 @@ final class Map {
     
     fileprivate let encoder = JSONEncoder()
     fileprivate let decoder = JSONDecoder()
+    
+    private let rootKey = "__llvs_root"
     
     init(zone: Zone, root: Key) {
         self.zone = zone
@@ -92,15 +95,20 @@ final class Map {
         try zone.store(data, for: rootNode.reference)
     }
     
-    func valueReferences(matching key: Map.Key) throws -> [Value.Reference] {
-        return []
+    func valueReferences(matching key: Map.Key, at version: Version.Identifier) throws -> [Value.Reference] {
+        let rootRef = Zone.Reference(key: rootKey, version: version)
+        guard let rootNode = try node(for: rootRef) else { throw Error.missingVersionRoot }
+        guard case let .nodes(subNodeRefs) = rootNode.children else { throw Error.missingNode }
+        let subNodeKey = String(key.keyString.prefix(2))
+        guard let subNodeRef = subNodeRefs.first(where: { $0.key == subNodeKey }) else { return [] }
+        guard let subNode = try node(for: subNodeRef) else { throw Error.missingNode }
+        guard case let .values(valueRefs) = subNode.children else { throw Error.unexpectedNodeContent }
+        return valueRefs
     }
     
-    func valueIdentifiers(whereValuesDifferBetween version: Version, and otherVersion: Version) -> [Value.Identifier] {
+    func valueIdentifiers(whereValuesDifferBetween version: Version.Identifier, and otherVersion: Version.Identifier) -> [Value.Identifier] {
         return []
     }
-    
-    private let rootKey = "__llvs_root"
     
 //    fileprivate func existingNodalPath(for key: String, withRootVersion rootVersion: Version.Identifier) throws -> [Node] {
 //        guard let rootNode = try node(for: rootKey, version: rootVersion) else { return [] }
