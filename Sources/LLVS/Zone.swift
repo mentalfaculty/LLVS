@@ -21,6 +21,7 @@ internal final class Zone {
     
     init(rootDirectory: URL, fileExtension: String) {
         self.rootDirectory = rootDirectory.resolvingSymlinksInPath()
+        try? fileManager.createDirectory(at: rootDirectory, withIntermediateDirectories: true, attributes: nil)
         self.fileExtension = fileExtension
     }
 
