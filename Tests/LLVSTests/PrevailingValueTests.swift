@@ -11,7 +11,7 @@ import XCTest
 class PrevailingValueTests: XCTestCase {
     
     let fm = FileManager.default
-    let valueIdentifier = Value.Identifier(identifierString: "ABCDEF")
+    let valueIdentifier = Value.Identifier("ABCDEF")
     
     var store: Store!
     var rootURL: URL!

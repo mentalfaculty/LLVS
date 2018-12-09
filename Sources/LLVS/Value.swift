@@ -20,7 +20,11 @@ public struct Value: Codable {
     }
     
     public struct Identifier: StringIdentifiable, Hashable, Codable {
-        public var identifierString: String = UUID().uuidString
+        public var identifierString: String
+        
+        public init(_ identifierString: String = UUID().uuidString) {
+            self.identifierString = identifierString
+        }
     }
     
     var identifier: Identifier

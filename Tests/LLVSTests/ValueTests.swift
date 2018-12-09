@@ -18,7 +18,7 @@ final class ValueTests: XCTestCase {
         valuesURL = rootURL.appendingPathComponent("values")
         store = try! Store(rootDirectoryURL: rootURL)
         
-        originalValue = Value(identifier: .init(identifierString: "ABCDEF"), version: nil, properties: ["name":"Bob"])
+        originalValue = Value(identifier: .init("ABCDEF"), version: nil, properties: ["name":"Bob"])
         var values = [originalValue!]
         version = try! store.addVersion(basedOn: nil, storing: &values)
     }
@@ -67,7 +67,7 @@ final class ValueTests: XCTestCase {
     }
     
     func testFetchingAllVersionOfValue() {
-        let newValue = Value(identifier: .init(identifierString: "ABCDEF"), version: nil, properties: ["name":"Dave"])
+        let newValue = Value(identifier: .init("ABCDEF"), version: nil, properties: ["name":"Dave"])
         var values = [newValue]
         let predecessor = Version.Predecessors(identifierOfFirst: version.identifier, identifierOfSecond: nil)
         let newVersion = try! store.addVersion(basedOn: predecessor, storing: &values)
@@ -82,7 +82,7 @@ final class ValueTests: XCTestCase {
     }
     
     func testAllVersionsOfValue() {
-        let newValue = Value(identifier: .init(identifierString: "ABCDEF"), version: nil, properties: ["name":"Dave"])
+        let newValue = Value(identifier: .init("ABCDEF"), version: nil, properties: ["name":"Dave"])
         var values = [newValue]
         let newVersion = try! store.addVersion(basedOn: nil, storing: &values)
         

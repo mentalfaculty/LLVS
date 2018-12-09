@@ -11,9 +11,13 @@ import Foundation
 final class Map {
     
     struct Delta {
-        var key: String
-        var addedValueIdentifiers: [Value.Identifier]
-        var removedValueIdentifiers: [Value.Identifier]
+        var key: Key
+        var addedValueIdentifiers: [Value.Identifier] = []
+        var removedValueIdentifiers: [Value.Identifier] = []
+        
+        init(key: Key) {
+            self.key = key
+        }
     }
     
     enum Error: Swift.Error {
@@ -24,16 +28,14 @@ final class Map {
     }
         
     let zone: Zone
-    let root: Key
     
     fileprivate let encoder = JSONEncoder()
     fileprivate let decoder = JSONDecoder()
     
     private let rootKey = "__llvs_root"
     
-    init(zone: Zone, root: Key) {
+    init(zone: Zone) {
         self.zone = zone
-        self.root = root
     }
     
     func addVersion(_ version: Version.Identifier, basedOn baseVersion: Version.Identifier?, applying deltas: [Delta]) throws {
@@ -50,16 +52,16 @@ final class Map {
         rootNode.reference.version = version
         guard case let .nodes(rootChildRefs) = rootNode.children else { throw Error.unexpectedNodeContent }
         
-        var subNodesByKey: [String:Node] = [:]
+        var subNodesByKey: [Key:Node] = [:]
         for delta in deltas {
             let key = delta.key
-            let subNodeKey = String(key.prefix(2))
-            let subNodeRef = Zone.Reference(key: subNodeKey, version: version)
+            let subNodeKey = Key(String(key.keyString.prefix(2)))
+            let subNodeRef = Zone.Reference(key: subNodeKey.keyString, version: version)
             var subNode: Node
             if let n = subNodesByKey[key] {
                 subNode = n
             }
-            else if let existingSubNodeRef = rootChildRefs.first(where: { $0.key == subNodeKey }) {
+            else if let existingSubNodeRef = rootChildRefs.first(where: { $0.key == subNodeKey.keyString }) {
                 guard let existingSubNode = try node(for: existingSubNodeRef) else { throw Error.missingNode }
                 subNode = existingSubNode
                 subNode.reference = subNodeRef
@@ -139,7 +141,10 @@ final class Map {
 extension Map {
     
     struct Key: Codable, Hashable {
-        public var keyString: String = UUID().uuidString
+        var keyString: String
+        init(_ keyString: String = UUID().uuidString) {
+            self.keyString = keyString
+        }
     }
     
     struct Node: Codable, Hashable {
