@@ -20,23 +20,23 @@ class PrevailingValueTests: XCTestCase {
 
     override func setUp() {
         func addVersion(withName name: String) {
-            var values = [Value(identifier: valueIdentifier, version: nil, properties: ["name":name])]
+            var values = [Value(identifier: valueIdentifier, version: nil, data: "\(name)".data(using: .utf8)!)]
             let predecessors = versions!.last.flatMap { Version.Predecessors(identifierOfFirst: $0.identifier, identifierOfSecond: nil) }
-            let version = try! store.addVersion(basedOn: predecessors, storing: &values)
+            let version = try! store.addVersion(basedOn: predecessors, storing: &values, removing: [])
             versions.append(version)
         }
         
         func addEmptyVersion() {
             let predecessors = versions!.last.flatMap { Version.Predecessors(identifierOfFirst: $0.identifier, identifierOfSecond: nil) }
             var values: [Value] = []
-            let version = try! store.addVersion(basedOn: predecessors, storing: &values)
+            let version = try! store.addVersion(basedOn: predecessors, storing: &values, removing: [])
             versions.append(version)
         }
         
         func addBranchVersion() {
             var values: [Value] = []
             let predecessors =  Version.Predecessors(identifierOfFirst: versions[0].identifier, identifierOfSecond: versions.last!.identifier)
-            let version = try! store.addVersion(basedOn: predecessors, storing: &values)
+            let version = try! store.addVersion(basedOn: predecessors, storing: &values, removing: [])
             versions.append(version)
         }
         
@@ -69,22 +69,22 @@ class PrevailingValueTests: XCTestCase {
     
     func testSavedVersionMatchesPrevailingVersion() {
         let value = try! store.value(valueIdentifier, prevailingAt: versions[1].identifier)
-        XCTAssertEqual(value!.properties["name"]!, "1")
+        XCTAssertEqual(value!.data, "1".data(using: .utf8)!)
     }
     
     func testSavedVersionPrecedesPrevailingVersion() {
         let value = try! store.value(valueIdentifier, prevailingAt: versions[5].identifier)
-        XCTAssertEqual(value!.properties["name"]!, "3")
+        XCTAssertEqual(value!.data, "3".data(using: .utf8)!)
     }
     
     func testSavedVersionPrecedesMerge() {
         let value = try! store.value(valueIdentifier, prevailingAt: versions[6].identifier)
-        XCTAssertEqual(value!.properties["name"]!, "3")
+        XCTAssertEqual(value!.data, "3".data(using: .utf8)!)
     }
     
     func testSavedVersionFollowsMerge() {
         let value = try! store.value(valueIdentifier, prevailingAt: versions[8].identifier)
-        XCTAssertEqual(value!.properties["name"]!, "4")
+        XCTAssertEqual(value!.data, "4".data(using: .utf8)!)
     }
 
     static var allTests = [

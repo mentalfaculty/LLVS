@@ -17,9 +17,12 @@ public final class Store {
     public let rootDirectoryURL: URL
     public let valuesDirectoryURL: URL
     public let versionsDirectoryURL: URL
-    public let filtersDirectoryURL: URL
+    public let mapsDirectoryURL: URL
 
     private let valuesZone: Zone
+    
+    private let valuesMapName = "__llvs_values"
+    private let valuesMap: Map
     
     public private(set) var history = History()
     
@@ -31,12 +34,16 @@ public final class Store {
         self.rootDirectoryURL = rootDirectoryURL.resolvingSymlinksInPath()
         self.valuesDirectoryURL = rootDirectoryURL.appendingPathComponent("values")
         self.versionsDirectoryURL = rootDirectoryURL.appendingPathComponent("versions")
-        self.filtersDirectoryURL = rootDirectoryURL.appendingPathComponent("maps")
+        self.mapsDirectoryURL = rootDirectoryURL.appendingPathComponent("maps")
         try? fileManager.createDirectory(at: self.rootDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.valuesDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.versionsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
-        try? fileManager.createDirectory(at: self.filtersDirectoryURL, withIntermediateDirectories: true, attributes: nil)
+        try? fileManager.createDirectory(at: self.mapsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
+        
+        let valuesMapZone = Zone(rootDirectory: self.mapsDirectoryURL.appendingPathComponent(valuesMapName), fileExtension: "json")
+        valuesMap = Map(zone: valuesMapZone)
         valuesZone = Zone(rootDirectory: self.valuesDirectoryURL, fileExtension: "json")
+
         try loadHistory()
     }
     
@@ -53,20 +60,38 @@ public final class Store {
 
 extension Store {
     
-    @discardableResult public func addVersion(basedOn predecessors: Version.Predecessors?, storing values: inout [Value]) throws -> Version {
+    @discardableResult public func addVersion(basedOn predecessors: Version.Predecessors?, storing storedValues: inout [Value], removing removedIdentifiers: [Value.Identifier]) throws -> Version {
+        // Update version in values
         let version = Version(predecessors: predecessors)
-        values = values.map { value in
+        storedValues = storedValues.map { value in
             var newValue = value
-            newValue.version = version
+            newValue.version = version.identifier
             return newValue
         }
         
-        try values.forEach { value in
+        // Store values
+        try storedValues.forEach { value in
             try self.store(value)
         }
         
+        // Update values map
+        let storedDeltas: [Map.Delta] = storedValues.map { value in
+            let valueId = value.identifier
+            var delta = Map.Delta(key: Map.Key(valueId.identifierString))
+            delta.addedValueIdentifiers = [valueId]
+            return delta
+        }
+        let removedDeltas: [Map.Delta] = removedIdentifiers.map { valueIdentifier in
+            var delta = Map.Delta(key: Map.Key(valueIdentifier.identifierString))
+            delta.removedValueIdentifiers = [valueIdentifier]
+            return delta
+        }
+        try valuesMap.addVersion(version.identifier, basedOn: predecessors?.identifierOfFirst, applying: storedDeltas + removedDeltas)
+        
+        // Store version
         try store(version)
         
+        // Add to history
         try history.add(version, updatingPredecessorVersions: true)
         
         return version
@@ -74,8 +99,7 @@ extension Store {
     
     private func store(_ value: Value) throws {
         guard let zoneRef = value.zoneReference else { throw Error.attemptToStoreValueWithNoVersion }
-        let data = try encoder.encode(value)
-        try valuesZone.store(data, for: zoneRef)
+        try valuesZone.store(value.data, for: zoneRef)
     }
 }
 
@@ -94,7 +118,7 @@ extension Store {
     
     internal func value(_ valueIdentifier: Value.Identifier, storedAt versionIdentifier: Version.Identifier) throws -> Value? {
         guard let data = try valuesZone.data(for: .init(key: valueIdentifier.identifierString, version: versionIdentifier)) else { return nil }
-        let value = try decoder.decode(Value.self, from: data)
+        let value = Value(identifier: valueIdentifier, version: versionIdentifier, data: data)
         return value
     }
     
@@ -102,7 +126,7 @@ extension Store {
         let versionIdentifiers = try valuesZone.versionIdentifiers(for: valueIdentifier.identifierString)
         return try versionIdentifiers.map { version in
             let data = try valuesZone.data(for: .init(key: valueIdentifier.identifierString, version: version))!
-            return try decoder.decode(Value.self, from: data)
+            return Value(identifier: valueIdentifier, version: version, data: data)
         }
     }
 }

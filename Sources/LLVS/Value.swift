@@ -7,7 +7,7 @@
 
 import Foundation
 
-public struct Value: Codable {
+public struct Value {
     
     struct Diff {
         let firstValue: Value
@@ -28,12 +28,18 @@ public struct Value: Codable {
     }
     
     var identifier: Identifier
-    var version: Version?
-    var properties: [String:String] = [:]
+    var version: Version.Identifier?
+    var data: Data
     
     var zoneReference: Zone.Reference? {
         guard let version = version else { return nil }
-        return Zone.Reference(key: identifier.identifierString, version: version.identifier)
+        return Zone.Reference(key: identifier.identifierString, version: version)
+    }
+    
+    public init(identifier: Identifier, version: Version.Identifier?, data: Data) {
+        self.identifier = identifier
+        self.version = version
+        self.data = data
     }
     
 }
