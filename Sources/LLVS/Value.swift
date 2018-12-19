@@ -7,6 +7,11 @@
 
 import Foundation
 
+public struct VersionedValue {
+    public var value: Value
+    public var version: Version
+}
+
 public struct Value {
     
     struct Diff {

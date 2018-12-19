@@ -10,16 +10,6 @@ import Foundation
 
 final class Map {
     
-    struct Delta {
-        var key: Key
-        var addedValueIdentifiers: [Value.Identifier] = []
-        var removedValueIdentifiers: [Value.Identifier] = []
-        
-        init(key: Key) {
-            self.key = key
-        }
-    }
-    
     enum Error: Swift.Error {
         case encodingFailure(String)
         case unexpectedNodeContent
@@ -97,6 +87,10 @@ final class Map {
         try zone.store(data, for: rootNode.reference)
     }
     
+    func differences(between firstVersion: Version.Identifier, and secondVersion: Version.Identifier) throws -> [Diff] {
+        return []
+    }
+    
     func valueReferences(matching key: Map.Key, at version: Version.Identifier) throws -> [Value.Reference] {
         let rootRef = Zone.Reference(key: rootKey, version: version)
         guard let rootNode = try node(for: rootRef) else { throw Error.missingVersionRoot }
@@ -107,23 +101,6 @@ final class Map {
         guard case let .values(valueRefs) = subNode.children else { throw Error.unexpectedNodeContent }
         return valueRefs
     }
-    
-    func valueIdentifiers(whereValuesDifferBetween version: Version.Identifier, and otherVersion: Version.Identifier) -> [Value.Identifier] {
-        return []
-    }
-    
-//    fileprivate func existingNodalPath(for key: String, withRootVersion rootVersion: Version.Identifier) throws -> [Node] {
-//        guard let rootNode = try node(for: rootKey, version: rootVersion) else { return [] }
-//        guard case let .nodes(refs) = rootNode.children else { throw Error.unexpectedNodeContent }
-//
-//        let subNodeKey = key.prefix(2)
-//        guard let subNodeRef = refs.first(where: { $0.key == subNodeKey }), let subNode = try node(for: subNodeRef) else {
-//            return [rootNode]
-//        }
-//
-//        return [rootNode, subNode]
-//    }
-    
 
     fileprivate func node(for key: String, version: Version.Identifier) throws -> Node? {
         let ref = Zone.Reference(key: key, version: version)
@@ -138,6 +115,8 @@ final class Map {
 }
 
 
+// MARK:- Subtypes
+
 extension Map {
     
     struct Key: Codable, Hashable {
@@ -147,15 +126,32 @@ extension Map {
         }
     }
     
+    struct Delta {
+        var key: Key
+        var addedValueIdentifiers: [Value.Identifier] = []
+        var removedValueIdentifiers: [Value.Identifier] = []
+        
+        init(key: Key) {
+            self.key = key
+        }
+    }
+    
+    struct Diff {
+        enum VersionFork {
+            case exclusiveToFirst(Version.Identifier)
+            case exclusiveToSecond(Version.Identifier)
+            case conflict(Version.Identifier, Version.Identifier)
+        }
+        
+        var key: Key
+        var valueIdentifier: Value.Identifier
+        var versionFork: VersionFork
+    }
+    
     struct Node: Codable, Hashable {
         var reference: Zone.Reference
         var children: Children
     }
-    
-}
-
-
-extension Map {
     
     enum Children: Codable, Hashable {
         case values([Value.Reference])

@@ -7,6 +7,9 @@
 
 import Foundation
 
+
+// MARK:- Store
+
 public final class Store {
     
     enum Error: Swift.Error {
@@ -101,6 +104,24 @@ extension Store {
         guard let zoneRef = value.zoneReference else { throw Error.attemptToStoreValueWithNoVersion }
         try valuesZone.store(value.data, for: zoneRef)
     }
+}
+
+
+// MARK:- Merging
+
+extension Store {
+    
+    func merge(version firstVersion: Version.Identifier, with secondVersion: Version.Identifier, resolvingWith resolver: Resolver) throws -> Version {
+        let predecessors = Version.Predecessors(identifierOfFirst: firstVersion, identifierOfSecond: secondVersion)
+        let diffs = try valuesMap.differences(between: firstVersion, and: secondVersion)
+        for diff in diffs {
+            
+        }
+        var updatedValues: [Value] = []
+        let removedIdentifiers: [Value.Identifier] = []
+        return try addVersion(basedOn: predecessors, storing: &updatedValues, removing: removedIdentifiers)
+    }
+    
 }
 
 
