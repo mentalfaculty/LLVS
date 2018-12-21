@@ -87,7 +87,7 @@ final class Map {
         try zone.store(data, for: rootNode.reference)
     }
     
-    func differences(between firstVersion: Version.Identifier, and secondVersion: Version.Identifier) throws -> [Diff] {
+    func differences(between firstVersion: Version.Identifier, and secondVersion: Version.Identifier, withCommonAncestor commonAncestor: Version.Identifier) throws -> [Diff] {
         return []
     }
     
@@ -137,15 +137,24 @@ extension Map {
     }
     
     struct Diff {
-        enum VersionFork {
-            case exclusiveToFirst(Version.Identifier)
-            case exclusiveToSecond(Version.Identifier)
-            case conflict(Version.Identifier, Version.Identifier)
+        enum Branch {
+            case first
+            case second
+        }
+        
+        enum Fork {
+            case inserted(branch: Branch)
+            case twiceInserted
+            case removed(branch: Branch)
+            case twiceRemoved
+            case updated(branch: Branch)
+            case twiceUpdated
+            case removedAndUpdated(removedOn: Branch, updatedOn: Branch)
         }
         
         var key: Key
         var valueIdentifier: Value.Identifier
-        var versionFork: VersionFork
+        var fork: Fork
     }
     
     struct Node: Codable, Hashable {

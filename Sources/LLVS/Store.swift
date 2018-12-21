@@ -15,6 +15,7 @@ public final class Store {
     enum Error: Swift.Error {
         case attemptToLocateUnversionedValue
         case attemptToStoreValueWithNoVersion
+        case noCommonAncestor(firstVersion: Version.Identifier, secondVersion: Version.Identifier)
     }
     
     public let rootDirectoryURL: URL
@@ -112,10 +113,19 @@ extension Store {
 extension Store {
     
     func merge(version firstVersion: Version.Identifier, with secondVersion: Version.Identifier, resolvingWith resolver: Resolver) throws -> Version {
+        guard let commonAncestor = try history.greatestCommonAncestor(ofVersionsIdentifiedBy: (firstVersion, secondVersion)) else {
+            throw Error.noCommonAncestor(firstVersion: firstVersion, secondVersion: secondVersion)
+        }
+        
         let predecessors = Version.Predecessors(identifierOfFirst: firstVersion, identifierOfSecond: secondVersion)
-        let diffs = try valuesMap.differences(between: firstVersion, and: secondVersion)
+        let diffs = try valuesMap.differences(between: firstVersion, and: secondVersion, withCommonAncestor: commonAncestor)
+        var merge = Merge()
         for diff in diffs {
-            
+//            switch diff.versionFork {
+//            case .exclusiveToFirst(let version):
+//            case .exclusiveToSecond(let version):
+//            case .conflict(let version1, version2):
+//            }
         }
         var updatedValues: [Value] = []
         let removedIdentifiers: [Value.Identifier] = []
