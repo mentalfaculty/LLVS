@@ -13,6 +13,8 @@ import Foundation
 public final class Store {
     
     enum Error: Swift.Error {
+        case missingVersion
+        case mergeFromArbiterContainsConflicts
         case attemptToLocateUnversionedValue
         case attemptToStoreValueWithNoVersion
         case noCommonAncestor(firstVersion: Version.Identifier, secondVersion: Version.Identifier)
@@ -112,24 +114,46 @@ extension Store {
 
 extension Store {
     
-    func merge(version firstVersion: Version.Identifier, with secondVersion: Version.Identifier, resolvingWith resolver: Resolver) throws -> Version {
-        guard let commonAncestor = try history.greatestCommonAncestor(ofVersionsIdentifiedBy: (firstVersion, secondVersion)) else {
-            throw Error.noCommonAncestor(firstVersion: firstVersion, secondVersion: secondVersion)
+    func merge(version firstVersionIdentifier: Version.Identifier, with secondVersionIdentifier: Version.Identifier, resolvingWith arbiter: Arbiter) throws -> Version {
+        guard let commonAncestorIdentifier = try history.greatestCommonAncestor(ofVersionsIdentifiedBy: (firstVersionIdentifier, secondVersionIdentifier)) else {
+            throw Error.noCommonAncestor(firstVersion: firstVersionIdentifier, secondVersion: secondVersionIdentifier)
         }
         
-        let predecessors = Version.Predecessors(identifierOfFirst: firstVersion, identifierOfSecond: secondVersion)
-        let diffs = try valuesMap.differences(between: firstVersion, and: secondVersion, withCommonAncestor: commonAncestor)
-        var merge = Merge()
-        for diff in diffs {
-//            switch diff.versionFork {
-//            case .exclusiveToFirst(let version):
-//            case .exclusiveToSecond(let version):
-//            case .conflict(let version1, version2):
-//            }
+        guard let firstVersion = history.version(identifiedBy: firstVersionIdentifier),
+            let secondVersion = history.version(identifiedBy: secondVersionIdentifier),
+            let commonAncestor = history.version(identifiedBy: commonAncestorIdentifier) else {
+            throw Error.missingVersion
         }
-        var updatedValues: [Value] = []
-        let removedIdentifiers: [Value.Identifier] = []
-        return try addVersion(basedOn: predecessors, storing: &updatedValues, removing: removedIdentifiers)
+        
+        let predecessors = Version.Predecessors(identifierOfFirst: firstVersionIdentifier, identifierOfSecond: secondVersionIdentifier)
+        let diffs = try valuesMap.differences(between: firstVersionIdentifier, and: secondVersionIdentifier, withCommonAncestor: commonAncestorIdentifier)
+        var merge = Merge(versions: (firstVersion, secondVersion), commonAncestor: commonAncestor)
+        for diff in diffs {
+            switch diff.fork {
+            case .inserted(let branch):
+                let versionId = branch == .first ? firstVersionIdentifier : secondVersionIdentifier
+                let value = try self.value(diff.valueIdentifier, storedAt: versionId)!
+                merge.insertedValues.append(value)
+            case .updated(let branch):
+                let versionId = branch == .first ? firstVersionIdentifier : secondVersionIdentifier
+                let value = try self.value(diff.valueIdentifier, storedAt: versionId)!
+                merge.updatedValues.append(value)
+            case .removed, .twiceRemoved:
+                merge.identifiersOfRemovedValues.append(diff.valueIdentifier)
+            case .removedAndUpdated, .twiceUpdated, .twiceInserted:
+                let originalValue = try self.value(diff.valueIdentifier, storedAt: commonAncestorIdentifier)!
+                let firstValue = try self.value(diff.valueIdentifier, storedAt: firstVersionIdentifier)
+                let secondValue = try self.value(diff.valueIdentifier, storedAt: secondVersionIdentifier)
+                let conflict: Merge.Conflict = .init(values: (firstValue, secondValue), originalValue: originalValue)
+                merge.conflicts.append(conflict)
+            }
+        }
+
+        let resolvedMerge = arbiter.merge(byResolving: merge, in: self)
+        guard resolvedMerge.conflicts.isEmpty else { throw Error.mergeFromArbiterContainsConflicts }
+        
+        var updatedValues = resolvedMerge.updatedValues + resolvedMerge.insertedValues
+        return try addVersion(basedOn: predecessors, storing: &updatedValues, removing: resolvedMerge.identifiersOfRemovedValues)
     }
     
 }
