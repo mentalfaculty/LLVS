@@ -137,24 +137,9 @@ extension Map {
     }
     
     struct Diff {
-        enum Branch {
-            case first
-            case second
-        }
-        
-        enum Fork {
-            case inserted(branch: Branch)
-            case twiceInserted
-            case removed(branch: Branch)
-            case twiceRemoved
-            case updated(branch: Branch)
-            case twiceUpdated
-            case removedAndUpdated(removedOn: Branch, updatedOn: Branch)
-        }
-        
         var key: Key
         var valueIdentifier: Value.Identifier
-        var fork: Fork
+        var valueDiff: Value.Diff
     }
     
     struct Node: Codable, Hashable {

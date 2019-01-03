@@ -14,11 +14,6 @@ public struct VersionedValue {
 
 public struct Value {
     
-    struct Diff {
-        let firstValue: Value
-        let secondValue: Value
-    }
-    
     struct Reference: Codable, Hashable {
         var identifier: Identifier
         var version: Version.Identifier
@@ -29,6 +24,30 @@ public struct Value {
         
         public init(_ identifierString: String = UUID().uuidString) {
             self.identifierString = identifierString
+        }
+    }
+    
+    public enum Diff {
+        public enum Branch {
+            case first
+            case second
+        }
+        
+        case inserted(Branch)
+        case twiceInserted
+        case removed(Branch)
+        case twiceRemoved
+        case updated(Branch)
+        case twiceUpdated
+        case removedAndUpdated(removedOn: Branch, updatedOn: Branch)
+        
+        public var conflicting: Bool {
+            switch self {
+            case .inserted, .removed, .updated:
+                return false
+            case .twiceInserted, .twiceRemoved, .twiceUpdated, .removedAndUpdated:
+                return true
+            }
         }
     }
     

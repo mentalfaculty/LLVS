@@ -14,7 +14,6 @@ public final class Store {
     
     enum Error: Swift.Error {
         case missingVersion
-        case mergeFromArbiterContainsConflicts
         case attemptToLocateUnversionedValue
         case attemptToStoreValueWithNoVersion
         case noCommonAncestor(firstVersion: Version.Identifier, secondVersion: Version.Identifier)
@@ -129,7 +128,7 @@ extension Store {
         let diffs = try valuesMap.differences(between: firstVersionIdentifier, and: secondVersionIdentifier, withCommonAncestor: commonAncestorIdentifier)
         var merge = Merge(versions: (firstVersion, secondVersion), commonAncestor: commonAncestor)
         for diff in diffs {
-            switch diff.fork {
+            switch diff.valueDiff {
             case .inserted(let branch):
                 let versionId = branch == .first ? firstVersionIdentifier : secondVersionIdentifier
                 let value = try self.value(diff.valueIdentifier, storedAt: versionId)!
@@ -149,8 +148,7 @@ extension Store {
             }
         }
 
-        let resolvedMerge = arbiter.merge(byResolving: merge, in: self)
-        guard resolvedMerge.conflicts.isEmpty else { throw Error.mergeFromArbiterContainsConflicts }
+        let resolvedMerge = arbiter.resolvedMerge(byResolving: merge, in: self)
         
         var updatedValues = resolvedMerge.updatedValues + resolvedMerge.insertedValues
         return try addVersion(basedOn: predecessors, storing: &updatedValues, removing: resolvedMerge.identifiersOfRemovedValues)
