@@ -65,33 +65,41 @@ public final class Store {
 
 extension Store {
     
-    @discardableResult public func addVersion(basedOn predecessors: Version.Predecessors?, storing storedValues: inout [Value], removing removedIdentifiers: [Value.Identifier]) throws -> Version {
+    @discardableResult public func addVersion(basedOn predecessors: Version.Predecessors?, storingChanges changes: [Value.Change]) throws -> Version {
         // Update version in values
         let version = Version(predecessors: predecessors)
-        storedValues = storedValues.map { value in
-            var newValue = value
-            newValue.version = version.identifier
-            return newValue
-        }
         
         // Store values
-        try storedValues.forEach { value in
-            try self.store(value)
+        for change in changes {
+            switch change {
+            case .insert(let value), .update(let value):
+                var newValue = value
+                newValue.version = version.identifier
+                try self.store(newValue)
+            case .remove, .preserve:
+                continue
+            }
         }
         
         // Update values map
-        let storedDeltas: [Map.Delta] = storedValues.map { value in
-            let valueId = value.identifier
-            var delta = Map.Delta(key: Map.Key(valueId.identifierString))
-            delta.addedValueIdentifiers = [valueId]
-            return delta
+        let deltas: [Map.Delta] = changes.map { change in
+            switch change {
+            case .insert(let value), .update(let value):
+                let valueRef = Value.Reference(identifier: value.identifier, version: version.identifier)
+                var delta = Map.Delta(key: Map.Key(value.identifier.identifierString))
+                delta.addedValueReferences = [valueRef]
+                return delta
+            case .remove(let valueId):
+                var delta = Map.Delta(key: Map.Key(valueId.identifierString))
+                delta.removedValueIdentifiers = [valueId]
+                return delta
+            case .preserve(let valueRef):
+                var delta = Map.Delta(key: Map.Key(valueRef.identifier.identifierString))
+                delta.addedValueReferences = [valueRef]
+                return delta
+            }
         }
-        let removedDeltas: [Map.Delta] = removedIdentifiers.map { valueIdentifier in
-            var delta = Map.Delta(key: Map.Key(valueIdentifier.identifierString))
-            delta.removedValueIdentifiers = [valueIdentifier]
-            return delta
-        }
-        try valuesMap.addVersion(version.identifier, basedOn: predecessors?.identifierOfFirst, applying: storedDeltas + removedDeltas)
+        try valuesMap.addVersion(version.identifier, basedOn: predecessors?.identifierOfFirst, applying: deltas)
         
         // Store version
         try store(version)
@@ -128,7 +136,7 @@ extension Store {
         let diffs = try valuesMap.differences(between: firstVersionIdentifier, and: secondVersionIdentifier, withCommonAncestor: commonAncestorIdentifier)
         var merge = Merge(versions: (firstVersion, secondVersion), commonAncestor: commonAncestor)
         for diff in diffs {
-            switch diff.valueDiff {
+            switch diff.valueFork {
             case .inserted(let branch):
                 let versionId = branch == .first ? firstVersionIdentifier : secondVersionIdentifier
                 let value = try self.value(diff.valueIdentifier, storedAt: versionId)!

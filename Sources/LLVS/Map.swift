@@ -62,8 +62,8 @@ final class Map {
             
             guard case let .values(valueRefs) = subNode.children else { throw Error.unexpectedNodeContent }
             var valueRefsByIdentifier: [Value.Identifier:Value.Reference] = Dictionary(uniqueKeysWithValues: valueRefs.map({ ($0.identifier, $0) }) )
-            for valueIdentifier in delta.addedValueIdentifiers {
-                valueRefsByIdentifier[valueIdentifier] = Value.Reference(identifier: valueIdentifier, version: version)
+            for valueRef in delta.addedValueReferences {
+                valueRefsByIdentifier[valueRef.identifier] = valueRef
             }
             for valueIdentifier in delta.removedValueIdentifiers {
                 valueRefsByIdentifier[valueIdentifier] = nil
@@ -128,7 +128,7 @@ extension Map {
     
     struct Delta {
         var key: Key
-        var addedValueIdentifiers: [Value.Identifier] = []
+        var addedValueReferences: [Value.Reference] = []
         var removedValueIdentifiers: [Value.Identifier] = []
         
         init(key: Key) {
@@ -139,7 +139,7 @@ extension Map {
     struct Diff {
         var key: Key
         var valueIdentifier: Value.Identifier
-        var valueDiff: Value.Diff
+        var valueFork: Value.Fork
     }
     
     struct Node: Codable, Hashable {
@@ -151,13 +151,13 @@ extension Map {
         case values([Value.Reference])
         case nodes([Zone.Reference])
         
-        enum Keys: CodingKey {
+        enum Key: CodingKey {
             case values
             case nodes
         }
         
         init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: Keys.self)
+            let container = try decoder.container(keyedBy: Key.self)
             if let values = try? container.decode([Value.Reference].self, forKey: .values) {
                 self = .values(values)
             } else if let nodes = try? container.decode([Zone.Reference].self, forKey: .nodes) {
@@ -168,7 +168,7 @@ extension Map {
         }
         
         func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: Keys.self)
+            var container = encoder.container(keyedBy: Key.self)
             switch self {
             case let .values(values):
                 try container.encode(values, forKey: .values)

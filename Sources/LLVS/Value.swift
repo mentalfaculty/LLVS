@@ -7,49 +7,8 @@
 
 import Foundation
 
-public struct VersionedValue {
-    public var value: Value
-    public var version: Version
-}
 
 public struct Value {
-    
-    struct Reference: Codable, Hashable {
-        var identifier: Identifier
-        var version: Version.Identifier
-    }
-    
-    public struct Identifier: StringIdentifiable, Hashable, Codable {
-        public var identifierString: String
-        
-        public init(_ identifierString: String = UUID().uuidString) {
-            self.identifierString = identifierString
-        }
-    }
-    
-    public enum Diff {
-        public enum Branch {
-            case first
-            case second
-        }
-        
-        case inserted(Branch)
-        case twiceInserted
-        case removed(Branch)
-        case twiceRemoved
-        case updated(Branch)
-        case twiceUpdated
-        case removedAndUpdated(removedOn: Branch, updatedOn: Branch)
-        
-        public var conflicting: Bool {
-            switch self {
-            case .inserted, .removed, .updated:
-                return false
-            case .twiceInserted, .twiceRemoved, .twiceUpdated, .removedAndUpdated:
-                return true
-            }
-        }
-    }
     
     var identifier: Identifier
     var version: Version.Identifier?
@@ -65,5 +24,53 @@ public struct Value {
         self.version = version
         self.data = data
     }
+
+}
+
+
+public extension Value {
     
+    public struct Reference: Codable, Hashable {
+        var identifier: Identifier
+        var version: Version.Identifier
+    }
+    
+    public struct Identifier: StringIdentifiable, Hashable, Codable {
+        public var identifierString: String
+        
+        public init(_ identifierString: String = UUID().uuidString) {
+            self.identifierString = identifierString
+        }
+    }
+    
+    public enum Change {
+        case insert(Value)
+        case update(Value)
+        case remove(Identifier)
+        case preserve(Reference)
+    }
+    
+    public enum Fork {
+        public enum Branch {
+            case first
+            case second
+        }
+        
+        case inserted(Branch)
+        case twiceInserted
+        case removed(Branch)
+        case twiceRemoved
+        case updated(Branch)
+        case twiceUpdated
+        case removedAndUpdated(removedOn: Branch)
+        
+        public var conflicting: Bool {
+            switch self {
+            case .inserted, .removed, .updated, .twiceRemoved:
+                return false
+            case .twiceInserted, .twiceUpdated, .removedAndUpdated:
+                return true
+            }
+        }
+    }
 }

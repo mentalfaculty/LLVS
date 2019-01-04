@@ -9,6 +9,22 @@ import Foundation
 
 public struct Version: Codable, Hashable {
     
+    public var identifier: Identifier = .init()
+    public var predecessors: Predecessors?
+    public var successors: Successors = .init()
+    public var timestamp: TimeInterval
+    
+    public init(identifier: Identifier = .init(), predecessors: Predecessors? = nil) {
+        self.identifier = identifier
+        self.predecessors = predecessors
+        self.timestamp = Date().timeIntervalSinceReferenceDate
+    }
+    
+}
+
+
+extension Version {
+    
     public struct Identifier: StringIdentifiable, Codable, Hashable {
         public var identifierString: String
         public init(_ identifierString: String = UUID().uuidString) {
@@ -37,18 +53,7 @@ public struct Version: Codable, Hashable {
             self.identifiers = identifiers
         }
     }
-    
-    public var identifier: Identifier = .init()
-    public var predecessors: Predecessors?
-    public var successors: Successors = .init()
-    public var timestamp: TimeInterval
-    
-    public init(identifier: Identifier = .init(), predecessors: Predecessors? = nil) {
-        self.identifier = identifier
-        self.predecessors = predecessors
-        self.timestamp = Date().timeIntervalSinceReferenceDate
-    }
-    
+
 }
 
 
