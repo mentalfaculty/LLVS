@@ -13,7 +13,6 @@ public struct Merge {
     public var commonAncestor: Version
     public var versions: (first: Version, second: Version)
     public var forksByValueIdentifier: [Value.Identifier:Value.Fork] = [:]
-    public var changes: [Value.Change] = []
     
     internal init(versions: (first: Version, second: Version), commonAncestor: Version) {
         self.commonAncestor = commonAncestor
@@ -23,8 +22,8 @@ public struct Merge {
 }
 
 
-protocol Arbiter {
+protocol MergeArbiter {
     
-    func resolvedMerge(byResolvingConflictsIn merge: inout Merge, in store: Store)
+    func changes(toResolve merge: Merge, in store: Store) -> [Value.Change]
     
 }

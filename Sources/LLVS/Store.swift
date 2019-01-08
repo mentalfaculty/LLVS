@@ -17,6 +17,7 @@ public final class Store {
         case attemptToLocateUnversionedValue
         case attemptToStoreValueWithNoVersion
         case noCommonAncestor(firstVersion: Version.Identifier, secondVersion: Version.Identifier)
+        case unresolvedConflict(valueIdentifier: Value.Identifier, valueFork: Value.Fork)
     }
     
     public let rootDirectoryURL: URL
@@ -65,7 +66,9 @@ public final class Store {
 
 extension Store {
     
-    @discardableResult public func addVersion(basedOn predecessors: Version.Predecessors?, storingChanges changes: [Value.Change]) throws -> Version {
+    /// Changes must include all updates to the map of the first predecessor. If necessary, preserves should be included to bring values
+    /// from the second predecessor into the first predecessor map.
+    @discardableResult public func addVersion(basedOn predecessors: Version.Predecessors?, storing changes: [Value.Change]) throws -> Version {
         // Update version in values
         let version = Version(predecessors: predecessors)
         
@@ -76,7 +79,7 @@ extension Store {
                 var newValue = value
                 newValue.version = version.identifier
                 try self.store(newValue)
-            case .remove, .preserve:
+            case .remove, .preserve, .preserveRemoval:
                 continue
             }
         }
@@ -89,7 +92,7 @@ extension Store {
                 var delta = Map.Delta(key: Map.Key(value.identifier.identifierString))
                 delta.addedValueReferences = [valueRef]
                 return delta
-            case .remove(let valueId):
+            case .remove(let valueId), .preserveRemoval(let valueId):
                 var delta = Map.Delta(key: Map.Key(valueId.identifierString))
                 delta.removedValueIdentifiers = [valueId]
                 return delta
@@ -121,7 +124,7 @@ extension Store {
 
 extension Store {
     
-    func merge(version firstVersionIdentifier: Version.Identifier, with secondVersionIdentifier: Version.Identifier, resolvingWith arbiter: Arbiter) throws -> Version {
+    func merge(version firstVersionIdentifier: Version.Identifier, with secondVersionIdentifier: Version.Identifier, resolvingWith arbiter: MergeArbiter) throws -> Version {
         guard let commonAncestorIdentifier = try history.greatestCommonAncestor(ofVersionsIdentifiedBy: (firstVersionIdentifier, secondVersionIdentifier)) else {
             throw Error.noCommonAncestor(firstVersion: firstVersionIdentifier, secondVersion: secondVersionIdentifier)
         }
@@ -132,34 +135,42 @@ extension Store {
             throw Error.missingVersion
         }
         
+        // Prepare merge
         let predecessors = Version.Predecessors(identifierOfFirst: firstVersionIdentifier, identifierOfSecond: secondVersionIdentifier)
         let diffs = try valuesMap.differences(between: firstVersionIdentifier, and: secondVersionIdentifier, withCommonAncestor: commonAncestorIdentifier)
         var merge = Merge(versions: (firstVersion, secondVersion), commonAncestor: commonAncestor)
+        let forkTuples = diffs.map({ ($0.valueIdentifier, $0.valueFork) })
+        merge.forksByValueIdentifier = .init(uniqueKeysWithValues: forkTuples)
+        
+        // Resolve with arbiter
+        var changes = arbiter.changes(toResolve: merge, in: self)
+        
+        // Check changes resolve conflicts
+        let idsInChanges = Set(changes.valueIdentifiers)
         for diff in diffs {
-            switch diff.valueFork {
-            case .inserted(let branch):
-                let versionId = branch == .first ? firstVersionIdentifier : secondVersionIdentifier
-                let value = try self.value(diff.valueIdentifier, storedAt: versionId)!
-                merge.insertedValues.append(value)
-            case .updated(let branch):
-                let versionId = branch == .first ? firstVersionIdentifier : secondVersionIdentifier
-                let value = try self.value(diff.valueIdentifier, storedAt: versionId)!
-                merge.updatedValues.append(value)
-            case .removed, .twiceRemoved:
-                merge.identifiersOfRemovedValues.append(diff.valueIdentifier)
-            case .removedAndUpdated, .twiceUpdated, .twiceInserted:
-                let originalValue = try self.value(diff.valueIdentifier, storedAt: commonAncestorIdentifier)!
-                let firstValue = try self.value(diff.valueIdentifier, storedAt: firstVersionIdentifier)
-                let secondValue = try self.value(diff.valueIdentifier, storedAt: secondVersionIdentifier)
-                let conflict: Merge.Conflict = .init(values: (firstValue, secondValue), originalValue: originalValue)
-                merge.conflicts.append(conflict)
+            if diff.valueFork.isConflicting && !idsInChanges.contains(diff.valueIdentifier) {
+                throw Error.unresolvedConflict(valueIdentifier: diff.valueIdentifier, valueFork: diff.valueFork)
             }
         }
-
-        let resolvedMerge = arbiter.resolvedMerge(byResolving: merge, in: self)
         
-        var updatedValues = resolvedMerge.updatedValues + resolvedMerge.insertedValues
-        return try addVersion(basedOn: predecessors, storing: &updatedValues, removing: resolvedMerge.identifiersOfRemovedValues)
+        // Must make sure any change that was made in the second predecessor is included,
+        // via a 'preserve' if necessary.
+        // This is so the map of the first predecessor is updated properly.
+        for diff in diffs where !idsInChanges.contains(diff.valueIdentifier) {
+            switch diff.valueFork {
+            case .inserted(let branch) where branch == .second:
+                fallthrough
+            case .updated(let branch) where branch == .second:
+                let ref = Value.Reference(identifier: diff.valueIdentifier, version: secondVersionIdentifier)
+                changes.append(.preserve(ref))
+            case .removed(let branch) where branch == .second:
+                changes.append(.preserveRemoval(diff.valueIdentifier))
+            default:
+                break
+            }
+        }
+        
+        return try addVersion(basedOn: predecessors, storing: changes)
     }
     
 }

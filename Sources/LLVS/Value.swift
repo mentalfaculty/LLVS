@@ -48,6 +48,7 @@ public extension Value {
         case update(Value)
         case remove(Identifier)
         case preserve(Reference)
+        case preserveRemoval(Identifier)
     }
     
     public enum Fork {
@@ -64,7 +65,7 @@ public extension Value {
         case twiceUpdated
         case removedAndUpdated(removedOn: Branch)
         
-        public var conflicting: Bool {
+        public var isConflicting: Bool {
             switch self {
             case .inserted, .removed, .updated, .twiceRemoved:
                 return false
@@ -73,4 +74,22 @@ public extension Value {
             }
         }
     }
+}
+
+
+extension Array where Element == Value.Change {
+    
+    var valueIdentifiers: [Value.Identifier] {
+        return self.map { change in
+            switch change {
+            case .insert(let value), .update(let value):
+                return value.identifier
+            case .remove(let identifier), .preserveRemoval(let identifier):
+                return identifier
+            case .preserve(let ref):
+                return ref.identifier
+            }
+        }
+    }
+    
 }
