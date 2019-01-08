@@ -20,23 +20,22 @@ class PrevailingValueTests: XCTestCase {
 
     override func setUp() {
         func addVersion(withName name: String) {
-            var values = [Value(identifier: valueIdentifier, version: nil, data: "\(name)".data(using: .utf8)!)]
+            let values = [Value(identifier: valueIdentifier, version: nil, data: "\(name)".data(using: .utf8)!)]
+            let changes: [Value.Change] = values.map { .insert($0) }
             let predecessors = versions!.last.flatMap { Version.Predecessors(identifierOfFirst: $0.identifier, identifierOfSecond: nil) }
-            let version = try! store.addVersion(basedOn: predecessors, storing: &values, removing: [])
+            let version = try! store.addVersion(basedOn: predecessors, storing: changes)
             versions.append(version)
         }
         
         func addEmptyVersion() {
             let predecessors = versions!.last.flatMap { Version.Predecessors(identifierOfFirst: $0.identifier, identifierOfSecond: nil) }
-            var values: [Value] = []
-            let version = try! store.addVersion(basedOn: predecessors, storing: &values, removing: [])
+            let version = try! store.addVersion(basedOn: predecessors, storing: [])
             versions.append(version)
         }
         
         func addBranchVersion() {
-            var values: [Value] = []
             let predecessors =  Version.Predecessors(identifierOfFirst: versions[0].identifier, identifierOfSecond: versions.last!.identifier)
-            let version = try! store.addVersion(basedOn: predecessors, storing: &values, removing: [])
+            let version = try! store.addVersion(basedOn: predecessors, storing: [])
             versions.append(version)
         }
         

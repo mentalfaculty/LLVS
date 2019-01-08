@@ -37,8 +37,9 @@ class MapTests: XCTestCase {
     func testFirstCommit() {
         let valueKey = "ABCD"
         let versionId = Version.Identifier("1234")
+        let valueRef = Value.Reference(identifier: .init(valueKey), version: versionId)
         var delta: Map.Delta = .init(key: .init(valueKey))
-        delta.addedValueIdentifiers = [.init(valueKey)]
+        delta.addedValueReferences = [valueRef]
         XCTAssertNoThrow(try map.addVersion(versionId, basedOn: nil, applying: [delta]))
         let valueRefs = try! map.valueReferences(matching: .init(valueKey), at: versionId)
         XCTAssertEqual(valueRefs.count, 1)
@@ -48,7 +49,9 @@ class MapTests: XCTestCase {
     func testFetchingValueFromEarlierCommit() {
         let valueKey = "ABCD"
         var delta: Map.Delta = .init(key: .init(valueKey))
-        delta.addedValueIdentifiers = [.init(valueKey)]
+        let versionId = Version.Identifier("1234")
+        let valueRef = Value.Reference(identifier: .init(valueKey), version: versionId)
+        delta.addedValueReferences = [valueRef]
         try! map.addVersion(.init("1234"), basedOn: nil, applying: [delta])
         try! map.addVersion(.init("2345"), basedOn: .init("1234"), applying: [])
         let valueRefs = try! map.valueReferences(matching: .init(valueKey), at: .init("2345"))
@@ -59,14 +62,18 @@ class MapTests: XCTestCase {
     func testRemovingValue() {
         let valueKey1 = "ABCD"
         var delta1: Map.Delta = .init(key: .init(valueKey1))
-        delta1.addedValueIdentifiers = [.init(valueKey1)]
-        try! map.addVersion(.init("1234"), basedOn: nil, applying: [delta1])
+        let versionId1 = Version.Identifier("1234")
+        let valueRef1 = Value.Reference(identifier: .init(valueKey1), version: versionId1)
+        delta1.addedValueReferences = [valueRef1]
+        try! map.addVersion(versionId1, basedOn: nil, applying: [delta1])
         
         let valueKey2 = "BCDE"
+        let versionId2 = Version.Identifier("2345")
         var delta21: Map.Delta = .init(key: .init(valueKey1))
         delta21.removedValueIdentifiers = [.init(valueKey1)]
         var delta22: Map.Delta = .init(key: .init(valueKey2))
-        delta22.addedValueIdentifiers = [.init(valueKey2)]
+        let valueRef2 = Value.Reference(identifier: .init(valueKey2), version: versionId2)
+        delta22.addedValueReferences = [valueRef2]
         try! map.addVersion(.init("2345"), basedOn: .init("1234"), applying: [delta21, delta22])
         
         var valueRefs = try! map.valueReferences(matching: .init(valueKey1), at: .init("2345"))
@@ -79,12 +86,14 @@ class MapTests: XCTestCase {
     
     func testOneToManyMap() {
         var delta1: Map.Delta = .init(key: .init("Amsterdam"))
-        delta1.addedValueIdentifiers = [.init("ABCD")]
-        try! map.addVersion(.init("1234"), basedOn: nil, applying: [delta1])
+        let valueRef1 = Value.Reference(identifier: .init("ABCD"), version: .init("1234"))
+        delta1.addedValueReferences = [valueRef1]
+        try! map.addVersion(valueRef1.version, basedOn: nil, applying: [delta1])
         
         var delta2: Map.Delta = .init(key: .init("Amsterdam"))
-        delta2.addedValueIdentifiers = [.init("CDEF")]
-        try! map.addVersion(.init("2345"), basedOn: .init("1234"), applying: [delta2])
+        let valueRef2 = Value.Reference(identifier: .init("CDEF"), version: .init("2345"))
+        delta2.addedValueReferences = [valueRef2]
+        try! map.addVersion(valueRef2.version, basedOn: .init("1234"), applying: [delta2])
         
         var valueRefs = try! map.valueReferences(matching: .init("Amsterdam"), at: .init("2345"))
         XCTAssertEqual(valueRefs.count, 2)

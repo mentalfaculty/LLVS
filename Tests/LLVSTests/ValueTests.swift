@@ -19,8 +19,8 @@ final class ValueTests: XCTestCase {
         store = try! Store(rootDirectoryURL: rootURL)
         
         originalValue = Value(identifier: .init("ABCDEF"), version: nil, data: "Bob".data(using: .utf8)!)
-        var values = [originalValue!]
-        version = try! store.addVersion(basedOn: nil, storing: &values, removing: [])
+        let changes: [Value.Change] = [.insert(originalValue!)]
+        version = try! store.addVersion(basedOn: nil, storing: changes)
     }
     
     override func tearDown() {
@@ -65,9 +65,9 @@ final class ValueTests: XCTestCase {
     
     func testFetchingAllVersionOfValue() {
         let newValue = Value(identifier: .init("ABCDEF"), version: nil, data: "Dave".data(using: .utf8)!)
-        var values = [newValue]
+        let changes: [Value.Change] = [.insert(newValue)]
         let predecessor = Version.Predecessors(identifierOfFirst: version.identifier, identifierOfSecond: nil)
-        let newVersion = try! store.addVersion(basedOn: predecessor, storing: &values, removing: [])
+        let newVersion = try! store.addVersion(basedOn: predecessor, storing: changes)
 
         let fetchedValues = try! store.values(newValue.identifier)
         
@@ -80,8 +80,8 @@ final class ValueTests: XCTestCase {
     
     func testAllVersionsOfValue() {
         let newValue = Value(identifier: .init("ABCDEF"), version: nil, data: "Dave".data(using: .utf8)!)
-        var values = [newValue]
-        let newVersion = try! store.addVersion(basedOn: nil, storing: &values, removing: [])
+        let changes: [Value.Change] = [.insert(newValue)]
+        let newVersion = try! store.addVersion(basedOn: nil, storing: changes)
         
         let versionIdentifiers = try! store.versionIdentifiers(for: newValue.identifier)
         
