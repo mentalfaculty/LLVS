@@ -88,7 +88,135 @@ final class Map {
     }
     
     func differences(between firstVersion: Version.Identifier, and secondVersion: Version.Identifier, withCommonAncestor commonAncestor: Version.Identifier) throws -> [Diff] {
-        return []
+        let originRef = Zone.Reference(key: rootKey, version: commonAncestor)
+        let rootRef1 = Zone.Reference(key: rootKey, version: firstVersion)
+        let rootRef2 = Zone.Reference(key: rootKey, version: secondVersion)
+        
+        guard let originNode = try node(for: originRef),
+            let rootNode1 = try node(for: rootRef1),
+            let rootNode2 = try node(for: rootRef2) else {
+            throw Error.missingVersionRoot
+        }
+
+        guard case let .nodes(nodesOrigin) = originNode.children,
+            case let .nodes(subNodes1) = rootNode1.children,
+            case let .nodes(subNodes2) = rootNode2.children else {
+            throw Error.unexpectedNodeContent
+        }
+
+        let refOriginByKey: [String:Zone.Reference] = .init(uniqueKeysWithValues: nodesOrigin.map({ ($0.key, $0) }))
+        let subNodeRefs1ByKey: [String:Zone.Reference] = .init(uniqueKeysWithValues: subNodes1.map({ ($0.key, $0) }))
+        let subNodeRefs2ByKey: [String:Zone.Reference] = .init(uniqueKeysWithValues: subNodes2.map({ ($0.key, $0) }))
+        let allSubNodeKeys = Set(subNodeRefs1ByKey.keys).union(subNodeRefs2ByKey.keys).union(refOriginByKey.keys)
+        
+        var diffs: [Diff] = []
+        for subNodeKey in allSubNodeKeys {
+            
+            func appendDiffs(forIdentifiers ids: [Value.Identifier], fork: Value.Fork) throws {
+                for id in ids {
+                    let diff = Diff(key: .init(subNodeKey), valueIdentifier: id, valueFork: fork)
+                    diffs.append(diff)
+                }
+            }
+            
+            func appendDiffs(forSubNode subNodeRef: Zone.Reference, fork: Value.Fork) throws {
+                let refs = try valueReferences(forRootSubNode: subNodeRef)
+                try appendDiffs(forIdentifiers: refs.map({ $0.identifier }), fork: fork)
+            }
+            
+            func appendDiffs(forOriginNode originNode: Zone.Reference, branchNode: Zone.Reference, branch: Value.Fork.Branch) throws {
+                let vo = try valueReferences(forRootSubNode: originNode)
+                let vb = try valueReferences(forRootSubNode: branchNode)
+                let refOById: [Value.Identifier:Value.Reference] = .init(uniqueKeysWithValues: vo.map({ ($0.identifier, $0) }))
+                let refBById: [Value.Identifier:Value.Reference] = .init(uniqueKeysWithValues: vb.map({ ($0.identifier, $0) }))
+                let allIds = Set(refOById.keys).union(refBById.keys)
+                for valueId in allIds {
+                    let refO = refOById[valueId]
+                    let ref2 = refBById[valueId]
+                    switch (refO, ref2) {
+                    case (_?, _?):
+                        try appendDiffs(forIdentifiers: [valueId], fork: .updated(branch))
+                    case (_?, nil):
+                        try appendDiffs(forIdentifiers: [valueId], fork: .removed(branch))
+                    case (nil, _?):
+                        try appendDiffs(forIdentifiers: [valueId], fork: .inserted(branch))
+                    case (nil, nil):
+                        fatalError()
+                    }
+                }
+            }
+            
+            let ref1 = subNodeRefs1ByKey[subNodeKey]
+            let ref2 = subNodeRefs2ByKey[subNodeKey]
+            let origin = refOriginByKey[subNodeKey]
+            switch (origin, ref1, ref2) {
+            case let (o?, r1?, r2?):
+                let vo = try valueReferences(forRootSubNode: o)
+                let v1 = try valueReferences(forRootSubNode: r1)
+                let v2 = try valueReferences(forRootSubNode: r2)
+                let refOById: [Value.Identifier:Value.Reference] = .init(uniqueKeysWithValues: vo.map({ ($0.identifier, $0) }))
+                let ref1ById: [Value.Identifier:Value.Reference] = .init(uniqueKeysWithValues: v1.map({ ($0.identifier, $0) }))
+                let ref2ById: [Value.Identifier:Value.Reference] = .init(uniqueKeysWithValues: v2.map({ ($0.identifier, $0) }))
+                let allIds = Set(refOById.keys).union(ref1ById.keys).union(ref2ById.keys)
+                for valueId in allIds {
+                    let refO = refOById[valueId]
+                    let ref1 = ref1ById[valueId]
+                    let ref2 = ref2ById[valueId]
+                    switch (refO, ref1, ref2) {
+                    case (_?, _?, _?):
+                        try appendDiffs(forIdentifiers: [valueId], fork: .twiceUpdated)
+                    case (_?, _?, nil):
+                        try appendDiffs(forIdentifiers: [valueId], fork: .updated(.first))
+                    case (_?, nil, _?):
+                        try appendDiffs(forIdentifiers: [valueId], fork: .updated(.second))
+                    case (nil, _?, _?):
+                        try appendDiffs(forIdentifiers: [valueId], fork: .twiceInserted)
+                    case (nil, nil, _?):
+                        try appendDiffs(forIdentifiers: [valueId], fork: .inserted(.second))
+                    case (nil, _?, nil):
+                        try appendDiffs(forIdentifiers: [valueId], fork: .inserted(.first))
+                    case (_?, nil, nil):
+                        try appendDiffs(forIdentifiers: [valueId], fork: .twiceRemoved)
+                    case (nil, nil, nil):
+                        fatalError()
+                    }
+                }
+            case let (o?, r1?, nil):
+                try appendDiffs(forOriginNode: o, branchNode: r1, branch: .first)
+            case let (o?, nil, r2?):
+                try appendDiffs(forOriginNode: o, branchNode: r2, branch: .second)
+            case let (nil, r1?, r2?):
+                let v1 = try valueReferences(forRootSubNode: r1)
+                let v2 = try valueReferences(forRootSubNode: r2)
+                let ref1ById: [Value.Identifier:Value.Reference] = .init(uniqueKeysWithValues: v1.map({ ($0.identifier, $0) }))
+                let ref2ById: [Value.Identifier:Value.Reference] = .init(uniqueKeysWithValues: v2.map({ ($0.identifier, $0) }))
+                let allIds = Set(ref1ById.keys).union(ref2ById.keys)
+                for valueId in allIds {
+                    let ref1 = ref1ById[valueId]
+                    let ref2 = ref2ById[valueId]
+                    switch (ref1, ref2) {
+                    case (_?, _?):
+                        try appendDiffs(forIdentifiers: [valueId], fork: .twiceInserted)
+                    case (_?, nil):
+                        try appendDiffs(forIdentifiers: [valueId], fork: .inserted(.first))
+                    case (nil, _?):
+                        try appendDiffs(forIdentifiers: [valueId], fork: .inserted(.second))
+                    case (nil, nil):
+                        fatalError()
+                    }
+                }
+            case let (nil, r1?, nil):
+                try appendDiffs(forSubNode: r1, fork: .inserted(.first))
+            case let (nil, nil, r2?):
+                try appendDiffs(forSubNode: r2, fork: .inserted(.second))
+            case let (o?, nil, nil):
+                try appendDiffs(forSubNode: o, fork: .twiceRemoved)
+            case (nil, nil, nil):
+                fatalError()
+            }
+        }
+
+        return diffs
     }
     
     func valueReferences(matching key: Map.Key, at version: Version.Identifier) throws -> [Value.Reference] {
@@ -110,6 +238,12 @@ final class Map {
     fileprivate func node(for reference: Zone.Reference) throws -> Node? {
         guard let data = try zone.data(for: reference) else { return nil }
         return try decoder.decode(Node.self, from: data)
+    }
+    
+    private func valueReferences(forRootSubNode subNodeRef: Zone.Reference) throws -> [Value.Reference] {
+        guard let subNode = try node(for: subNodeRef) else { throw Error.missingNode }
+        guard case let .values(valueRefs) = subNode.children else { throw Error.unexpectedNodeContent }
+        return valueRefs
     }
     
 }
