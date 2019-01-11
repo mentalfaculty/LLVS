@@ -51,10 +51,14 @@ public extension Value {
         case preserveRemoval(Identifier)
     }
     
-    public enum Fork {
-        public enum Branch {
+    public enum Fork: Equatable {
+        public enum Branch: Equatable {
             case first
             case second
+            
+            var opposite: Branch {
+                return self == .first ? .second : .first
+            }
         }
         
         case inserted(Branch)

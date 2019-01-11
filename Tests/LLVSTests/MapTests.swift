@@ -30,10 +30,6 @@ class MapTests: XCTestCase {
         super.tearDown()
     }
     
-    func testFetchingNonExistentVersionThrows() {
-        
-    }
-    
     func testFirstCommit() {
         let valueKey = "ABCD"
         let versionId = Version.Identifier("1234")
@@ -110,9 +106,9 @@ class MapTests: XCTestCase {
     }
     
     static var allTests = [
-        ("testFetchingNonExistentVersionThrows", testFetchingNonExistentVersionThrows),
         ("testFirstCommit", testFirstCommit),
         ("testFetchingValueFromEarlierCommit", testFetchingValueFromEarlierCommit),
         ("testRemovingValue", testRemovingValue),
+        ("testOneToManyMap", testOneToManyMap),
     ]
 }

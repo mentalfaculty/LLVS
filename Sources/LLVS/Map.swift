@@ -124,7 +124,7 @@ final class Map {
                 try appendDiffs(forIdentifiers: refs.map({ $0.identifier }), fork: fork)
             }
             
-            func appendDiffs(forOriginNode originNode: Zone.Reference, branchNode: Zone.Reference, branch: Value.Fork.Branch) throws {
+            func appendDiffs(forOriginNode originNode: Zone.Reference, onlyBranchNode branchNode: Zone.Reference, branch: Value.Fork.Branch) throws {
                 let vo = try valueReferences(forRootSubNode: originNode)
                 let vb = try valueReferences(forRootSubNode: branchNode)
                 let refOById: [Value.Identifier:Value.Reference] = .init(uniqueKeysWithValues: vo.map({ ($0.identifier, $0) }))
@@ -132,12 +132,16 @@ final class Map {
                 let allIds = Set(refOById.keys).union(refBById.keys)
                 for valueId in allIds {
                     let refO = refOById[valueId]
-                    let ref2 = refBById[valueId]
-                    switch (refO, ref2) {
-                    case (_?, _?):
-                        try appendDiffs(forIdentifiers: [valueId], fork: .updated(branch))
+                    let refB = refBById[valueId]
+                    switch (refO, refB) {
+                    case let (ro?, rb?):
+                        if ro != rb {
+                            try appendDiffs(forIdentifiers: [valueId], fork: .removedAndUpdated(removedOn: branch.opposite))
+                        } else {
+                            try appendDiffs(forIdentifiers: [valueId], fork: .removed(branch.opposite))
+                        }
                     case (_?, nil):
-                        try appendDiffs(forIdentifiers: [valueId], fork: .removed(branch))
+                        try appendDiffs(forIdentifiers: [valueId], fork: .twiceRemoved)
                     case (nil, _?):
                         try appendDiffs(forIdentifiers: [valueId], fork: .inserted(branch))
                     case (nil, nil):
@@ -163,12 +167,26 @@ final class Map {
                     let ref1 = ref1ById[valueId]
                     let ref2 = ref2ById[valueId]
                     switch (refO, ref1, ref2) {
-                    case (_?, _?, _?):
-                        try appendDiffs(forIdentifiers: [valueId], fork: .twiceUpdated)
-                    case (_?, _?, nil):
-                        try appendDiffs(forIdentifiers: [valueId], fork: .updated(.first))
-                    case (_?, nil, _?):
-                        try appendDiffs(forIdentifiers: [valueId], fork: .updated(.second))
+                    case let (ro?, r1?, r2?):
+                        if ro == r1, ro != r2 {
+                            try appendDiffs(forIdentifiers: [valueId], fork: .updated(.second))
+                        } else if ro != r1, ro == r2 {
+                            try appendDiffs(forIdentifiers: [valueId], fork: .updated(.first))
+                        } else if ro != r1, ro != r2 {
+                            try appendDiffs(forIdentifiers: [valueId], fork: .twiceUpdated)
+                        }
+                    case let (ro?, r1?, nil):
+                        if ro != r1 {
+                            try appendDiffs(forIdentifiers: [valueId], fork: .removedAndUpdated(removedOn: .second))
+                        } else {
+                            try appendDiffs(forIdentifiers: [valueId], fork: .removed(.second))
+                        }
+                    case let (ro?, nil, r2?):
+                        if ro != r2 {
+                            try appendDiffs(forIdentifiers: [valueId], fork: .removedAndUpdated(removedOn: .first))
+                        } else {
+                            try appendDiffs(forIdentifiers: [valueId], fork: .removed(.first))
+                        }
                     case (nil, _?, _?):
                         try appendDiffs(forIdentifiers: [valueId], fork: .twiceInserted)
                     case (nil, nil, _?):
@@ -182,9 +200,9 @@ final class Map {
                     }
                 }
             case let (o?, r1?, nil):
-                try appendDiffs(forOriginNode: o, branchNode: r1, branch: .first)
+                try appendDiffs(forOriginNode: o, onlyBranchNode: r1, branch: .first)
             case let (o?, nil, r2?):
-                try appendDiffs(forOriginNode: o, branchNode: r2, branch: .second)
+                try appendDiffs(forOriginNode: o, onlyBranchNode: r2, branch: .second)
             case let (nil, r1?, r2?):
                 let v1 = try valueReferences(forRootSubNode: r1)
                 let v2 = try valueReferences(forRootSubNode: r2)
