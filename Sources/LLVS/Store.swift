@@ -66,9 +66,14 @@ public final class Store {
 
 extension Store {
     
+    @discardableResult public func addVersion(basedOnPredecessor version: Version.Identifier?, storing changes: [Value.Change]) throws -> Version {
+        let predecessors = version.flatMap { Version.Predecessors(identifierOfFirst: $0, identifierOfSecond: nil) }
+        return try addVersion(basedOn: predecessors, storing: changes)
+    }
+    
     /// Changes must include all updates to the map of the first predecessor. If necessary, preserves should be included to bring values
     /// from the second predecessor into the first predecessor map.
-    @discardableResult public func addVersion(basedOn predecessors: Version.Predecessors?, storing changes: [Value.Change]) throws -> Version {
+    @discardableResult internal func addVersion(basedOn predecessors: Version.Predecessors?, storing changes: [Value.Change]) throws -> Version {
         // Update version in values
         let version = Version(predecessors: predecessors)
         

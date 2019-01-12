@@ -22,14 +22,12 @@ class PrevailingValueTests: XCTestCase {
         func addVersion(withName name: String) {
             let values = [Value(identifier: valueIdentifier, version: nil, data: "\(name)".data(using: .utf8)!)]
             let changes: [Value.Change] = values.map { .insert($0) }
-            let predecessors = versions!.last.flatMap { Version.Predecessors(identifierOfFirst: $0.identifier, identifierOfSecond: nil) }
-            let version = try! store.addVersion(basedOn: predecessors, storing: changes)
+            let version = try! store.addVersion(basedOnPredecessor: versions!.last?.identifier, storing: changes)
             versions.append(version)
         }
         
         func addEmptyVersion() {
-            let predecessors = versions!.last.flatMap { Version.Predecessors(identifierOfFirst: $0.identifier, identifierOfSecond: nil) }
-            let version = try! store.addVersion(basedOn: predecessors, storing: [])
+            let version = try! store.addVersion(basedOnPredecessor: versions!.last?.identifier, storing: [])
             versions.append(version)
         }
         

@@ -94,10 +94,31 @@ class MergeTests: XCTestCase {
         XCTAssertEqual(mergeValue.data, "Tom".data(using: .utf8)!)
     }
     
+    func testAsymmetricBranchPreserve() {
+//        class Arbiter: MergeArbiter {
+//            func changes(toResolve merge: Merge, in store: Store) -> [Value.Change] {
+//                let fork = merge.forksByValueIdentifier[.init("ABCDEF")]
+//                XCTAssertEqual(fork, .twiceUpdated)
+//                let firstValue = try! store.value(.init("ABCDEF"), prevailingAt: merge.versions.first.identifier)!
+//                return [.preserve(firstValue.reference!)]
+//            }
+//        }
+//        
+//        let predecessors: Version.Predecessors = .init(identifierOfFirst: branch1.identifier, identifierOfSecond: nil)
+//        branch1 = try! store.addVersion(basedOn: predecessors, storing: changes1)
+//        
+//        let mergeVersion = try! store.merge(version: branch1.identifier, with: branch2.identifier, resolvingWith: Arbiter())
+//        let mergeValue = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)!
+//        XCTAssertEqual(mergeValue.data, "Tom".data(using: .utf8)!)
+    }
+    
+    
     static var allTests = [
         ("testUnresolveMergeFails", testUnresolveMergeFails),
         ("testResolvedMergeSucceeds", testResolvedMergeSucceeds),
         ("testIncompletelyResolvedMergeFails", testIncompletelyResolvedMergeFails),
+        ("testPreserve", testPreserve),
+        ("testAsymmetricBranchPreserve", testAsymmetricBranchPreserve),
     ]
 }
 
