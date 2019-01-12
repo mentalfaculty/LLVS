@@ -48,7 +48,7 @@ final class Map {
             let subNodeKey = Key(String(key.keyString.prefix(2)))
             let subNodeRef = Zone.Reference(key: subNodeKey.keyString, version: version)
             var subNode: Node
-            if let n = subNodesByKey[key] {
+            if let n = subNodesByKey[subNodeKey] {
                 subNode = n
             }
             else if let existingSubNodeRef = rootChildRefs.first(where: { $0.key == subNodeKey.keyString }) {
@@ -71,7 +71,7 @@ final class Map {
             let newValueRefs = Array(valueRefsByIdentifier.values)
             subNode.children = .values(newValueRefs)
             
-            subNodesByKey[key] = subNode
+            subNodesByKey[subNodeKey] = subNode
         }
         
         // Update and save subnodes and rootnode
