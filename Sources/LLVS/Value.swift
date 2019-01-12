@@ -10,13 +10,18 @@ import Foundation
 
 public struct Value {
     
-    var identifier: Identifier
-    var version: Version.Identifier?
-    var data: Data
+    public var identifier: Identifier
+    public var version: Version.Identifier?
+    public var data: Data
     
-    var zoneReference: Zone.Reference? {
+    internal var zoneReference: Zone.Reference? {
         guard let version = version else { return nil }
         return Zone.Reference(key: identifier.identifierString, version: version)
+    }
+    
+    public var reference: Reference? {
+        guard let version = version else { return nil }
+        return Reference(identifier: identifier, version: version)
     }
     
     public init(identifier: Identifier, version: Version.Identifier?, data: Data) {
