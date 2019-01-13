@@ -31,12 +31,6 @@ class PrevailingValueTests: XCTestCase {
             versions.append(version)
         }
         
-        func addBranchVersion() {
-            let predecessors =  Version.Predecessors(identifierOfFirst: versions[0].identifier, identifierOfSecond: versions.last!.identifier)
-            let version = try! store.addVersion(basedOn: predecessors, storing: [])
-            versions.append(version)
-        }
-        
         super.setUp()
         rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         valuesURL = rootURL.appendingPathComponent("values")
@@ -48,9 +42,6 @@ class PrevailingValueTests: XCTestCase {
         addEmptyVersion()
         addVersion(withName: "2")
         addVersion(withName: "3")
-        addEmptyVersion()
-        addBranchVersion()
-        addVersion(withName: "4")
         addEmptyVersion()
 
     }
@@ -73,23 +64,11 @@ class PrevailingValueTests: XCTestCase {
         let value = try! store.value(valueIdentifier, prevailingAt: versions[5].identifier)
         XCTAssertEqual(value!.data, "3".data(using: .utf8)!)
     }
-    
-    func testSavedVersionPrecedesMerge() {
-        let value = try! store.value(valueIdentifier, prevailingAt: versions[6].identifier)
-        XCTAssertEqual(value!.data, "3".data(using: .utf8)!)
-    }
-    
-    func testSavedVersionFollowsMerge() {
-        let value = try! store.value(valueIdentifier, prevailingAt: versions[8].identifier)
-        XCTAssertEqual(value!.data, "4".data(using: .utf8)!)
-    }
 
     static var allTests = [
         ("testNoSavedVersionAtPrevailingVersion", testNoSavedVersionAtPrevailingVersion),
         ("testSavedVersionMatchesPrevailingVersion", testSavedVersionMatchesPrevailingVersion),
         ("testSavedVersionPrecedesPrevailingVersion", testSavedVersionPrecedesPrevailingVersion),
-        ("testSavedVersionPrecedesMerge", testSavedVersionPrecedesMerge),
-        ("testSavedVersionFollowsMerge", testSavedVersionFollowsMerge),
     ]
 
 }

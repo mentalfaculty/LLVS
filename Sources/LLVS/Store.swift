@@ -186,11 +186,8 @@ extension Store {
 extension Store {
     
     public func value(_ valueIdentifier: Value.Identifier, prevailingAt versionIdentifier: Version.Identifier) throws -> Value? {
-        let candidateVersionIdentifiers = try versionIdentifiers(for: valueIdentifier)
-        let prevailingVersion = history.version(prevailingFromCandidates: candidateVersionIdentifiers, at: versionIdentifier)
-        return try prevailingVersion.flatMap {
-            try value(valueIdentifier, storedAt: $0.identifier)
-        }
+        let ref = try valuesMap.valueReferences(matching: .init(valueIdentifier.identifierString), at: versionIdentifier).first
+        return try ref.flatMap { try value(valueIdentifier, storedAt: $0.version) }
     }
     
     internal func value(_ valueIdentifier: Value.Identifier, storedAt versionIdentifier: Version.Identifier) throws -> Value? {
