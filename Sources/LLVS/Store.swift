@@ -57,6 +57,9 @@ public final class Store {
         for version in try versions() {
             try history.add(version, updatingPredecessorVersions: false)
         }
+        for version in try versions() {
+            try history.updateSuccessors(inPredecessorsOf: version)
+        }
     }
     
 }

@@ -14,10 +14,30 @@ public struct Version: Codable, Hashable {
     public var successors: Successors = .init()
     public var timestamp: TimeInterval
     
+    private enum CodingKeys: String, CodingKey {
+        case identifier
+        case predecessors
+        case timestamp
+    }
+    
     public init(identifier: Identifier = .init(), predecessors: Predecessors? = nil) {
         self.identifier = identifier
         self.predecessors = predecessors
         self.timestamp = Date().timeIntervalSinceReferenceDate
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        identifier = try container.decode(Identifier.self, forKey: .identifier)
+        predecessors = try container.decode(Predecessors.self, forKey: .predecessors)
+        timestamp = try container.decode(TimeInterval.self, forKey: .timestamp)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(identifier, forKey: .identifier)
+        try container.encode(predecessors, forKey: .predecessors)
+        try container.encode(timestamp, forKey: .timestamp)
     }
     
 }

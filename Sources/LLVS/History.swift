@@ -16,10 +16,15 @@ public struct History {
     
     private var versionsByIdentifier: [Version.Identifier:Version] = [:]
     private var referencedVersionIdentifiers: Set<Version.Identifier> = [] // Any version that is a predecessor
-    public private(set) var headIdentifiers: Set<Version.Identifier> = [] // Versions that are not predecessors of other versions
+    public private(set) var headIdentifiers: Set<Version.Identifier> = []  // Versions that are not predecessors of other versions
     
     public var mostRecentHead: Version? {
-        return headIdentifiers.map({ version(identifiedBy: $0)! }).sorted(by: { $0.timestamp < $1.timestamp }).last
+        let maxId = headIdentifiers.max { (vId1, vId2) -> Bool in
+            let v1 = version(identifiedBy: vId1)!
+            let v2 = version(identifiedBy: vId2)!
+            return v1.timestamp < v2.timestamp
+        }
+        return maxId.flatMap { version(identifiedBy: $0) }
     }
     
     public func version(identifiedBy identifier: Version.Identifier) -> Version? {
@@ -49,25 +54,37 @@ public struct History {
     
     /// If updatingPredecessorVersions is true, the successors of other versions may be updated.
     /// Use this when adding a new head when storing.
-    /// Pass in false if the versions alreeady have their successors up-to-date, for example,
-    /// when loading them to setup the History.
+    /// Pass in false if more control is needed over setting the successors, such as
+    /// when loading them to setup the History. In that case, we only want to set them when all versions
+    /// have been loaded.
     internal mutating func add(_ version: Version, updatingPredecessorVersions: Bool) throws {
         guard versionsByIdentifier[version.identifier] == nil else {
             throw Error.attemptToAddPreexistingVersion(identifier: version.identifier.identifierString)
         }
+        
         versionsByIdentifier[version.identifier] = version
-        for predecessorIdentifier in version.predecessors?.identifiers ?? [] {
-            referencedVersionIdentifiers.insert(predecessorIdentifier)
-            headIdentifiers.remove(predecessorIdentifier)
-            if updatingPredecessorVersions, let predecessor = self.version(identifiedBy: predecessorIdentifier) {
-                var newPredecessor = predecessor
-                let newSuccessorIdentifiers = predecessor.successors.identifiers.union([version.identifier])
-                newPredecessor.successors = Version.Successors(identifiers: newSuccessorIdentifiers)
-                versionsByIdentifier[newPredecessor.identifier] = newPredecessor
-            }
+        if updatingPredecessorVersions {
+            try updateSuccessors(inPredecessorsOf: version)
         }
+        
         if !referencedVersionIdentifiers.contains(version.identifier) {
             headIdentifiers.insert(version.identifier)
+        }
+    }
+    
+    public mutating func updateSuccessors(inPredecessorsOf version: Version) throws {
+        for predecessorIdentifier in version.predecessors?.identifiers ?? [] {
+            guard let predecessor = self.version(identifiedBy: predecessorIdentifier) else {
+                throw Error.nonExistentVersionEncountered(identifier: predecessorIdentifier.identifierString)
+            }
+            
+            referencedVersionIdentifiers.insert(predecessorIdentifier)
+            headIdentifiers.remove(predecessorIdentifier)
+            
+            var newPredecessor = predecessor
+            let newSuccessorIdentifiers = predecessor.successors.identifiers.union([version.identifier])
+            newPredecessor.successors = Version.Successors(identifiers: newSuccessorIdentifiers)
+            versionsByIdentifier[newPredecessor.identifier] = newPredecessor
         }
     }
     
