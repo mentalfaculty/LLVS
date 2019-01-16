@@ -72,7 +72,7 @@ public struct History {
         }
     }
     
-    public mutating func updateSuccessors(inPredecessorsOf version: Version) throws {
+    internal mutating func updateSuccessors(inPredecessorsOf version: Version) throws {
         for predecessorIdentifier in version.predecessors?.identifiers ?? [] {
             guard let predecessor = self.version(identifiedBy: predecessorIdentifier) else {
                 throw Error.nonExistentVersionEncountered(identifier: predecessorIdentifier.identifierString)

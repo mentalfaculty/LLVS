@@ -95,23 +95,83 @@ class MergeTests: XCTestCase {
     }
     
     func testAsymmetricBranchPreserve() {
-//        class Arbiter: MergeArbiter {
-//            func changes(toResolve merge: Merge, in store: Store) -> [Value.Change] {
-//                let fork = merge.forksByValueIdentifier[.init("ABCDEF")]
-//                XCTAssertEqual(fork, .twiceUpdated)
-//                let firstValue = try! store.value(.init("ABCDEF"), prevailingAt: merge.versions.first.identifier)!
-//                return [.preserve(firstValue.reference!)]
-//            }
-//        }
-//        
-//        let predecessors: Version.Predecessors = .init(identifierOfFirst: branch1.identifier, identifierOfSecond: nil)
-//        branch1 = try! store.addVersion(basedOn: predecessors, storing: changes1)
-//        
-//        let mergeVersion = try! store.merge(version: branch1.identifier, with: branch2.identifier, resolvingWith: Arbiter())
-//        let mergeValue = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)!
-//        XCTAssertEqual(mergeValue.data, "Tom".data(using: .utf8)!)
+        class Arbiter: MergeArbiter {
+            func changes(toResolve merge: Merge, in store: Store) -> [Value.Change] {
+                let fork = merge.forksByValueIdentifier[.init("ABCDEF")]
+                XCTAssertEqual(fork, .twiceUpdated)
+                let firstValue = try! store.value(.init("ABCDEF"), prevailingAt: merge.versions.first.identifier)!
+                return [.preserve(firstValue.reference!)]
+            }
+        }
+        
+        let predecessors: Version.Predecessors = .init(identifierOfFirst: branch1.identifier, identifierOfSecond: nil)
+        let newValue = Value(identifier: .init("ABCDEF"), version: nil, data: "Pete".data(using: .utf8)!)
+        branch1 = try! store.addVersion(basedOn: predecessors, storing: [.update(newValue)])
+        
+        let mergeVersion = try! store.merge(version: branch1.identifier, with: branch2.identifier, resolvingWith: Arbiter())
+        let mergeValue = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)!
+        XCTAssertEqual(mergeValue.data, "Pete".data(using: .utf8)!)
     }
     
+    func testRemove() {
+        class Arbiter: MergeArbiter {
+            func changes(toResolve merge: Merge, in store: Store) -> [Value.Change] {
+                let fork = merge.forksByValueIdentifier[.init("ABCDEF")]
+                XCTAssertEqual(fork, .removedAndUpdated(removedOn: .first))
+                return [.preserveRemoval(.init("ABCDEF"))]
+            }
+        }
+        
+        let predecessors: Version.Predecessors = .init(identifierOfFirst: branch1.identifier, identifierOfSecond: nil)
+        branch1 = try! store.addVersion(basedOn: predecessors, storing: [.remove(.init("ABCDEF"))])
+        
+        let mergeVersion = try! store.merge(version: branch1.identifier, with: branch2.identifier, resolvingWith: Arbiter())
+        let mergeValue = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)
+        XCTAssertNil(mergeValue)
+    }
+    
+    func testTwiceRemoved() {
+        class Arbiter: MergeArbiter {
+            func changes(toResolve merge: Merge, in store: Store) -> [Value.Change] {
+                let fork = merge.forksByValueIdentifier[.init("ABCDEF")]
+                XCTAssertEqual(fork, .twiceRemoved)
+                return [.preserveRemoval(.init("ABCDEF"))]
+            }
+        }
+        
+        let predecessors1: Version.Predecessors = .init(identifierOfFirst: branch1.identifier, identifierOfSecond: nil)
+        branch1 = try! store.addVersion(basedOn: predecessors1, storing: [.remove(.init("ABCDEF"))])
+        
+        let predecessors2: Version.Predecessors = .init(identifierOfFirst: branch2.identifier, identifierOfSecond: nil)
+        branch2 = try! store.addVersion(basedOn: predecessors2, storing: [.remove(.init("ABCDEF"))])
+        
+        let mergeVersion = try! store.merge(version: branch1.identifier, with: branch2.identifier, resolvingWith: Arbiter())
+        let mergeValue = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)
+        XCTAssertNil(mergeValue)
+    }
+    
+    func testTwiceUpdated() {
+        class Arbiter: MergeArbiter {
+            func changes(toResolve merge: Merge, in store: Store) -> [Value.Change] {
+                let fork = merge.forksByValueIdentifier[.init("ABCDEF")]
+                XCTAssertEqual(fork, .twiceUpdated)
+                let secondValue = try! store.value(.init("ABCDEF"), prevailingAt: merge.versions.second.identifier)!
+                return [.preserve(secondValue.reference!)]
+            }
+        }
+        
+        let predecessors1: Version.Predecessors = .init(identifierOfFirst: branch1.identifier, identifierOfSecond: nil)
+        let newValue1 = Value(identifier: .init("ABCDEF"), version: nil, data: "Pete".data(using: .utf8)!)
+        branch1 = try! store.addVersion(basedOn: predecessors1, storing: [.update(newValue1)])
+        
+        let predecessors2: Version.Predecessors = .init(identifierOfFirst: branch2.identifier, identifierOfSecond: nil)
+        let newValue2 = Value(identifier: .init("ABCDEF"), version: nil, data: "Joyce".data(using: .utf8)!)
+        branch2 = try! store.addVersion(basedOn: predecessors2, storing: [.update(newValue2)])
+        
+        let mergeVersion = try! store.merge(version: branch1.identifier, with: branch2.identifier, resolvingWith: Arbiter())
+        let mergeValue = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)!
+        XCTAssertEqual(mergeValue.data, "Joyce".data(using: .utf8)!)
+    }
     
     static var allTests = [
         ("testUnresolveMergeFails", testUnresolveMergeFails),
@@ -119,6 +179,9 @@ class MergeTests: XCTestCase {
         ("testIncompletelyResolvedMergeFails", testIncompletelyResolvedMergeFails),
         ("testPreserve", testPreserve),
         ("testAsymmetricBranchPreserve", testAsymmetricBranchPreserve),
+        ("testRemove", testRemove),
+        ("testTwiceRemoved", testTwiceRemoved),
+        ("testTwiceUpdated", testTwiceUpdated),
     ]
 }
 
