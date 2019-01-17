@@ -36,8 +36,8 @@ public struct Value {
 public extension Value {
     
     public struct Reference: Codable, Hashable {
-        var identifier: Identifier
-        var version: Version.Identifier
+        public var identifier: Identifier
+        public var version: Version.Identifier
     }
     
     public struct Identifier: StringIdentifiable, Hashable, Codable {
