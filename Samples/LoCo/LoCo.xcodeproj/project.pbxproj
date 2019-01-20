@@ -16,7 +16,8 @@
 		07734ED921F10BBC00BB9EFA /* LLVS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 07734ED821F10BBC00BB9EFA /* LLVS.framework */; };
 		07734EDA21F10BBC00BB9EFA /* LLVS.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 07734ED821F10BBC00BB9EFA /* LLVS.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		07734EDF21F10CC300BB9EFA /* Contact.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EDE21F10CC300BB9EFA /* Contact.swift */; };
-		07734EE321F11EC200BB9EFA /* Entity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EE221F11EC200BB9EFA /* Entity.swift */; };
+		07734EE321F11EC200BB9EFA /* PropertiesContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EE221F11EC200BB9EFA /* PropertiesContainer.swift */; };
+		07734EF021F5140800BB9EFA /* ContactBook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EEF21F5140800BB9EFA /* ContactBook.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -75,7 +76,8 @@
 		07734EB521F109D300BB9EFA /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		07734EBB21F10B2700BB9EFA /* LLVS.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = LLVS.xcodeproj; path = ../../LLVS.xcodeproj; sourceTree = "<group>"; };
 		07734EDE21F10CC300BB9EFA /* Contact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contact.swift; sourceTree = "<group>"; };
-		07734EE221F11EC200BB9EFA /* Entity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Entity.swift; sourceTree = "<group>"; };
+		07734EE221F11EC200BB9EFA /* PropertiesContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PropertiesContainer.swift; sourceTree = "<group>"; };
+		07734EEF21F5140800BB9EFA /* ContactBook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactBook.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -113,8 +115,9 @@
 				07734EA721F109D100BB9EFA /* AppDelegate.swift */,
 				07734EA921F109D100BB9EFA /* ContactsViewController.swift */,
 				07734EAB21F109D100BB9EFA /* ContactViewController.swift */,
+				07734EEF21F5140800BB9EFA /* ContactBook.swift */,
 				07734EDE21F10CC300BB9EFA /* Contact.swift */,
-				07734EE221F11EC200BB9EFA /* Entity.swift */,
+				07734EE221F11EC200BB9EFA /* PropertiesContainer.swift */,
 				07734EAD21F109D100BB9EFA /* Main.storyboard */,
 				07734EB021F109D300BB9EFA /* Assets.xcassets */,
 				07734EB221F109D300BB9EFA /* LaunchScreen.storyboard */,
@@ -237,10 +240,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				07734EDF21F10CC300BB9EFA /* Contact.swift in Sources */,
-				07734EE321F11EC200BB9EFA /* Entity.swift in Sources */,
+				07734EE321F11EC200BB9EFA /* PropertiesContainer.swift in Sources */,
 				07734EAC21F109D100BB9EFA /* ContactViewController.swift in Sources */,
 				07734EAA21F109D100BB9EFA /* ContactsViewController.swift in Sources */,
 				07734EA821F109D100BB9EFA /* AppDelegate.swift in Sources */,
+				07734EF021F5140800BB9EFA /* ContactBook.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

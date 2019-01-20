@@ -9,12 +9,6 @@
 import Foundation
 import LLVS
 
-extension Store {
-    func valueCluster<KeyType: StoreKey>(_ reference: Value.Reference) -> Entity<KeyType> {
-        return Entity(store: self, reference: reference)
-    }
-}
-
 struct Person: Codable, Equatable {
     var firstName: String
     var secondName: String?
@@ -29,7 +23,41 @@ struct Address: Codable, Equatable {
 
 struct Contact: Equatable {
     
-    struct Identifier: Equatable {
+    var valueIdentifier: Value.Identifier
+    var valueReferenceWhenLoaded: Value.Reference?
+    
+    var person: Person
+    var address: Address?
+    var age: Int?
+    var email: String?
+    var phoneNumber: String?
+    var friends: [Identifier] = []
+    
+    init(with reference: Value.Reference, loadingFrom store: Store) throws {
+        let container = PropertyLoader<StoreKeys>(store: store, reference: reference)
+        self.person = try container.load(.person)!
+        self.address = try container.load(.address)
+        self.age = try container.load(.age)
+        self.email = try container.load(.email)
+        self.phoneNumber = try container.load(.phoneNumber)
+        self.friends = try container.load(.friends)!
+        self.valueIdentifier = reference.identifier
+        self.valueReferenceWhenLoaded = reference
+    }
+    
+    func changesSinceLoad(from store: Store) throws -> [Value.Change] {
+        let originalContact = try valueReferenceWhenLoaded.flatMap { try Contact(with: $0, loadingFrom: store) }
+        let changeGenerator = PropertyChangeGenerator<StoreKeys>(store: store, valueIdentifier: valueIdentifier)
+        try changeGenerator.generate(.person, propertyValue: person, originalPropertyValue: originalContact?.person)
+        try changeGenerator.generate(.address, propertyValue: address, originalPropertyValue: originalContact?.address)
+        try changeGenerator.generate(.age, propertyValue: age, originalPropertyValue: originalContact?.age)
+        try changeGenerator.generate(.email, propertyValue: email, originalPropertyValue: originalContact?.email)
+        try changeGenerator.generate(.phoneNumber, propertyValue: phoneNumber, originalPropertyValue: originalContact?.phoneNumber)
+        try changeGenerator.generate(.friends, propertyValue: friends, originalPropertyValue: originalContact?.friends)
+        return changeGenerator.propertyChanges
+    }
+    
+    struct Identifier: Equatable, Codable {
         var string: String
     }
     
@@ -39,42 +67,10 @@ struct Contact: Equatable {
         case age
         case email
         case phoneNumber
+        case friends
         
         func key(forIdentifier identifier: Value.Identifier) -> String {
             return "\(identifier).Contact.\(self)"
         }
-    }
-    
-    var valueReference: Value.Reference
-    
-    var person: Person
-    var address: Address?
-    var age: Int?
-    var email: String?
-    var phoneNumber: String?
-    
-    var friends: [Identifier] = []
-    
-    init(with reference: Value.Reference, loadingFrom store: Store) throws {
-        let cluster = Entity<StoreKeys>(store: store, reference: reference)
-        self.person = try cluster.load(.person)!
-        self.address = try cluster.load(.address)
-        self.age = try cluster.load(.age)
-        self.email = try cluster.load(.email)
-        self.phoneNumber = try cluster.load(.phoneNumber)
-        self.valueReference = reference
-    }
-    
-    func changesSinceLoad(from store: Store) throws -> [Value.Change] {
-        let originalContact = try Contact(with: valueReference, loadingFrom: store)
-        var changes: [Value.Change] = []
-        
-        // Form changes by comparing values with original
-//        let cluster = Entity<StoreKeys>(store: store, reference: reference)
-//        if person != originalContact.person {
-//            changes.append(.update(person.value))
-//        }
-        
-        return changes
     }
 }
