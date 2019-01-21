@@ -18,6 +18,7 @@
 		07734EDF21F10CC300BB9EFA /* Contact.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EDE21F10CC300BB9EFA /* Contact.swift */; };
 		07734EE321F11EC200BB9EFA /* PropertiesContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EE221F11EC200BB9EFA /* PropertiesContainer.swift */; };
 		07734EF021F5140800BB9EFA /* ContactBook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EEF21F5140800BB9EFA /* ContactBook.swift */; };
+		079D144021F6482B0091BCA9 /* Fault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 079D143F21F6482B0091BCA9 /* Fault.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -78,6 +79,7 @@
 		07734EDE21F10CC300BB9EFA /* Contact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contact.swift; sourceTree = "<group>"; };
 		07734EE221F11EC200BB9EFA /* PropertiesContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PropertiesContainer.swift; sourceTree = "<group>"; };
 		07734EEF21F5140800BB9EFA /* ContactBook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactBook.swift; sourceTree = "<group>"; };
+		079D143F21F6482B0091BCA9 /* Fault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fault.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -117,6 +119,7 @@
 				07734EAB21F109D100BB9EFA /* ContactViewController.swift */,
 				07734EEF21F5140800BB9EFA /* ContactBook.swift */,
 				07734EDE21F10CC300BB9EFA /* Contact.swift */,
+				079D143F21F6482B0091BCA9 /* Fault.swift */,
 				07734EE221F11EC200BB9EFA /* PropertiesContainer.swift */,
 				07734EAD21F109D100BB9EFA /* Main.storyboard */,
 				07734EB021F109D300BB9EFA /* Assets.xcassets */,
@@ -245,6 +248,7 @@
 				07734EAA21F109D100BB9EFA /* ContactsViewController.swift in Sources */,
 				07734EA821F109D100BB9EFA /* AppDelegate.swift in Sources */,
 				07734EF021F5140800BB9EFA /* ContactBook.swift in Sources */,
+				079D144021F6482B0091BCA9 /* Fault.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -14,16 +14,18 @@ fileprivate var decoder: JSONDecoder = .init()
 
 class PropertyLoader<KeyType: StoreKey> {
     let store: Store
-    let reference: Value.Reference
+    let valueIdentifier: Value.Identifier
+    let prevailingVersion: Version.Identifier
     
-    init(store: Store, reference: Value.Reference) {
+    init(store: Store, valueIdentifier: Value.Identifier, prevailingVersion: Version.Identifier) {
         self.store = store
-        self.reference = reference
+        self.valueIdentifier = valueIdentifier
+        self.prevailingVersion = prevailingVersion
     }
     
     func load<PropertyType: Codable>(_ storeKey: KeyType) throws -> PropertyType? {
-        let key = storeKey.key(forIdentifier: reference.identifier)
-        let value = try store.value(.init(key), prevailingAt: reference.version)!
+        let key = storeKey.key(forIdentifier: valueIdentifier)
+        let value = try store.value(.init(key), prevailingAt: prevailingVersion)!
         return try decoder.decode(PropertyType.self, from: value.data)
     }
 }
@@ -58,7 +60,7 @@ protocol StoreKey {
 }
 
 extension Store {
-    func valueContainer<KeyType: StoreKey>(_ reference: Value.Reference) -> PropertyLoader<KeyType> {
-        return PropertyLoader(store: self, reference: reference)
+    func valueContainer<KeyType: StoreKey>(_ valueIdentifier: Value.Identifier, prevailingVersion: Version.Identifier) -> PropertyLoader<KeyType> {
+        return PropertyLoader(store: self, valueIdentifier: valueIdentifier, prevailingVersion: prevailingVersion)
     }
 }

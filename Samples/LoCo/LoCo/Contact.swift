@@ -21,32 +21,36 @@ struct Address: Codable, Equatable {
     var country: String
 }
 
-struct Contact: Equatable {
+struct Contact: Equatable, Faultable {
     
     var valueIdentifier: Value.Identifier
-    var valueReferenceWhenLoaded: Value.Reference?
+    var prevailingVersionWhenLoaded: Version.Identifier?
     
-    var person: Person
+    var person: Person?
     var address: Address?
     var age: Int?
     var email: String?
     var phoneNumber: String?
-    var friends: [Identifier] = []
+    var friends: [Value.Identifier] = []
     
-    init(with reference: Value.Reference, loadingFrom store: Store) throws {
-        let container = PropertyLoader<StoreKeys>(store: store, reference: reference)
-        self.person = try container.load(.person)!
+    init() {
+        valueIdentifier = .init(UUID().uuidString)
+    }
+    
+    init(_ valueIdentifier: Value.Identifier, prevailingAt version: Version.Identifier, loadingFrom store: Store) throws {
+        let container = PropertyLoader<StoreKeys>(store: store, valueIdentifier: valueIdentifier, prevailingVersion: version)
+        self.person = try container.load(.person)
         self.address = try container.load(.address)
         self.age = try container.load(.age)
         self.email = try container.load(.email)
         self.phoneNumber = try container.load(.phoneNumber)
         self.friends = try container.load(.friends)!
-        self.valueIdentifier = reference.identifier
-        self.valueReferenceWhenLoaded = reference
+        self.valueIdentifier = valueIdentifier
+        self.prevailingVersionWhenLoaded = version
     }
     
     func changesSinceLoad(from store: Store) throws -> [Value.Change] {
-        let originalContact = try valueReferenceWhenLoaded.flatMap { try Contact(with: $0, loadingFrom: store) }
+        let originalContact = try prevailingVersionWhenLoaded.flatMap { try Contact(valueIdentifier, prevailingAt: $0, loadingFrom: store) }
         let changeGenerator = PropertyChangeGenerator<StoreKeys>(store: store, valueIdentifier: valueIdentifier)
         try changeGenerator.generate(.person, propertyValue: person, originalPropertyValue: originalContact?.person)
         try changeGenerator.generate(.address, propertyValue: address, originalPropertyValue: originalContact?.address)
@@ -55,10 +59,6 @@ struct Contact: Equatable {
         try changeGenerator.generate(.phoneNumber, propertyValue: phoneNumber, originalPropertyValue: originalContact?.phoneNumber)
         try changeGenerator.generate(.friends, propertyValue: friends, originalPropertyValue: originalContact?.friends)
         return changeGenerator.propertyChanges
-    }
-    
-    struct Identifier: Equatable, Codable {
-        var string: String
     }
     
     private enum StoreKeys: String, StoreKey {
