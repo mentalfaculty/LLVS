@@ -38,13 +38,13 @@ struct Contact: Equatable, Faultable {
     }
     
     init(_ valueIdentifier: Value.Identifier, prevailingAt version: Version.Identifier, loadingFrom store: Store) throws {
-        let container = PropertyLoader<StoreKeys>(store: store, valueIdentifier: valueIdentifier, prevailingVersion: version)
-        self.person = try container.load(.person)
-        self.address = try container.load(.address)
-        self.age = try container.load(.age)
-        self.email = try container.load(.email)
-        self.phoneNumber = try container.load(.phoneNumber)
-        self.friends = try container.load(.friends)!
+        let loader = PropertyLoader<StoreKeys>(store: store, valueIdentifier: valueIdentifier, prevailingVersion: version)
+        self.person = try loader.load(.person)
+        self.address = try loader.load(.address)
+        self.age = try loader.load(.age)
+        self.email = try loader.load(.email)
+        self.phoneNumber = try loader.load(.phoneNumber)
+        self.friends = try loader.load(.friends)!
         self.valueIdentifier = valueIdentifier
         self.prevailingVersionWhenLoaded = version
     }
@@ -70,7 +70,7 @@ struct Contact: Equatable, Faultable {
         case friends
         
         func key(forIdentifier identifier: Value.Identifier) -> String {
-            return "\(identifier).Contact.\(self)"
+            return "\(identifier.identifierString).Contact.\(self)"
         }
     }
 }

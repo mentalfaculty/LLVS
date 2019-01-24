@@ -35,7 +35,10 @@ final class ContactBook {
     
     init(creatingIn store: Store) throws {
         self.store = store
-        currentVersion = try store.addVersion(basedOnPredecessor: nil, storing: []).identifier
+        let emptyArrayData = try JSONSerialization.data(withJSONObject: [], options: [])
+        let newValue = Value(identifier: ContactBook.sharedIdentifier, version: nil, data: emptyArrayData)
+        let insert: Value.Change = .insert(newValue)
+        currentVersion = try store.addVersion(basedOnPredecessor: nil, storing: [insert]).identifier
     }
     
     func add(_ contact: Contact) throws {
@@ -47,8 +50,6 @@ final class ContactBook {
         let changes = insertChanges + [try updateContactsChange(withContactIdentifiers: valueIdentifiers)]
             
         currentVersion = try store.addVersion(basedOnPredecessor: currentVersion, storing: changes).identifier
-        
-        try fetchContacts()
     }
     
     func delete(_ contact: Contact) throws {
@@ -59,18 +60,18 @@ final class ContactBook {
         let removal: Value.Change = .remove(contact.valueIdentifier)
         let changes = [removal, try updateContactsChange(withContactIdentifiers: valueIdentifiers)]
         currentVersion = try store.addVersion(basedOnPredecessor: currentVersion, storing: changes).identifier
-        
-        try fetchContacts()
     }
     
     private func fetchContacts() throws {
         let data = try store.value(ContactBook.sharedIdentifier, prevailingAt: currentVersion)!.data
-        let contactIds = try JSONSerialization.jsonObject(with: data, options: []) as! [Value.Identifier]
+        let idStrings = try JSONSerialization.jsonObject(with: data, options: []) as! [String]
+        let contactIds = idStrings.map { Value.Identifier($0) }
         self.contacts = contactIds.map { Fault<Contact>($0, prevailingAtVersion: currentVersion, in: store) }
     }
     
     private func updateContactsChange(withContactIdentifiers valueIdentifiers: [Value.Identifier]) throws -> Value.Change {
-        let data = try JSONSerialization.data(withJSONObject: valueIdentifiers, options: [])
+        let identifierStrings = valueIdentifiers.map { $0.identifierString }
+        let data = try JSONSerialization.data(withJSONObject: identifierStrings, options: [])
         let newValue = Value(identifier: ContactBook.sharedIdentifier, version: nil, data: data)
         let update: Value.Change = .update(newValue)
         return update

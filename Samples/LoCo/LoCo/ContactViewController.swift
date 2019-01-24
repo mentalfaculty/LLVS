@@ -7,34 +7,48 @@
 //
 
 import UIKit
+import LLVS
 
 class ContactViewController: UIViewController {
 
     @IBOutlet weak var detailDescriptionLabel: UILabel!
-
-
-    func configureView() {
-        // Update the user interface for the detail item.
-        if let detail = detailItem {
-            if let label = detailDescriptionLabel {
-                label.text = detail.description
-            }
+    
+    private(set) var contactBook: ContactBook?
+    private(set) var contactIdentifier: Value.Identifier?
+    
+    private var versionDidChangeObserver: AnyObject?
+    
+    private var contact: Contact? {
+        guard let book = contactBook, let identifier = contactIdentifier else { return nil }
+        return book.contacts.first(where: { $0.valueIdentifier == identifier })!.value
+    }
+    
+    deinit {
+        if let o = versionDidChangeObserver {
+            NotificationCenter.default.removeObserver(o)
         }
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Do any additional setup after loading the view, typically from a nib.
-        configureView()
+        versionDidChangeObserver = NotificationCenter.default.addObserver(forName: .contactBookVersionDidChange, object: contactBook, queue: nil) { notif in
+            self.updateView()
+        }
+        updateView()
     }
 
-    var detailItem: NSDate? {
-        didSet {
-            // Update the view.
-            configureView()
+    func showContact(at index: Int, in book: ContactBook) {
+        contactBook = book
+        contactIdentifier = contactBook!.contacts[index].valueIdentifier
+        updateView()
+    }
+
+    func updateView() {
+        if let contact = contact {
+            detailDescriptionLabel.text = "\(contact)"
+        } else {
+            detailDescriptionLabel.text = "No Selection"
         }
     }
-
-
 }
 

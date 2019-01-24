@@ -25,7 +25,7 @@ class PropertyLoader<KeyType: StoreKey> {
     
     func load<PropertyType: Codable>(_ storeKey: KeyType) throws -> PropertyType? {
         let key = storeKey.key(forIdentifier: valueIdentifier)
-        let value = try store.value(.init(key), prevailingAt: prevailingVersion)!
+        guard let value = try store.value(.init(key), prevailingAt: prevailingVersion) else { return nil }
         return try decoder.decode(PropertyType.self, from: value.data)
     }
 }
