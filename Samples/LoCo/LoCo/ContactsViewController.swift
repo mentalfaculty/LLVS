@@ -11,7 +11,6 @@ import UIKit
 class ContactsViewController: UITableViewController {
     
     var contactBook: ContactBook!
-    var contactViewController: ContactViewController!
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -20,12 +19,6 @@ class ContactsViewController: UITableViewController {
 
         let addButton = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addContact(_:)))
         navigationItem.rightBarButtonItem = addButton
-        
-        if let split = splitViewController {
-            let controllers = split.viewControllers
-            let navController = controllers.last as! UINavigationController
-            contactViewController = navController.topViewController as? ContactViewController
-        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -43,6 +36,8 @@ class ContactsViewController: UITableViewController {
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         if segue.identifier == "showContact" {
             if let indexPath = tableView.indexPathForSelectedRow {
+                let navController = segue.destination as! UINavigationController
+                let contactViewController = navController.topViewController as! ContactViewController
                 contactViewController.showContact(at: indexPath.row, in: contactBook)
                 contactViewController.navigationItem.leftBarButtonItem = splitViewController?.displayModeButtonItem
                 contactViewController.navigationItem.leftItemsSupplementBackButton = true

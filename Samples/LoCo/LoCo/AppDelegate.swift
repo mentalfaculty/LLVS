@@ -41,13 +41,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDele
             book = try! ContactBook(creatingIn: store)
             versionIdentifier = book.currentVersion
         }
-        UserDefaults.standard.set(versionIdentifier.identifierString, forKey: storeVersionKey)
+        UserDefaults.standard.set(book.currentVersion.identifierString, forKey: self.storeVersionKey)
+        UserDefaults.standard.synchronize()
         return book
     }()
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         NotificationCenter.default.addObserver(forName: .contactBookVersionDidChange, object: contactBook, queue: nil) { notif in
-            UserDefaults.standard.set(self.contactBook.currentVersion.identifierString, forKey: self.storeVersionKey)
+            self.storeCurrentVersion()
         }
     
         let splitViewController = window!.rootViewController as! UISplitViewController
@@ -60,6 +61,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDele
         contactsController.contactBook = contactBook
         
         return true
+    }
+    
+    func storeCurrentVersion() {
+        UserDefaults.standard.set(self.contactBook.currentVersion.identifierString, forKey: self.storeVersionKey)
+        UserDefaults.standard.synchronize()
     }
 
     func splitViewController(_ splitViewController: UISplitViewController, collapseSecondary secondaryViewController:UIViewController, onto primaryViewController:UIViewController) -> Bool {

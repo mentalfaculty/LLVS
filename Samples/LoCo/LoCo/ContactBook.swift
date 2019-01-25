@@ -13,7 +13,7 @@ extension Notification.Name {
     static let contactBookVersionDidChange = Notification.Name("contactBookVersionDidChange")
 }
 
-final class ContactBook {
+class ContactBook {
     
     let store: Store
     private(set) var contacts: [Fault<Contact>] = []
@@ -45,7 +45,6 @@ final class ContactBook {
         var valueIdentifiers = contacts.map { $0.valueIdentifier }
         valueIdentifiers.append(contact.valueIdentifier)
         
-        let contact = Contact()
         let insertChanges = try contact.changesSinceLoad(from: store)
         let changes = insertChanges + [try updateContactsChange(withContactIdentifiers: valueIdentifiers)]
             

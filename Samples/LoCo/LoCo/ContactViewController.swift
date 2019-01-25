@@ -11,10 +11,10 @@ import LLVS
 
 class ContactViewController: UIViewController {
 
-    @IBOutlet weak var detailDescriptionLabel: UILabel!
+    @IBOutlet weak var detailDescriptionLabel: UILabel?
     
-    private(set) var contactBook: ContactBook?
-    private(set) var contactIdentifier: Value.Identifier?
+    var contactBook: ContactBook?
+    var contactIdentifier: Value.Identifier?
     
     private var versionDidChangeObserver: AnyObject?
     
@@ -34,6 +34,10 @@ class ContactViewController: UIViewController {
         versionDidChangeObserver = NotificationCenter.default.addObserver(forName: .contactBookVersionDidChange, object: contactBook, queue: nil) { notif in
             self.updateView()
         }
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
         updateView()
     }
 
@@ -44,10 +48,11 @@ class ContactViewController: UIViewController {
     }
 
     func updateView() {
+        guard let label = detailDescriptionLabel else { return }
         if let contact = contact {
-            detailDescriptionLabel.text = "\(contact)"
+            label.text = "\(contact)"
         } else {
-            detailDescriptionLabel.text = "No Selection"
+            label.text = "No Selection"
         }
     }
 }
