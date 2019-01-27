@@ -20,7 +20,7 @@ class ContactViewController: UIViewController {
     
     private var contact: Contact? {
         guard let book = contactBook, let identifier = contactIdentifier else { return nil }
-        return book.contacts.first(where: { $0.valueIdentifier == identifier })!.value
+        return book.contacts.first(where: { $0.valueIdentifier == identifier })?.value
     }
     
     deinit {

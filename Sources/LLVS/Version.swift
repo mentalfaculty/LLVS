@@ -29,14 +29,14 @@ public struct Version: Codable, Hashable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         identifier = try container.decode(Identifier.self, forKey: .identifier)
-        predecessors = try container.decode(Predecessors.self, forKey: .predecessors)
+        predecessors = try container.decodeIfPresent(Predecessors.self, forKey: .predecessors)
         timestamp = try container.decode(TimeInterval.self, forKey: .timestamp)
     }
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(identifier, forKey: .identifier)
-        try container.encode(predecessors, forKey: .predecessors)
+        try container.encodeIfPresent(predecessors, forKey: .predecessors)
         try container.encode(timestamp, forKey: .timestamp)
     }
     
