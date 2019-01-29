@@ -15,6 +15,10 @@ extension Notification.Name {
 
 class ContactBook {
     
+    enum Error: Swift.Error {
+        case contactNotFound(String)
+    }
+    
     let store: Store
     private(set) var contacts: [Fault<Contact>] = []
     
@@ -51,6 +55,11 @@ class ContactBook {
         currentVersion = try store.addVersion(basedOnPredecessor: currentVersion, storing: changes).identifier
     }
     
+    func update(_ contact: Contact) throws {
+        let updateChanges = try contact.changesSinceLoad(from: store)
+        currentVersion = try store.addVersion(basedOnPredecessor: currentVersion, storing: updateChanges).identifier
+    }
+    
     func delete(_ contact: Contact) throws {
         var valueIdentifiers = contacts.map { $0.valueIdentifier }
         let index = valueIdentifiers.firstIndex(of: contact.valueIdentifier)!
@@ -59,6 +68,18 @@ class ContactBook {
         let removal: Value.Change = .remove(contact.valueIdentifier)
         let changes = [removal, try updateContactsChange(withContactIdentifiers: valueIdentifiers)]
         currentVersion = try store.addVersion(basedOnPredecessor: currentVersion, storing: changes).identifier
+    }
+    
+    func move(contactWithIdentifier moved: Value.Identifier, afterContactWithIdentifier target: Value.Identifier?) throws {
+        var identifiers = contacts.compactMap { $0.valueIdentifier != moved ? $0.valueIdentifier : nil }
+        if let target = target {
+            guard let index = identifiers.firstIndex(of: target) else { throw Error.contactNotFound("No target found") }
+            identifiers.insert(moved, at: index+1)
+        } else {
+            identifiers.insert(moved, at: 0)
+        }
+        let change = try updateContactsChange(withContactIdentifiers: identifiers)
+        currentVersion = try store.addVersion(basedOnPredecessor: currentVersion, storing: [change]).identifier
     }
     
     private func fetchContacts() throws {
