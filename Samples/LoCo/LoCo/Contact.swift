@@ -12,13 +12,33 @@ import LLVS
 struct Person: Codable, Equatable {
     var firstName: String
     var secondName: String?
+
+    var fullName: String {
+        var result = firstName
+        if let s = secondName {
+            result += " \(s)"
+        }
+        return result
+    }
+    
+    init(firstName: String, secondName: String?) {
+        self.firstName = firstName
+        self.secondName = secondName
+    }
 }
 
 struct Address: Codable, Equatable {
-    var streetName: String
-    var streetNumber: Int
+    var streetAddress: String
+    var postCode: String
     var city: String
     var country: String
+    
+    init(streetAddress: String, postCode: String, city: String, country: String) {
+        self.streetAddress = streetAddress
+        self.postCode = postCode
+        self.city = city
+        self.country = country
+    }
 }
 
 struct Contact: Equatable, Faultable {
@@ -28,7 +48,6 @@ struct Contact: Equatable, Faultable {
     
     var person: Person?
     var address: Address?
-    var age: Int?
     var email: String?
     var phoneNumber: String?
     var friends: [Value.Identifier] = []
@@ -41,7 +60,6 @@ struct Contact: Equatable, Faultable {
         let loader = PropertyLoader<StoreKeys>(store: store, valueIdentifier: valueIdentifier, prevailingVersion: version)
         self.person = try loader.load(.person)
         self.address = try loader.load(.address)
-        self.age = try loader.load(.age)
         self.email = try loader.load(.email)
         self.phoneNumber = try loader.load(.phoneNumber)
         self.friends = try loader.load(.friends)!
@@ -54,7 +72,6 @@ struct Contact: Equatable, Faultable {
         let changeGenerator = PropertyChangeGenerator<StoreKeys>(store: store, valueIdentifier: valueIdentifier)
         try changeGenerator.generate(.person, propertyValue: person, originalPropertyValue: originalContact?.person)
         try changeGenerator.generate(.address, propertyValue: address, originalPropertyValue: originalContact?.address)
-        try changeGenerator.generate(.age, propertyValue: age, originalPropertyValue: originalContact?.age)
         try changeGenerator.generate(.email, propertyValue: email, originalPropertyValue: originalContact?.email)
         try changeGenerator.generate(.phoneNumber, propertyValue: phoneNumber, originalPropertyValue: originalContact?.phoneNumber)
         try changeGenerator.generate(.friends, propertyValue: friends, originalPropertyValue: originalContact?.friends)

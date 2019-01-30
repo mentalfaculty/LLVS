@@ -55,8 +55,9 @@ class ContactsViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
-        let contact = contactBook.contacts[indexPath.row]
-        cell.textLabel!.text = "\(contact.value)"
+        let contact = contactBook.contacts[indexPath.row].value
+        let name = contact.person?.fullName ?? "Unnamed Contact"
+        cell.textLabel!.text = "\(name)"
         return cell
     }
 
