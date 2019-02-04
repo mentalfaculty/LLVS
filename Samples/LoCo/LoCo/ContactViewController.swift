@@ -35,6 +35,7 @@ class ContactViewController: UIViewController {
     deinit {
         if let o = versionDidChangeObserver {
             NotificationCenter.default.removeObserver(o)
+            versionDidChangeObserver = nil
         }
     }
 
