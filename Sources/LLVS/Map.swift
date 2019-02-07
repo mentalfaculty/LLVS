@@ -45,6 +45,7 @@ final class Map {
         var subNodesByKey: [Key:Node] = [:]
         for delta in deltas {
             let key = delta.key
+            
             let subNodeKey = Key(String(key.keyString.prefix(2)))
             let subNodeRef = Zone.Reference(key: subNodeKey.keyString, version: version)
             var subNode: Node
@@ -60,7 +61,9 @@ final class Map {
                 subNode = Node(reference: subNodeRef, children: .values([]))
             }
             
-            guard case let .values(valueRefs) = subNode.children else { throw Error.unexpectedNodeContent }
+            guard case let .values(keyValuePairs) = subNode.children else { throw Error.unexpectedNodeContent }
+            
+            let valueRefs = keyValuePairs.filter({ $0.key == key }).map({ $0.valueReference })
             var valueRefsByIdentifier: [Value.Identifier:Value.Reference] = Dictionary(uniqueKeysWithValues: valueRefs.map({ ($0.identifier, $0) }) )
             for valueRef in delta.addedValueReferences {
                 valueRefsByIdentifier[valueRef.identifier] = valueRef
@@ -69,7 +72,9 @@ final class Map {
                 valueRefsByIdentifier[valueIdentifier] = nil
             }
             let newValueRefs = Array(valueRefsByIdentifier.values)
-            subNode.children = .values(newValueRefs)
+            var newPairs = keyValuePairs.filter { $0.key != key }
+            newPairs += newValueRefs.map { KeyValuePair(key: key, valueReference: $0) }
+            subNode.children = .values(newPairs)
             
             subNodesByKey[subNodeKey] = subNode
         }
@@ -244,8 +249,8 @@ final class Map {
         let subNodeKey = String(key.keyString.prefix(2))
         guard let subNodeRef = subNodeRefs.first(where: { $0.key == subNodeKey }) else { return [] }
         guard let subNode = try node(for: subNodeRef) else { throw Error.missingNode }
-        guard case let .values(valueRefs) = subNode.children else { throw Error.unexpectedNodeContent }
-        return valueRefs
+        guard case let .values(keyValuePairs) = subNode.children else { throw Error.unexpectedNodeContent }
+        return keyValuePairs.filter({ $0.key == key }).map({ $0.valueReference })
     }
 
     fileprivate func node(for key: String, version: Version.Identifier) throws -> Node? {
@@ -258,12 +263,12 @@ final class Map {
         return try decoder.decode(Node.self, from: data)
     }
     
-    private func valueReferences(forRootSubNode subNodeRef: Zone.Reference) throws -> [Value.Reference] {
-        guard let subNode = try node(for: subNodeRef) else { throw Error.missingNode }
-        guard case let .values(valueRefs) = subNode.children else { throw Error.unexpectedNodeContent }
-        return valueRefs
-    }
-    
+//    private func valueReferences(forRootSubNode subNodeRef: Zone.Reference) throws -> [Value.Reference] {
+//        guard let subNode = try node(for: subNodeRef) else { throw Error.missingNode }
+//        guard case let .values(keyValuePairs) = subNode.children else { throw Error.unexpectedNodeContent }
+//        return keyValuePairs.filter({ $0.key == key }).map({ $0.valueReference })
+//    }
+//
 }
 
 
@@ -276,6 +281,11 @@ extension Map {
         init(_ keyString: String = UUID().uuidString) {
             self.keyString = keyString
         }
+    }
+    
+    struct KeyValuePair: Codable, Hashable {
+        var key: Key
+        var valueReference: Value.Reference
     }
     
     struct Delta {
@@ -300,7 +310,7 @@ extension Map {
     }
     
     enum Children: Codable, Hashable {
-        case values([Value.Reference])
+        case values([KeyValuePair])
         case nodes([Zone.Reference])
         
         enum Key: CodingKey {
@@ -310,7 +320,7 @@ extension Map {
         
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: Key.self)
-            if let values = try? container.decode([Value.Reference].self, forKey: .values) {
+            if let values = try? container.decode([KeyValuePair].self, forKey: .values) {
                 self = .values(values)
             } else if let nodes = try? container.decode([Zone.Reference].self, forKey: .nodes) {
                 self = .nodes(nodes)
