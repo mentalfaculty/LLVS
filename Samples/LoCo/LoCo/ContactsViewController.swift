@@ -23,6 +23,7 @@ class ContactsViewController: UITableViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         clearsSelectionOnViewWillAppear = splitViewController!.isCollapsed
+        tableView.reloadData()
         super.viewWillAppear(animated)
     }
 
@@ -31,6 +32,14 @@ class ContactsViewController: UITableViewController {
         try! contactBook.add(contact)
         let indexPath = IndexPath(row: contactBook.contacts.count-1, section: 0)
         tableView.insertRows(at: [indexPath], with: .automatic)
+        view.isUserInteractionEnabled = false
+        DispatchQueue.main.asyncAfter(deadline: .now()+0.3) {
+            self.tableView.selectRow(at: indexPath, animated: true, scrollPosition: .none)
+            DispatchQueue.main.asyncAfter(deadline: .now()+0.2) {
+                self.performSegue(withIdentifier: "showContact", sender: self)
+                self.view.isUserInteractionEnabled = true
+            }
+        }
     }
 
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
