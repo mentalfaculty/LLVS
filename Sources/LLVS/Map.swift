@@ -263,12 +263,12 @@ final class Map {
         return try decoder.decode(Node.self, from: data)
     }
     
-//    private func valueReferences(forRootSubNode subNodeRef: Zone.Reference) throws -> [Value.Reference] {
-//        guard let subNode = try node(for: subNodeRef) else { throw Error.missingNode }
-//        guard case let .values(keyValuePairs) = subNode.children else { throw Error.unexpectedNodeContent }
-//        return keyValuePairs.filter({ $0.key == key }).map({ $0.valueReference })
-//    }
-//
+    private func valueReferences(forRootSubNode subNodeRef: Zone.Reference) throws -> [Value.Reference] {
+        guard let subNode = try node(for: subNodeRef) else { throw Error.missingNode }
+        guard case let .values(keyValuePairs) = subNode.children else { throw Error.unexpectedNodeContent }
+        return keyValuePairs.map({ $0.valueReference })
+    }
+
 }
 
 
