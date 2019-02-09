@@ -26,7 +26,8 @@ class PropertyLoader<KeyType: StoreKey> {
     func load<PropertyType: Codable>(_ storeKey: KeyType) throws -> PropertyType? {
         let key = storeKey.key(forIdentifier: valueIdentifier)
         guard let value = try store.value(.init(key), prevailingAt: prevailingVersion) else { return nil }
-        return try decoder.decode(PropertyType.self, from: value.data)
+        let array = try decoder.decode([PropertyType].self, from: value.data) // Properties are in array to please JSON
+        return array.first
     }
 }
 
@@ -44,7 +45,7 @@ class PropertyChangeGenerator<KeyType: StoreKey> {
         let key = storeKey.key(forIdentifier: valueIdentifier)
         guard propertyValue != originalPropertyValue else { return }
         if let propertyValue = propertyValue {
-            let data = try encoder.encode(propertyValue)
+            let data = try encoder.encode([propertyValue]) // Wrap properties in array to please JSON encoding. Requires array or dict root.
             let value = Value(identifier: .init(key), version: nil, data: data)
             let change: Value.Change = originalPropertyValue == nil ? .insert(value) : .update(value)
             propertyChanges.append(change)

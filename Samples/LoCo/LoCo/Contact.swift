@@ -29,11 +29,11 @@ struct Person: Codable, Equatable {
 
 struct Address: Codable, Equatable {
     var streetAddress: String
-    var postCode: String
-    var city: String
-    var country: String
+    var postCode: String?
+    var city: String?
+    var country: String?
     
-    init(streetAddress: String, postCode: String, city: String, country: String) {
+    init(streetAddress: String, postCode: String?, city: String?, country: String?) {
         self.streetAddress = streetAddress
         self.postCode = postCode
         self.city = city
@@ -81,7 +81,6 @@ struct Contact: Equatable, Faultable {
     private enum StoreKeys: String, StoreKey {
         case person
         case address
-        case age
         case email
         case phoneNumber
         case friends

@@ -85,12 +85,6 @@
                                         <fontDescription key="fontDescription" type="system" pointSize="14"/>
                                         <textInputTraits key="textInputTraits" textContentType="given-name"/>
                                     </textField>
-                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" misplaced="YES" text="Street Address" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Dgp-td-OPV">
-                                        <rect key="frame" x="24" y="68" width="115" height="21"/>
-                                        <fontDescription key="fontDescription" type="system" pointSize="17"/>
-                                        <nil key="textColor"/>
-                                        <nil key="highlightedColor"/>
-                                    </label>
                                     <textField opaque="NO" contentMode="scaleToFill" misplaced="YES" contentHorizontalAlignment="left" contentVerticalAlignment="center" borderStyle="roundedRect" textAlignment="natural" minimumFontSize="17" translatesAutoresizingMaskIntoConstraints="NO" id="rX4-kr-ELp">
                                         <rect key="frame" x="147" y="165" width="203" height="30"/>
                                         <nil key="textColor"/>
@@ -124,8 +118,8 @@
                                         <nil key="textColor"/>
                                         <nil key="highlightedColor"/>
                                     </label>
-                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" misplaced="YES" text="Family Name" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="clA-b4-cvC">
-                                        <rect key="frame" x="40" y="130" width="99" height="21"/>
+                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" misplaced="YES" text="Street Address" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="clA-b4-cvC">
+                                        <rect key="frame" x="24" y="130" width="114" height="21"/>
                                         <constraints>
                                             <constraint firstAttribute="height" constant="21" id="BUh-Fs-a5J"/>
                                         </constraints>
@@ -148,6 +142,12 @@
                                         <fontDescription key="fontDescription" type="system" pointSize="14"/>
                                         <textInputTraits key="textInputTraits" textContentType="tel"/>
                                     </textField>
+                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" misplaced="YES" text="Family Name" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Dgp-td-OPV">
+                                        <rect key="frame" x="39" y="64" width="99" height="21"/>
+                                        <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                        <nil key="textColor"/>
+                                        <nil key="highlightedColor"/>
+                                    </label>
                                 </subviews>
                                 <constraints>
                                     <constraint firstItem="llF-iK-c6u" firstAttribute="centerY" secondItem="1nx-4F-MUo" secondAttribute="centerY" id="2Ib-bb-pEJ"/>
@@ -159,15 +159,15 @@
                                     <constraint firstItem="H8Z-DK-O0k" firstAttribute="top" secondItem="s85-A6-5lS" secondAttribute="top" constant="20" id="Ac7-eo-Fx2"/>
                                     <constraint firstItem="rX4-kr-ELp" firstAttribute="leading" secondItem="5yQ-tV-icD" secondAttribute="leading" id="BgH-Ij-53N"/>
                                     <constraint firstItem="clA-b4-cvC" firstAttribute="centerY" secondItem="VKY-Xl-CVp" secondAttribute="centerY" constant="66.5" id="Bzl-Bf-ceE"/>
-                                    <constraint firstItem="VKY-Xl-CVp" firstAttribute="leading" secondItem="clA-b4-cvC" secondAttribute="trailing" constant="8" id="FGb-ud-gbH"/>
-                                    <constraint firstItem="5yQ-tV-icD" firstAttribute="leading" secondItem="Dgp-td-OPV" secondAttribute="trailing" constant="8" id="FIl-qh-uWm"/>
+                                    <constraint firstItem="VKY-Xl-CVp" firstAttribute="leading" secondItem="clA-b4-cvC" secondAttribute="trailing" constant="9" id="FGb-ud-gbH"/>
+                                    <constraint firstItem="5yQ-tV-icD" firstAttribute="leading" secondItem="Dgp-td-OPV" secondAttribute="trailing" constant="9" id="FIl-qh-uWm"/>
                                     <constraint firstItem="rX4-kr-ELp" firstAttribute="top" secondItem="5yQ-tV-icD" secondAttribute="bottom" constant="8" id="GpO-WY-5Iz"/>
                                     <constraint firstItem="fd8-47-3Fx" firstAttribute="leading" secondItem="H8Z-DK-O0k" secondAttribute="leading" id="KQM-WU-iPX"/>
                                     <constraint firstItem="fd8-47-3Fx" firstAttribute="leading" secondItem="1QK-2I-hiB" secondAttribute="trailing" constant="8" id="Ndo-W4-tlE"/>
                                     <constraint firstItem="rX4-kr-ELp" firstAttribute="trailing" secondItem="5yQ-tV-icD" secondAttribute="trailing" id="Nzd-Gd-Zk6"/>
                                     <constraint firstItem="fd8-47-3Fx" firstAttribute="top" secondItem="1nx-4F-MUo" secondAttribute="bottom" constant="8" id="O26-6K-NJ2"/>
                                     <constraint firstItem="4Kt-oR-i4r" firstAttribute="trailing" secondItem="rX4-kr-ELp" secondAttribute="trailing" id="Ojl-dv-Y1p"/>
-                                    <constraint firstItem="Dgp-td-OPV" firstAttribute="centerY" secondItem="5yQ-tV-icD" secondAttribute="centerY" constant="-63.5" id="PGj-RF-5MC"/>
+                                    <constraint firstItem="Dgp-td-OPV" firstAttribute="centerY" secondItem="5yQ-tV-icD" secondAttribute="centerY" constant="-67.5" id="PGj-RF-5MC"/>
                                     <constraint firstAttribute="trailing" secondItem="H8Z-DK-O0k" secondAttribute="trailing" constant="25" id="Q0U-it-osw"/>
                                     <constraint firstItem="xT3-de-Inn" firstAttribute="trailing" secondItem="5Gt-2k-3yC" secondAttribute="trailing" id="Q4U-2B-EWe"/>
                                     <constraint firstItem="1nx-4F-MUo" firstAttribute="top" secondItem="2Et-wV-Ybn" secondAttribute="bottom" constant="42" id="Tap-7G-4jW"/>
@@ -271,7 +271,7 @@
                             <outlet property="delegate" destination="7bK-jq-Zjz" id="RA6-mI-bju"/>
                         </connections>
                     </tableView>
-                    <navigationItem key="navigationItem" title="Master" id="Zdf-7t-Un8"/>
+                    <navigationItem key="navigationItem" title="Contact Book" id="Zdf-7t-Un8"/>
                 </tableViewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="Rux-fX-hf1" sceneMemberID="firstResponder"/>
             </objects>

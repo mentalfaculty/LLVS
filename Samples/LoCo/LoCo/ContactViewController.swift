@@ -65,11 +65,23 @@ class ContactViewController: UIViewController {
     func updateView() {
         guard let _ = firstNameField else { return }
         if let contact = contact {
-            firstNameField.text = contact.person?.firstName ?? ""
-            secondNameField.text = contact.person?.secondName ?? ""
+            firstNameField.text = contact.person?.firstName
+            secondNameField.text = contact.person?.secondName
+            streetAddressField.text = contact.address?.streetAddress
+            postCodeField.text = contact.address?.postCode
+            cityField.text = contact.address?.city
+            countryField.text = contact.address?.country
+            emailField.text = contact.email
+            phoneNumberField.text = contact.phoneNumber
         } else {
             firstNameField.text = nil
             secondNameField.text = nil
+            streetAddressField.text = nil
+            postCodeField.text = nil
+            cityField.text = nil
+            countryField.text = nil
+            emailField.text = nil
+            phoneNumberField.text = nil
         }
     }
     
@@ -78,16 +90,23 @@ class ContactViewController: UIViewController {
         
         var newContact = contact
         
-        let firstName = firstNameField.text ?? ""
-        let secondName = secondNameField.text ?? ""
-        if !firstName.isEmpty || !secondName.isEmpty {
-            let person = Person(firstName: firstName, secondName: (!secondName.isEmpty ? secondName : nil))
-            newContact.person = person
-        } else {
-            newContact.person = nil
-        }
+        let firstName = firstNameField.text
+        let secondName = secondNameField.text
+        let person = firstName.flatMap { Person(firstName: $0, secondName: secondName) }
+        newContact.person = person
         
-        try? contactBook?.update(newContact)
+        let streetAddress = streetAddressField.text
+        let postCode = postCodeField.text
+        let city = cityField.text
+        let country = countryField.text
+        let address = streetAddress.flatMap {
+            Address(streetAddress: $0, postCode: postCode, city: city, country: country)
+        }
+        newContact.address = address
+        
+        newContact.email = emailField.text
+        newContact.phoneNumber = phoneNumberField.text
+        
+        try! contactBook?.update(newContact)
     }
 }
-
