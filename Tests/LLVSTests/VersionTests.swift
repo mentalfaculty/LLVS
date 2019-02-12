@@ -40,7 +40,9 @@ final class VersionTests: XCTestCase {
     
     func testLoadingOfVersion() {
         store = try! Store(rootDirectoryURL: rootURL)
-        XCTAssertEqual(store.history.headIdentifiers, [version.identifier])
+        store.queryHistory { history in
+            XCTAssertEqual(history.headIdentifiers, [version.identifier])
+        }
     }
 
     static var allTests = [

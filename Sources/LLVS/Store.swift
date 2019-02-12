@@ -30,7 +30,8 @@ public final class Store {
     private let valuesMapName = "__llvs_values"
     private let valuesMap: Map
     
-    public private(set) var history = History()
+    private let history = History()
+    private let historyAccessQueue = DispatchQueue(label: "llvs.dispatchQueue.historyaccess")
     
     fileprivate let fileManager = FileManager()
     fileprivate let encoder = JSONEncoder()
@@ -54,11 +55,19 @@ public final class Store {
     }
     
     private func loadHistory() throws {
-        for version in try versions() {
-            try history.add(version, updatingPredecessorVersions: false)
+        try historyAccessQueue.sync {
+            for version in try versions() {
+                try history.add(version, updatingPredecessorVersions: false)
+            }
+            for version in try versions() {
+                try history.updateSuccessors(inPredecessorsOf: version)
+            }
         }
-        for version in try versions() {
-            try history.updateSuccessors(inPredecessorsOf: version)
+    }
+    
+    public func queryHistory(in block: (History)->Void) {
+        historyAccessQueue.sync {
+            block(self.history)
         }
     }
     
@@ -116,7 +125,9 @@ extension Store {
         try store(version)
         
         // Add to history
-        try history.add(version, updatingPredecessorVersions: true)
+        try historyAccessQueue.sync {
+            try history.add(version, updatingPredecessorVersions: true)
+        }
         
         return version
     }
@@ -133,20 +144,27 @@ extension Store {
 extension Store {
     
     func merge(version firstVersionIdentifier: Version.Identifier, with secondVersionIdentifier: Version.Identifier, resolvingWith arbiter: MergeArbiter) throws -> Version {
-        guard let commonAncestorIdentifier = try history.greatestCommonAncestor(ofVersionsIdentifiedBy: (firstVersionIdentifier, secondVersionIdentifier)) else {
-            throw Error.noCommonAncestor(firstVersion: firstVersionIdentifier, secondVersion: secondVersionIdentifier)
-        }
-        
-        guard let firstVersion = history.version(identifiedBy: firstVersionIdentifier),
-            let secondVersion = history.version(identifiedBy: secondVersionIdentifier),
-            let commonAncestor = history.version(identifiedBy: commonAncestorIdentifier) else {
-            throw Error.missingVersion
+        var firstVersion, secondVersion, commonVersion: Version?
+        var commonVersionIdentifier: Version.Identifier?
+        try historyAccessQueue.sync {
+            commonVersionIdentifier = try history.greatestCommonAncestor(ofVersionsIdentifiedBy: (firstVersionIdentifier, secondVersionIdentifier))
+            guard commonVersionIdentifier != nil else {
+                throw Error.noCommonAncestor(firstVersion: firstVersionIdentifier, secondVersion: secondVersionIdentifier)
+            }
+            
+            firstVersion = history.version(identifiedBy: firstVersionIdentifier)
+            secondVersion = history.version(identifiedBy: secondVersionIdentifier)
+            commonVersion = history.version(identifiedBy: commonVersionIdentifier!)
+            
+            guard firstVersion != nil, secondVersion != nil else {
+                throw Error.missingVersion
+            }
         }
         
         // Prepare merge
         let predecessors = Version.Predecessors(identifierOfFirst: firstVersionIdentifier, identifierOfSecond: secondVersionIdentifier)
-        let diffs = try valuesMap.differences(between: firstVersionIdentifier, and: secondVersionIdentifier, withCommonAncestor: commonAncestorIdentifier)
-        var merge = Merge(versions: (firstVersion, secondVersion), commonAncestor: commonAncestor)
+        let diffs = try valuesMap.differences(between: firstVersionIdentifier, and: secondVersionIdentifier, withCommonAncestor: commonVersionIdentifier!)
+        var merge = Merge(versions: (firstVersion!, secondVersion!), commonAncestor: commonVersion!)
         let forkTuples = diffs.map({ ($0.valueIdentifier, $0.valueFork) })
         merge.forksByValueIdentifier = .init(uniqueKeysWithValues: forkTuples)
         

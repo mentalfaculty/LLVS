@@ -7,7 +7,7 @@
 
 import Foundation
 
-public struct History {
+public class History {
     
     public enum Error: Swift.Error {
         case attemptToAddPreexistingVersion(identifier: String)
@@ -57,7 +57,7 @@ public struct History {
     /// Pass in false if more control is needed over setting the successors, such as
     /// when loading them to setup the History. In that case, we only want to set them when all versions
     /// have been loaded.
-    internal mutating func add(_ version: Version, updatingPredecessorVersions: Bool) throws {
+    internal func add(_ version: Version, updatingPredecessorVersions: Bool) throws {
         guard versionsByIdentifier[version.identifier] == nil else {
             throw Error.attemptToAddPreexistingVersion(identifier: version.identifier.identifierString)
         }
@@ -72,7 +72,7 @@ public struct History {
         }
     }
     
-    internal mutating func updateSuccessors(inPredecessorsOf version: Version) throws {
+    internal func updateSuccessors(inPredecessorsOf version: Version) throws {
         for predecessorIdentifier in version.predecessors?.identifiers ?? [] {
             guard let predecessor = self.version(identifiedBy: predecessorIdentifier) else {
                 throw Error.nonExistentVersionEncountered(identifier: predecessorIdentifier.identifierString)
