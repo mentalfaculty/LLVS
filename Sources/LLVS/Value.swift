@@ -8,7 +8,7 @@
 import Foundation
 
 
-public struct Value {
+public struct Value: Codable {
     
     public var identifier: Identifier
     public var version: Version.Identifier?
@@ -48,12 +48,56 @@ public extension Value {
         }
     }
     
-    public enum Change {
+    public enum Change: Codable {
         case insert(Value)
         case update(Value)
         case remove(Identifier)
         case preserve(Reference)
         case preserveRemoval(Identifier)
+        
+        enum CodingKeys: String, CodingKey {
+            case insert, update, remove, preserve, preserveRemoval
+        }
+        
+        enum Error: Swift.Error {
+            case changeDecodingFailure
+        }
+        
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            switch self {
+            case let .insert(value):
+                try c.encode(value, forKey: .insert)
+            case let .update(value):
+                try c.encode(value, forKey: .update)
+            case let .remove(id):
+                try c.encode(id, forKey: .remove)
+            case let .preserve(ref):
+                try c.encode(ref, forKey: .preserve)
+            case let .preserveRemoval(id):
+                try c.encode(id, forKey: .preserveRemoval)
+            }
+        }
+        
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            if let v = try? c.decode(Value.self, forKey: .insert) {
+                self = .insert(v); return
+            }
+            if let v = try? c.decode(Value.self, forKey: .update) {
+                self = .update(v); return
+            }
+            if let i = try? c.decode(Identifier.self, forKey: .remove) {
+                self = .remove(i); return
+            }
+            if let r = try? c.decode(Reference.self, forKey: .preserve) {
+                self = .preserve(r); return
+            }
+            if let i = try? c.decode(Identifier.self, forKey: .preserveRemoval) {
+                self = .preserveRemoval(i); return
+            }
+            throw Error.changeDecodingFailure
+        }
     }
     
     public enum Fork: Equatable {
