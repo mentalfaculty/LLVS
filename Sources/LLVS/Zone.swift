@@ -38,7 +38,7 @@ internal final class Zone {
     }
     
     internal func versionIdentifiers(for key: String) throws -> [Version.Identifier] {
-        let valueDirectoryURL = fileManager.splitFilenameURL(forRoot: rootDirectory, name: key)
+        let valueDirectoryURL = rootDirectory.appendingSplitPathComponent(key)
         let valueDirLength = valueDirectoryURL.path.count
         let enumerator = fileManager.enumerator(at: valueDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
         var versions: [Version.Identifier] = []
@@ -56,9 +56,9 @@ internal final class Zone {
     }
     
     func fileSystemLocation(for reference: Reference) throws -> (directoryURL: URL, fileURL: URL) {
-        let valueDirectoryURL = fileManager.splitFilenameURL(forRoot: rootDirectory, name: reference.key)
+        let valueDirectoryURL = rootDirectory.appendingSplitPathComponent(reference.key)
         let versionName = reference.version.identifierString + "." + fileExtension
-        let fileURL = fileManager.splitFilenameURL(forRoot: valueDirectoryURL, name: versionName, subDirectoryNameLength: 1)
+        let fileURL = valueDirectoryURL.appendingSplitPathComponent(versionName, prefixLength: 1)
         let directoryURL = fileURL.deletingLastPathComponent()
         return (directoryURL: directoryURL, fileURL: fileURL)
     }

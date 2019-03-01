@@ -21,7 +21,6 @@ public class FileSystemExchange: NSObject, Exchange {
     public var changesDirectory: URL { return rootDirectoryURL.appendingPathComponent("changes") }
 
     private let fileManager = FileManager()
-    
     fileprivate let queue = OperationQueue()
 
     init(rootDirectoryURL: URL) {

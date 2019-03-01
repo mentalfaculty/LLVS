@@ -239,7 +239,7 @@ extension Store {
     }
     
     internal func versionIdentifiers(for valueIdentifier: Value.Identifier) throws -> [Version.Identifier] {
-        let valueDirectoryURL = fileManager.splitFilenameURL(forRoot: valuesDirectoryURL, name: valueIdentifier.identifierString)
+        let valueDirectoryURL = valuesDirectoryURL.appendingSplitPathComponent(valueIdentifier.identifierString)
         let enumerator = fileManager.enumerator(at: valueDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
         let valueDirComponents = valueDirectoryURL.standardizedFileURL.pathComponents
         var versionIdentifiers: [Version.Identifier] = []
@@ -279,7 +279,7 @@ extension Store {
 fileprivate extension Store {
     
     func fileSystemLocation(forVersionIdentifiedBy identifier: Version.Identifier) -> (directoryURL: URL, fileURL: URL) {
-        let fileURL = fileManager.splitFilenameURL(forRoot: versionsDirectoryURL, name: identifier.identifierString).appendingPathExtension("json")
+        let fileURL = versionsDirectoryURL.appendingSplitPathComponent(identifier.identifierString).appendingPathExtension("json")
         let directoryURL = fileURL.deletingLastPathComponent()
         return (directoryURL: directoryURL, fileURL: fileURL)
     }
@@ -288,18 +288,21 @@ fileprivate extension Store {
 
 // MARK:- Path Utilities
 
-internal extension FileManager {
+internal extension URL {
     
-    func splitFilenameURL(forRoot rootDirectoryURL: URL, name: String, subDirectoryNameLength: UInt = 2) -> URL {
-        guard name.count > subDirectoryNameLength else {
-            return rootDirectoryURL.appendingPathComponent(name)
+    /// Appends a path to the messaged URL that consists of a filename for which
+    /// a prefix is taken as a subdirectory. Eg. `file:///root` might become
+    /// `file:///root/fi/lename.jpg` when appending `filename.jpg` with `subDirectoryNameLength` of 2.
+    func appendingSplitPathComponent(_ name: String, prefixLength: UInt = 2) -> URL {
+        guard name.count > prefixLength else {
+            return appendingPathComponent(name)
         }
         
         // Embed a subdirectory
-        let index = name.index(name.startIndex, offsetBy: Int(subDirectoryNameLength))
+        let index = name.index(name.startIndex, offsetBy: Int(prefixLength))
         let prefix = String(name[..<index])
         let postfix = String(name[index...])
-        let directory = rootDirectoryURL.appendingPathComponent(prefix).appendingPathComponent(postfix)
+        let directory = appendingPathComponent(prefix).appendingPathComponent(postfix)
         
         return directory
     }
