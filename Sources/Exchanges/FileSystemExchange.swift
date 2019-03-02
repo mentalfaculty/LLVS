@@ -8,11 +8,13 @@
 import Foundation
 
 public class FileSystemExchange: NSObject, Exchange {
-    
+
     public enum Error: Swift.Error {
         case versionFileInvalid
         case changesFileInvalid
     }
+    
+    public let store: Store
     
     public weak var client: ExchangeClient?
     
@@ -20,18 +22,19 @@ public class FileSystemExchange: NSObject, Exchange {
     public var versionsDirectory: URL { return rootDirectoryURL.appendingPathComponent("versions") }
     public var changesDirectory: URL { return rootDirectoryURL.appendingPathComponent("changes") }
 
-    private let fileManager = FileManager()
+    fileprivate let fileManager = FileManager()
     fileprivate let queue = OperationQueue()
 
-    init(rootDirectoryURL: URL) {
+    init(rootDirectoryURL: URL, store: Store) {
         self.rootDirectoryURL = rootDirectoryURL
+        self.store = store
         super.init()
         try? fileManager.createDirectory(at: rootDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: versionsDirectory, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: changesDirectory, withIntermediateDirectories: true, attributes: nil)
     }
     
-    public func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping (ExchangeResult<[Version.Identifier]>) -> Void) {
+    public func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping (Result<[Version.Identifier]>) -> Void) {
         coordinateFileAccess(.read, completionHandler: completionHandler) {
             let contents = try self.fileManager.contentsOfDirectory(at: self.versionsDirectory, includingPropertiesForKeys: nil, options: [])
             let versionIds = contents.map({ Version.Identifier($0.lastPathComponent) })
@@ -39,7 +42,7 @@ public class FileSystemExchange: NSObject, Exchange {
         }
     }
     
-    public func retrieveVersion(identifiedBy versionIdentifier: Version.Identifier, executingUponCompletion completionHandler: @escaping (ExchangeResult<Version>) -> Void) {
+    public func retrieveVersion(identifiedBy versionIdentifier: Version.Identifier, executingUponCompletion completionHandler: @escaping (Result<Version>) -> Void) {
         coordinateFileAccess(.read, completionHandler: completionHandler) {
             let url = self.versionsDirectory.appendingPathComponent(versionIdentifier.identifierString)
             let data = try Data(contentsOf: url)
@@ -52,7 +55,7 @@ public class FileSystemExchange: NSObject, Exchange {
         }
     }
     
-    public func retrieveValueChanges(forVersionIdentifiedBy versionIdentifier: Version.Identifier, executingUponCompletion completionHandler: @escaping (ExchangeResult<[Value.Change]>) -> Void) {
+    public func retrieveValueChanges(forVersionIdentifiedBy versionIdentifier: Version.Identifier, executingUponCompletion completionHandler: @escaping (Result<[Value.Change]>) -> Void) {
         coordinateFileAccess(.read, completionHandler: completionHandler) {
             let url = self.changesDirectory.appendingPathComponent(versionIdentifier.identifierString)
             let data = try Data(contentsOf: url)
@@ -61,7 +64,7 @@ public class FileSystemExchange: NSObject, Exchange {
         }
     }
     
-    public func send(_ version: Version, with valueChanges: [Value.Change], executingUponCompletion completionHandler: @escaping (ExchangeResult<Void>) -> Void) {
+    public func send(_ version: Version, with valueChanges: [Value.Change], executingUponCompletion completionHandler: @escaping (Result<Void>) -> Void) {
         coordinateFileAccess(.write, completionHandler: completionHandler) {
             let changesURL = self.changesDirectory.appendingPathComponent(version.identifier.identifierString)
             let changesData = try JSONEncoder().encode(valueChanges)
@@ -79,7 +82,7 @@ public class FileSystemExchange: NSObject, Exchange {
         case read, write
     }
     
-    private func coordinateFileAccess<ResultType>(_ access: FileAccess, completionHandler: @escaping (ExchangeResult<ResultType>) -> Void, by block: @escaping () throws -> Void) {
+    private func coordinateFileAccess<ResultType>(_ access: FileAccess, completionHandler: @escaping (Result<ResultType>) -> Void, by block: @escaping () throws -> Void) {
         queue.addOperation {
             let coordinator = NSFileCoordinator(filePresenter: self)
             var error: NSError?

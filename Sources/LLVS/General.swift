@@ -10,3 +10,10 @@ import Foundation
 public protocol StringIdentifiable {
     var identifierString: String { get }
 }
+
+public enum Result<ValueType> {
+    case failure(Error)
+    case success(ValueType)
+}
+
+public typealias CompletionHandler<T> = (Result<T>)->Void

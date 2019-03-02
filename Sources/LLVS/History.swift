@@ -16,7 +16,9 @@ public class History {
     
     private var versionsByIdentifier: [Version.Identifier:Version] = [:]
     private var referencedVersionIdentifiers: Set<Version.Identifier> = [] // Any version that is a predecessor
+    
     public private(set) var headIdentifiers: Set<Version.Identifier> = []  // Versions that are not predecessors of other versions
+    public var allVersionIdentifiers: [Version.Identifier] { return Array(versionsByIdentifier.keys) }
     
     public var mostRecentHead: Version? {
         let maxId = headIdentifiers.max { (vId1, vId2) -> Bool in
