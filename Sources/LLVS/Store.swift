@@ -18,6 +18,8 @@ public final class Store {
         case attemptToStoreValueWithNoVersion
         case noCommonAncestor(firstVersion: Version.Identifier, secondVersion: Version.Identifier)
         case unresolvedConflict(valueIdentifier: Value.Identifier, valueFork: Value.Fork)
+        case attemptToAddExistingVersion(Version.Identifier)
+        case attemptToAddVersionWithNonexistingPredecessors(Version)
     }
     
     public let rootDirectoryURL: URL
@@ -71,6 +73,14 @@ public final class Store {
         }
     }
     
+    public func history(includesVersionsIdentifiedBy versionIdentifiers: [Version.Identifier]) -> Bool {
+        var valid = false
+        queryHistory { history in
+            valid = versionIdentifiers.allSatisfy { history.version(identifiedBy: $0) != nil }
+        }
+        return valid
+    }
+    
 }
 
 
@@ -86,8 +96,18 @@ extension Store {
     /// Changes must include all updates to the map of the first predecessor. If necessary, preserves should be included to bring values
     /// from the second predecessor into the first predecessor map.
     @discardableResult internal func addVersion(basedOn predecessors: Version.Predecessors?, storing changes: [Value.Change]) throws -> Version {
-        // Update version in values
         let version = Version(predecessors: predecessors)
+        try addVersion(version, storing: changes)
+        return version
+    }
+    
+    internal func addVersion(_ version: Version, storing changes: [Value.Change]) throws {
+        guard !history(includesVersionsIdentifiedBy: [version.identifier]) else {
+            throw Error.attemptToAddExistingVersion(version.identifier)
+        }
+        guard history(includesVersionsIdentifiedBy: version.predecessors?.identifiers ?? []) else {
+            throw Error.attemptToAddVersionWithNonexistingPredecessors(version)
+        }
         
         // Store values
         for change in changes {
@@ -119,7 +139,7 @@ extension Store {
                 return delta
             }
         }
-        try valuesMap.addVersion(version.identifier, basedOn: predecessors?.identifierOfFirst, applying: deltas)
+        try valuesMap.addVersion(version.identifier, basedOn: version.predecessors?.identifierOfFirst, applying: deltas)
         
         // Store version
         try store(version)
@@ -128,8 +148,6 @@ extension Store {
         try historyAccessQueue.sync {
             try history.add(version, updatingPredecessorVersions: true)
         }
-        
-        return version
     }
     
     private func store(_ value: Value) throws {
