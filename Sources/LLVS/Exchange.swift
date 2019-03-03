@@ -17,7 +17,7 @@ public protocol Exchange {
     
     func retrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>)
     func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>)
-    func retrieveVersion(identifiedBy versionIdentifier: Version.Identifier, executingUponCompletion completionHandler: @escaping CompletionHandler<Version>)
+    func retrieveVersions(identifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>)
     func retrieveValueChanges(forVersionIdentifiedBy versionIdentifier: Version.Identifier, executingUponCompletion completionHandler: @escaping CompletionHandler<[Value.Change]>)
 
     func send(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>)

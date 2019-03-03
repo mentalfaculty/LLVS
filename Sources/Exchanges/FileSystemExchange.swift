@@ -7,7 +7,7 @@
 
 import Foundation
 
-public class FileSystemExchange: NSObject, Exchange {
+public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
 
     public enum Error: Swift.Error {
         case versionFileInvalid
@@ -34,7 +34,7 @@ public class FileSystemExchange: NSObject, Exchange {
         try? fileManager.createDirectory(at: changesDirectory, withIntermediateDirectories: true, attributes: nil)
     }
     
-    public func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping (Result<[Version.Identifier]>) -> Void) {
+    public func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>) {
         coordinateFileAccess(.read, completionHandler: completionHandler) {
             let contents = try self.fileManager.contentsOfDirectory(at: self.versionsDirectory, includingPropertiesForKeys: nil, options: [])
             let versionIds = contents.map({ Version.Identifier($0.lastPathComponent) })
@@ -42,20 +42,22 @@ public class FileSystemExchange: NSObject, Exchange {
         }
     }
     
-    public func retrieveVersion(identifiedBy versionIdentifier: Version.Identifier, executingUponCompletion completionHandler: @escaping (Result<Version>) -> Void) {
+    public func retrieveVersions(identifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
         coordinateFileAccess(.read, completionHandler: completionHandler) {
-            let url = self.versionsDirectory.appendingPathComponent(versionIdentifier.identifierString)
-            let data = try Data(contentsOf: url)
-            if let version = try JSONDecoder().decode([String:Version].self, from: data)["version"] {
-                completionHandler(.success(version))
+            let versions: [Version] = try versionIdentifiers.map { versionIdentifier in
+                let url = self.versionsDirectory.appendingPathComponent(versionIdentifier.identifierString)
+                let data = try Data(contentsOf: url)
+                if let version = try JSONDecoder().decode([String:Version].self, from: data)["version"] {
+                    return version
+                } else {
+                    throw Error.versionFileInvalid
+                }
             }
-            else {
-                completionHandler(.failure(Error.versionFileInvalid))
-            }
+            completionHandler(.success(versions))
         }
     }
     
-    public func retrieveValueChanges(forVersionIdentifiedBy versionIdentifier: Version.Identifier, executingUponCompletion completionHandler: @escaping (Result<[Value.Change]>) -> Void) {
+    public func retrieveValueChanges(forVersionIdentifiedBy versionIdentifier: Version.Identifier, executingUponCompletion completionHandler: @escaping CompletionHandler<[Value.Change]>) {
         coordinateFileAccess(.read, completionHandler: completionHandler) {
             let url = self.changesDirectory.appendingPathComponent(versionIdentifier.identifierString)
             let data = try Data(contentsOf: url)
@@ -64,7 +66,7 @@ public class FileSystemExchange: NSObject, Exchange {
         }
     }
     
-    public func send(_ version: Version, with valueChanges: [Value.Change], executingUponCompletion completionHandler: @escaping (Result<Void>) -> Void) {
+    public func send(_ version: Version, with valueChanges: [Value.Change], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         coordinateFileAccess(.write, completionHandler: completionHandler) {
             let changesURL = self.changesDirectory.appendingPathComponent(version.identifier.identifierString)
             let changesData = try JSONEncoder().encode(valueChanges)
@@ -82,7 +84,7 @@ public class FileSystemExchange: NSObject, Exchange {
         case read, write
     }
     
-    private func coordinateFileAccess<ResultType>(_ access: FileAccess, completionHandler: @escaping (Result<ResultType>) -> Void, by block: @escaping () throws -> Void) {
+    private func coordinateFileAccess<ResultType>(_ access: FileAccess, completionHandler: @escaping CompletionHandler<ResultType>, by block: @escaping () throws -> Void) {
         queue.addOperation {
             let coordinator = NSFileCoordinator(filePresenter: self)
             var error: NSError?
@@ -108,9 +110,7 @@ public class FileSystemExchange: NSObject, Exchange {
         }
     }
     
-}
-
-extension FileSystemExchange: NSFilePresenter {
+    // MARK:- File Presenter
     
     public var presentedItemURL: URL? {
         return rootDirectoryURL
@@ -120,14 +120,14 @@ extension FileSystemExchange: NSFilePresenter {
         return queue
     }
     
-    public func presentedSubitemDidAppear(at url: URL) {
-        type(of: self).cancelPreviousPerformRequests(withTarget: self, selector: #selector(notifyOfNewVersions), object: nil)
-        perform(#selector(notifyOfNewVersions), with: nil, afterDelay: 1.0)
-    }
+    private var notifyWorkItem: DispatchWorkItem?
+    private let minimumDelayBeforeNotifyingOfNewVersions = 1.0
     
-    @objc private func notifyOfNewVersions() {
-        OperationQueue.main.addOperation {
+    public func presentedSubitemDidAppear(at url: URL) {
+        notifyWorkItem?.cancel()
+        notifyWorkItem = DispatchWorkItem {
             self.client?.newVersionsAreAvailable(via: self)
         }
+        DispatchQueue.main.asyncAfter(deadline: .now()+minimumDelayBeforeNotifyingOfNewVersions, execute: notifyWorkItem!)
     }
 }
