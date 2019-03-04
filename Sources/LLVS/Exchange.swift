@@ -31,27 +31,35 @@ public protocol Exchange {
 public extension Exchange {
     
     func retrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>) {
-        retrieveAllVersionIdentifiers { result in
+        var remoteIds: [Version.Identifier]!
+        let retrieveIds = AsynchronousTask { finish in
+            self.retrieveAllVersionIdentifiers { result in
+                remoteIds = result.value
+                finish(result.taskResult)
+            }
+        }
+        
+        var remoteVersions: [Version]!
+        let retrieveVersions = AsynchronousTask { finish in
+            let toRetrieveIds = self.versionIdentifiersMissingFromHistory(forRemoteIdentifiers: remoteIds)
+            self.retrieveVersions(identifiedBy: toRetrieveIds) { result in
+                remoteVersions = result.value
+                finish(result.taskResult)
+            }
+        }
+        
+        let addToHistory = AsynchronousTask { finish in
+            self.addToHistory(remoteVersions) { result in
+                finish(result.taskResult)
+            }
+        }
+                    
+        [retrieveIds, retrieveVersions, addToHistory].executeInOrder { result in
             switch result {
-            case let .failure(error):
+            case .failure(let error):
                 completionHandler(.failure(error))
-            case let .success(versionIds):
-                let toRetrieveIds = self.versionIdentifiersMissingFromHistory(forRemoteIdentifiers: versionIds)
-                self.retrieveVersions(identifiedBy: toRetrieveIds) { result in
-                    switch result {
-                    case let .failure(error):
-                        completionHandler(.failure(error))
-                    case let .success(versions):
-                        self.addToHistory(versions) { result in
-                            switch result {
-                            case let .failure(error):
-                                completionHandler(.failure(error))
-                            case .success:
-                                completionHandler(.success(toRetrieveIds))
-                            }
-                        }
-                    }
-                }
+            case .success:
+                completionHandler(.success(remoteIds!))
             }
         }
     }

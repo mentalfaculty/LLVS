@@ -14,6 +14,13 @@ public protocol StringIdentifiable {
 public enum Result<ValueType> {
     case failure(Error)
     case success(ValueType)
+    
+    var value: ValueType? {
+        guard case let .success(value) = self else { return nil }
+        return value
+    }
 }
 
 public typealias CompletionHandler<T> = (Result<T>)->Void
+
+
