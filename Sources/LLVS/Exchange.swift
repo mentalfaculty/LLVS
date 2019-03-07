@@ -128,16 +128,20 @@ public extension Exchange {
             let toSendIds = self.versionIdentifiersMissingRemotely(forRemoteIdentifiers: remoteIds)
             let sendTasks = toSendIds.map { versionId in
                 AsynchronousTask { finish in
-                    var version: Version?
-                    self.store.queryHistory { history in
-                        version = history.version(identifiedBy: versionId)
-                    }
-                    guard let sendVersion = version else {
-                        finish(.failure(ExchangeError.missingVersion)); return
-                    }
-                    let changes = self.store.valueChanges(madeInVersionIdentifiedBy: versionId)
-                    self.send(sendVersion, with: changes) { result in
-                        finish(result.taskResult)
+                    do {
+                        var version: Version?
+                        self.store.queryHistory { history in
+                            version = history.version(identifiedBy: versionId)
+                        }
+                        guard let sendVersion = version else {
+                            finish(.failure(ExchangeError.missingVersion)); return
+                        }
+                        let changes = try self.store.valueChanges(madeInVersionIdentifiedBy: versionId)
+                        self.send(sendVersion, with: changes) { result in
+                            finish(result.taskResult)
+                        }
+                    } catch {
+                        finish(.failure(error))
                     }
                 }
             }

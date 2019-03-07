@@ -248,8 +248,35 @@ extension Store {
 
 extension Store {
     
-    public func valueChanges(madeInVersionIdentifiedBy: Version.Identifier) -> [Value.Change] {
-        return []
+    public func valueChanges(madeInVersionIdentifiedBy versionId: Version.Identifier) throws -> [Value.Change] {
+        var v: Version?
+        queryHistory { v = $0.version(identifiedBy: versionId) }
+        guard let version = v else { throw Error.missingVersion }
+        guard let predecessors = version.predecessors else { return [] }
+        
+        var changes: [Value.Change] = []
+        let firstPred = predecessors.identifierOfFirst
+        if let secondPred = predecessors.identifierOfSecond {
+            
+        } else {
+            let diffs = try valuesMap.differences(between: versionId, and: firstPred, withCommonAncestor: firstPred)
+            for diff in diffs {
+                switch diff.valueFork {
+                case .inserted:
+                    let value = try self.value(diff.valueIdentifier, prevailingAt: versionId)!
+                    changes.append(.insert(value))
+                case .removed:
+                    changes.append(.remove(diff.valueIdentifier))
+                case .updated:
+                    let value = try self.value(diff.valueIdentifier, prevailingAt: versionId)!
+                    changes.append(.update(value))
+                case .removedAndUpdated, .twiceInserted, .twiceRemoved, .twiceUpdated:
+                    fatalError("Should not be possible with only a single branch")
+                }
+            }
+        }
+        
+        return changes
     }
     
 }
