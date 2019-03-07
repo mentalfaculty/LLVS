@@ -244,6 +244,16 @@ extension Store {
     }
 }
 
+// MARK:- Value Changes
+
+extension Store {
+    
+    public func valueChanges(madeInVersionIdentifiedBy: Version.Identifier) -> [Value.Change] {
+        return []
+    }
+    
+}
+
 
 // MARK:- Storing and Fetching Versions
 

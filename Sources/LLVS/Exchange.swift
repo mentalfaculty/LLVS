@@ -9,6 +9,7 @@ import Foundation
 
 enum ExchangeError: Swift.Error {
     case remoteVersionsWithUnknownPredecessors
+    case missingVersion
 }
 
 public protocol ExchangeClient: class {
@@ -27,6 +28,8 @@ public protocol Exchange {
     func send(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>)
     func send(_ version: Version, with valueChanges: [Value.Change], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>)
 }
+
+// MARK:- Receiving
 
 public extension Exchange {
     
@@ -106,7 +109,60 @@ public extension Exchange {
         }
     }
     
+}
+
+// MARK:- Sending
+
+public extension Exchange {
+    
     func send(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>) {
+        var remoteIds: [Version.Identifier]!
+        let retrieveIds = AsynchronousTask { finish in
+            self.retrieveAllVersionIdentifiers { result in
+                remoteIds = result.value
+                finish(result.taskResult)
+            }
+        }
         
+        let sendVersions = AsynchronousTask { finish in
+            let toSendIds = self.versionIdentifiersMissingRemotely(forRemoteIdentifiers: remoteIds)
+            let sendTasks = toSendIds.map { versionId in
+                AsynchronousTask { finish in
+                    var version: Version?
+                    self.store.queryHistory { history in
+                        version = history.version(identifiedBy: versionId)
+                    }
+                    guard let sendVersion = version else {
+                        finish(.failure(ExchangeError.missingVersion)); return
+                    }
+                    let changes = self.store.valueChanges(madeInVersionIdentifiedBy: versionId)
+                    self.send(sendVersion, with: changes) { result in
+                        finish(result.taskResult)
+                    }
+                }
+            }
+            sendTasks.executeInOrder { result in
+                finish(result)
+            }
+        }
+
+        [retrieveIds, sendVersions].executeInOrder { result in
+            switch result {
+            case .failure(let error):
+                completionHandler(.failure(error))
+            case .success:
+                completionHandler(.success(remoteIds!))
+            }
+        }
+    }
+    
+    private func versionIdentifiersMissingRemotely(forRemoteIdentifiers remoteIdentifiers: [Version.Identifier]) -> [Version.Identifier] {
+        var toSendIds: [Version.Identifier]!
+        self.store.queryHistory { history in
+            let storeVersionIds = Set(history.allVersionIdentifiers)
+            let remoteVersionIds = Set(remoteIdentifiers)
+            toSendIds = Array(storeVersionIds.subtracting(remoteVersionIds))
+        }
+        return toSendIds
     }
 }
