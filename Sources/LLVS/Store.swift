@@ -255,11 +255,29 @@ extension Store {
         guard let predecessors = version.predecessors else { return [] }
         
         var changes: [Value.Change] = []
-        let firstPred = predecessors.identifierOfFirst
-        if let secondPred = predecessors.identifierOfSecond {
-            
+        let p1 = predecessors.identifierOfFirst
+        if let p2 = predecessors.identifierOfSecond {
+            // Do a reverse-in-time fork, and negate the outcome
+            let diffs = try valuesMap.differences(between: p1, and: p2, withCommonAncestor: versionId)
+            for diff in diffs {
+                switch diff.valueFork {
+                case .twiceInserted:
+                    changes.append(.remove(diff.valueIdentifier))
+                case .twiceUpdated, .removedAndUpdated:
+                    let value = try self.value(diff.valueIdentifier, prevailingAt: versionId)!
+                    changes.append(.update(value))
+                case .twiceRemoved:
+                    let value = try self.value(diff.valueIdentifier, prevailingAt: versionId)!
+                    changes.append(.insert(value))
+                case .inserted:
+                    changes.append(.preserveRemoval(diff.valueIdentifier))
+                case .removed, .updated:
+                    let value = try self.value(diff.valueIdentifier, prevailingAt: versionId)!
+                    changes.append(.preserve(value.reference!))
+                }
+            }
         } else {
-            let diffs = try valuesMap.differences(between: versionId, and: firstPred, withCommonAncestor: firstPred)
+            let diffs = try valuesMap.differences(between: versionId, and: p1, withCommonAncestor: p1)
             for diff in diffs {
                 switch diff.valueFork {
                 case .inserted:
