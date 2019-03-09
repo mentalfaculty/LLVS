@@ -187,7 +187,7 @@ extension Store {
         merge.forksByValueIdentifier = .init(uniqueKeysWithValues: forkTuples)
         
         // Resolve with arbiter
-        var changes = arbiter.changes(toResolve: merge, in: self)
+        var changes = try arbiter.changes(toResolve: merge, in: self)
         
         // Check changes resolve conflicts
         let idsInChanges = Set(changes.valueIdentifiers)
