@@ -249,10 +249,16 @@ extension Store {
 extension Store {
     
     public func valueChanges(madeInVersionIdentifiedBy versionId: Version.Identifier) throws -> [Value.Change] {
-        var v: Version?
-        queryHistory { v = $0.version(identifiedBy: versionId) }
-        guard let version = v else { throw Error.missingVersion }
-        guard let predecessors = version.predecessors else { return [] }
+        guard let version = try version(identifiedBy: versionId) else { throw Error.missingVersion }
+        
+        guard let predecessors = version.predecessors else {
+            var changes: [Value.Change] = []
+            try valuesMap.enumerateValueReferences(forVersionIdentifiedBy: versionId) { ref in
+                let v = try value(ref.identifier, storedAt: ref.version)!
+                changes.append(.insert(v))
+            }
+            return changes
+        }
         
         var changes: [Value.Change] = []
         let p1 = predecessors.identifierOfFirst

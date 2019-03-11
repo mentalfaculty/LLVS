@@ -242,6 +242,19 @@ final class Map {
         return diffs
     }
     
+    func enumerateValueReferences(forVersionIdentifiedBy versionId: Version.Identifier, executingForEach block: (Value.Reference) throws -> Void) throws {
+        let rootRef = Zone.Reference(key: rootKey, version: versionId)
+        guard let rootNode = try node(for: rootRef) else { throw Error.missingVersionRoot }
+        guard case let .nodes(subNodeRefs) = rootNode.children else { throw Error.missingNode }
+        for subNodeRef in subNodeRefs {
+            guard let subNode = try node(for: subNodeRef) else { throw Error.missingNode }
+            guard case let .values(keyValuePairs) = subNode.children else { throw Error.unexpectedNodeContent }
+            for keyValuePair in keyValuePairs {
+                try block(keyValuePair.valueReference)
+            }
+        }
+    }
+    
     func valueReferences(matching key: Map.Key, at version: Version.Identifier) throws -> [Value.Reference] {
         let rootRef = Zone.Reference(key: rootKey, version: version)
         guard let rootNode = try node(for: rootRef) else { throw Error.missingVersionRoot }

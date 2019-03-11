@@ -130,10 +130,7 @@ public extension Exchange {
             let sendTasks = toSendIds!.map { versionId in
                 AsynchronousTask { finish in
                     do {
-                        var version: Version?
-                        self.store.queryHistory { history in
-                            version = history.version(identifiedBy: versionId)
-                        }
+                        let version = try self.store.version(identifiedBy: versionId)
                         guard let sendVersion = version else {
                             finish(.failure(ExchangeError.missingVersion)); return
                         }
