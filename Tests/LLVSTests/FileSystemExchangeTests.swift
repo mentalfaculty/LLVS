@@ -43,15 +43,25 @@ class FileSystemExchangeTests: XCTestCase {
         return Value(identifier: .init(identifier), version: nil, data: stringData.data(using: .utf8)!)
     }
     
-    func testExchangeDirContainsFiles() {
+    private var changeFiles: [URL] {
+        return try! fm.contentsOfDirectory(at: exchangeURL.appendingPathComponent("changes"), includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
+    }
+    
+    private var versionFiles: [URL] {
+        return try! fm.contentsOfDirectory(at: exchangeURL.appendingPathComponent("versions"), includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
+    }
+    
+    func testSendFiles() {
         let val = value("CDEFGH", stringData: "Origin")
         let ver = try! store1.addVersion(basedOnPredecessor: nil, storing: [.insert(val)])
-        XCTAssertEqual(try! fm.contentsOfDirectory(at: exchangeURL.appendingPathComponent("changes"), includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]).count, 0)
-        XCTAssertEqual(try! fm.contentsOfDirectory(at: exchangeURL.appendingPathComponent("versions"), includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]).count, 0)
+        XCTAssertEqual(changeFiles.count, 0)
+        XCTAssertEqual(versionFiles.count, 0)
         let expect = self.expectation(description: "Send")
         exchange1.send { result in
             if case let .success(versionIds) = result {
                 XCTAssert(versionIds.contains(ver.identifier))
+                XCTAssertEqual(self.changeFiles.count, 1)
+                XCTAssertEqual(self.versionFiles.count, 1)
             } else {
                 XCTFail()
             }
@@ -59,8 +69,28 @@ class FileSystemExchangeTests: XCTestCase {
         }
         wait(for: [expect], timeout: 1.0)
     }
+    
+    func testReceiveFiles() {
+        let val = value("CDEFGH", stringData: "Origin")
+        let ver = try! store1.addVersion(basedOnPredecessor: nil, storing: [.insert(val)])
+        let expect = self.expectation(description: "Retrieve")
+        exchange1.send { _ in
+            self.exchange2.retrieve { result in
+                if case let .success(versionIds) = result {
+                    XCTAssert(versionIds.contains(ver.identifier))
+                    XCTAssertNotNil(try! self.store2.version(identifiedBy: ver.identifier))
+                    XCTAssertNotNil(try! self.store2.value(val.identifier, prevailingAt: ver.identifier))
+                } else {
+                    XCTFail()
+                }
+                expect.fulfill()
+            }
+        }
+        wait(for: [expect], timeout: 1.0)
+    }
 
     static var allTests = [
-        ("testExchangeDirContainsFiles", testExchangeDirContainsFiles),
+        ("testSendFiles", testSendFiles),
+        ("testReceiveFiles", testReceiveFiles),
     ]
 }

@@ -343,6 +343,14 @@ extension Store {
         }
         return versions
     }
+    
+    public func version(identifiedBy versionId: Version.Identifier) throws -> Version? {
+        var version: Version?
+        queryHistory { history in
+            version = history.version(identifiedBy: versionId)
+        }
+        return version
+    }
 
 }
 

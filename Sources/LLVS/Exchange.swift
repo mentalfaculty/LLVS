@@ -124,9 +124,10 @@ public extension Exchange {
             }
         }
         
+        var toSendIds: [Version.Identifier]!
         let sendVersions = AsynchronousTask { finish in
-            let toSendIds = self.versionIdentifiersMissingRemotely(forRemoteIdentifiers: remoteIds)
-            let sendTasks = toSendIds.map { versionId in
+            toSendIds = self.versionIdentifiersMissingRemotely(forRemoteIdentifiers: remoteIds)
+            let sendTasks = toSendIds!.map { versionId in
                 AsynchronousTask { finish in
                     do {
                         var version: Version?
@@ -155,7 +156,7 @@ public extension Exchange {
             case .failure(let error):
                 completionHandler(.failure(error))
             case .success:
-                completionHandler(.success(remoteIds!))
+                completionHandler(.success(toSendIds))
             }
         }
     }
