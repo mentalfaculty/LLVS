@@ -78,7 +78,7 @@ class FileSystemExchangeTests: XCTestCase {
             self.exchange2.retrieve { result in
                 if case let .success(versionIds) = result {
                     XCTAssert(versionIds.contains(ver.identifier))
-                    XCTAssertNotNil(try! self.store2.version(identifiedBy: ver.identifier))
+                    XCTAssertEqual(ver, try! self.store2.version(identifiedBy: ver.identifier))
                     XCTAssertNotNil(try! self.store2.value(val.identifier, prevailingAt: ver.identifier))
                 } else {
                     XCTFail()
@@ -88,9 +88,73 @@ class FileSystemExchangeTests: XCTestCase {
         }
         wait(for: [expect], timeout: 1.0)
     }
+    
+    func testConcurrentChanges() {
+        let expectOrigin = self.expectation(description: "Share Origin")
+        let origin = try! store1.addVersion(basedOnPredecessor: nil, storing: [])
+        exchange1.send { _ in
+            self.exchange2.retrieve { result in
+                expectOrigin.fulfill()
+            }
+        }
+        wait(for: [expectOrigin], timeout: 1.0)
+        
+        func add(numberOfVersions: Int, store: Store) -> ([Version], [Value]) {
+            var versions: [Version] = []
+            var values: [Value] = []
+            for _ in 0..<numberOfVersions {
+                let id = UUID().uuidString
+                let val = value(id, stringData: id)
+                let ver = try! store.addVersion(basedOnPredecessor: versions.last?.identifier ?? origin.identifier, storing: [.insert(val)])
+                versions.append(ver)
+                values.append(val)
+            }
+            return (versions, values)
+        }
+
+        let (versions1, values1) = add(numberOfVersions: 3, store: store1)
+        let (versions2, values2) = add(numberOfVersions: 3, store: store2)
+        
+        let expect = self.expectation(description: "Sync")
+        exchange1.send { _ in
+            self.exchange2.retrieve { result in
+                self.exchange2.send { _ in
+                    self.exchange1.retrieve { result in
+                        versions1.forEach { XCTAssertNotNil(try! self.store2.version(identifiedBy: $0.identifier)) }
+                        versions2.forEach { XCTAssertNotNil(try! self.store1.version(identifiedBy: $0.identifier)) }
+                        for (ver, val) in zip(versions1, values1) {
+                            let val2 = try! self.store2.value(val.identifier, storedAt: ver.identifier)!
+                            XCTAssertEqual(val.data, val2.data)
+                        }
+                        for (ver, val) in zip(versions2, values2) {
+                            let val1 = try! self.store1.value(val.identifier, storedAt: ver.identifier)!
+                            XCTAssertEqual(val.data, val1.data)
+                        }
+                        expect.fulfill()
+                    }
+                }
+            }
+        }
+        wait(for: [expect], timeout: 1.0)
+        
+        let merge = try! store1.merge(version: versions1.last!.identifier, with: versions2.last!.identifier, resolvingWith: MostRecentBranchFavoringArbiter())
+        let expectMerge = self.expectation(description: "Merge")
+        exchange1.send { _ in
+            self.exchange2.retrieve { result in
+                XCTAssertNotNil(try! self.store2.version(identifiedBy: merge.identifier))
+                for val in values1 + values2 {
+                    let val2 = try! self.store2.value(val.identifier, prevailingAt: merge.identifier)!
+                    XCTAssertEqual(val.data, val2.data)
+                }
+                expectMerge.fulfill()
+            }
+        }
+        wait(for: [expectMerge], timeout: 1.0)
+    }
 
     static var allTests = [
         ("testSendFiles", testSendFiles),
         ("testReceiveFiles", testReceiveFiles),
+        ("testConcurrentChanges", testConcurrentChanges),
     ]
 }
