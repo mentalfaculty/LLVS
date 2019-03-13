@@ -101,6 +101,9 @@ extension Store {
         return version
     }
     
+    /// This method does not check consistency, and does not automatically update the map.
+    /// It is assumed that any changes to the first predecessor that are needed in the map
+    /// are present as preserves from the second predecessor.
     internal func addVersion(_ version: Version, storing changes: [Value.Change]) throws {
         guard !history(includesVersionsIdentifiedBy: [version.identifier]) else {
             throw Error.attemptToAddExistingVersion(version.identifier)
