@@ -99,14 +99,14 @@ class MergeTests: XCTestCase {
             func changes(toResolve merge: Merge, in store: Store) -> [Value.Change] {
                 let fork = merge.forksByValueIdentifier[.init("ABCDEF")]
                 XCTAssertEqual(fork, .twiceUpdated)
-                let firstValue = try! store.value(.init("ABCDEF"), prevailingAt: merge.versions.first.identifier)!
+                let firstValue = try! store.value(.init("ABCDEF"), prevailingAt: merge.versions.second.identifier)!
                 return [.preserve(firstValue.reference!)]
             }
         }
         
-        let predecessors: Version.Predecessors = .init(identifierOfFirst: branch1.identifier, identifierOfSecond: nil)
+        let predecessors: Version.Predecessors = .init(identifierOfFirst: branch2.identifier, identifierOfSecond: nil)
         let newValue = Value(identifier: .init("ABCDEF"), version: nil, data: "Pete".data(using: .utf8)!)
-        branch1 = try! store.addVersion(basedOn: predecessors, storing: [.update(newValue)])
+        branch2 = try! store.addVersion(basedOn: predecessors, storing: [.update(newValue)])
         
         let mergeVersion = try! store.merge(version: branch1.identifier, with: branch2.identifier, resolvingWith: Arbiter())
         let mergeValue = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)!
@@ -117,13 +117,13 @@ class MergeTests: XCTestCase {
         class Arbiter: MergeArbiter {
             func changes(toResolve merge: Merge, in store: Store) -> [Value.Change] {
                 let fork = merge.forksByValueIdentifier[.init("ABCDEF")]
-                XCTAssertEqual(fork, .removedAndUpdated(removedOn: .first))
+                XCTAssertEqual(fork, .removedAndUpdated(removedOn: .second))
                 return [.preserveRemoval(.init("ABCDEF"))]
             }
         }
         
-        let predecessors: Version.Predecessors = .init(identifierOfFirst: branch1.identifier, identifierOfSecond: nil)
-        branch1 = try! store.addVersion(basedOn: predecessors, storing: [.remove(.init("ABCDEF"))])
+        let predecessors: Version.Predecessors = .init(identifierOfFirst: branch2.identifier, identifierOfSecond: nil)
+        branch2 = try! store.addVersion(basedOn: predecessors, storing: [.remove(.init("ABCDEF"))])
         
         let mergeVersion = try! store.merge(version: branch1.identifier, with: branch2.identifier, resolvingWith: Arbiter())
         let mergeValue = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)

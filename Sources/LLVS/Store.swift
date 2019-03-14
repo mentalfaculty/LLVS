@@ -208,7 +208,7 @@ extension Store {
             case .inserted(let branch) where branch == .second:
                 fallthrough
             case .updated(let branch) where branch == .second:
-                let ref = Value.Reference(identifier: diff.valueIdentifier, version: secondVersionIdentifier)
+                let ref = try valueReference(diff.valueIdentifier, prevailingAt: secondVersionIdentifier)!
                 changes.append(.preserve(ref))
             case .removed(let branch) where branch == .second:
                 changes.append(.preserveRemoval(diff.valueIdentifier))
@@ -227,8 +227,12 @@ extension Store {
 
 extension Store {
     
+    public func valueReference(_ valueIdentifier: Value.Identifier, prevailingAt versionIdentifier: Version.Identifier) throws -> Value.Reference? {
+        return try valuesMap.valueReferences(matching: .init(valueIdentifier.identifierString), at: versionIdentifier).first
+    }
+    
     public func value(_ valueIdentifier: Value.Identifier, prevailingAt versionIdentifier: Version.Identifier) throws -> Value? {
-        let ref = try valuesMap.valueReferences(matching: .init(valueIdentifier.identifierString), at: versionIdentifier).first
+        let ref = try valueReference(valueIdentifier, prevailingAt: versionIdentifier)
         return try ref.flatMap { try value(valueIdentifier, storedAt: $0.version) }
     }
     
