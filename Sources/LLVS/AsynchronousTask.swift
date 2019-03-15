@@ -4,9 +4,11 @@
 //
 //  Created by Drew McCormack on 04/03/2019.
 //
+import Dispatch
 
 /// An asynchronous task. Chaining this can avoid deep nesting.
 public class AsynchronousTask {
+    
     public enum Result {
         case success
         case failure(Error)
@@ -28,7 +30,8 @@ public class AsynchronousTask {
             
             // This block is used to capture self (and next).
             // Othersize pre-mature release happens on failure.
-            {
+            // It is asynchronous to prevent deadlocks.
+            DispatchQueue.global(qos: .utility).async {
                 self.completionBlock?(result)
                 switch result {
                 case .failure:
@@ -36,7 +39,7 @@ public class AsynchronousTask {
                 case .success:
                     self.next?.execute()
                 }
-            }()
+            }
         }
     }
     
