@@ -32,6 +32,11 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
         try? fileManager.createDirectory(at: rootDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: versionsDirectory, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: changesDirectory, withIntermediateDirectories: true, attributes: nil)
+        NSFileCoordinator.addFilePresenter(self)
+    }
+    
+    deinit {
+        NSFileCoordinator.removeFilePresenter(self)
     }
     
     public func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>) {
@@ -123,7 +128,7 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
     private var notifyWorkItem: DispatchWorkItem?
     private let minimumDelayBeforeNotifyingOfNewVersions = 1.0
     
-    public func presentedSubitemDidAppear(at url: URL) {
+    public func presentedItemDidChange() {
         notifyWorkItem?.cancel()
         notifyWorkItem = DispatchWorkItem {
             self.client?.newVersionsAreAvailable(via: self)

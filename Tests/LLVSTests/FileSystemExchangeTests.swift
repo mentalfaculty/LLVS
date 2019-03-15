@@ -151,10 +151,35 @@ class FileSystemExchangeTests: XCTestCase {
         }
         wait(for: [expectMerge], timeout: 1.0)
     }
+    
+    func testNewVersionAvailableNotification() {
+        
+        class MockClient: ExchangeClient {
+            let block: () -> Void
+            init(_ block: @escaping () -> Void) {
+                self.block = block
+            }
+            func newVersionsAreAvailable(via exchange: Exchange) {
+                block()
+            }
+        }
+        
+        let expect = self.expectation(description: "Send")
+        let mockClient = MockClient {
+            expect.fulfill()
+        }
+        exchange2.client = mockClient
+        
+        let _ = try! store1.addVersion(basedOnPredecessor: nil, storing: [])
+        
+        exchange1.send { _ in }
+        wait(for: [expect], timeout: 2.0)
+    }
 
     static var allTests = [
         ("testSendFiles", testSendFiles),
         ("testReceiveFiles", testReceiveFiles),
         ("testConcurrentChanges", testConcurrentChanges),
+        ("testNewVersionAvailableNotification", testNewVersionAvailableNotification),
     ]
 }
