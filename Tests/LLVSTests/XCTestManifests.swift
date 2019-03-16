@@ -8,7 +8,9 @@ public func allTests() -> [XCTestCaseEntry] {
         testCase(ValueTests.allTests),
         testCase(VersionTests.allTests),
         testCase(MergeTests.allTests),
-        testCase(MostRecentBranchMergeArbiterTests.allTests),
+        testCase(MostRecentBranchArbiterTests.allTests),
+        testCase(MostRecentChangeArbiterTests.allTests),
+        testCase(ValueChangesInVersionsTests.allTests),
         testCase(ZoneTests.allTests),
         testCase(MapTests.allTests),
         testCase(DiffTests.allTests),
@@ -16,6 +18,7 @@ public func allTests() -> [XCTestCaseEntry] {
         testCase(PrevailingValueTests.allTests),
         testCase(SerialHistoryTests.allTests),
         testCase(FileSystemExchangeTests.allTests),
+        testCase(SharedStoreTests.allTests),
         testCase(Performance.allTests),
     ]
 }

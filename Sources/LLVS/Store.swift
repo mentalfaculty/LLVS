@@ -53,10 +53,10 @@ public final class Store {
         valuesMap = Map(zone: valuesMapZone)
         valuesZone = Zone(rootDirectory: self.valuesDirectoryURL, fileExtension: "json")
 
-        try loadHistory()
+        try reloadHistory()
     }
     
-    private func loadHistory() throws {
+    public func reloadHistory() throws {
         try historyAccessQueue.sync {
             for version in try versions() {
                 try history.add(version, updatingPredecessorVersions: false)
