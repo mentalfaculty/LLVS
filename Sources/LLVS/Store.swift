@@ -58,10 +58,12 @@ public final class Store {
     
     public func reloadHistory() throws {
         try historyAccessQueue.sync {
-            for version in try versions() {
+            var newVersions: Set<Version> = []
+            for version in try versions() where history.version(identifiedBy: version.identifier) == nil {
+                newVersions.insert(version)
                 try history.add(version, updatingPredecessorVersions: false)
             }
-            for version in try versions() {
+            for version in newVersions {
                 try history.updateSuccessors(inPredecessorsOf: version)
             }
         }
