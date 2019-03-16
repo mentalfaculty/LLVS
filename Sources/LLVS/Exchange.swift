@@ -21,11 +21,13 @@ public protocol Exchange {
     var store: Store { get }
     
     func retrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>)
+    func prepareToRetrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>)
     func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>)
     func retrieveVersions(identifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>)
     func retrieveValueChanges(forVersionIdentifiedBy versionIdentifier: Version.Identifier, executingUponCompletion completionHandler: @escaping CompletionHandler<[Value.Change]>)
 
     func send(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>)
+    func prepareToSend(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>)
     func send(_ version: Version, with valueChanges: [Value.Change], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>)
 }
 
@@ -34,6 +36,12 @@ public protocol Exchange {
 public extension Exchange {
     
     func retrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>) {
+        let prepare = AsynchronousTask { finish in
+            self.prepareToRetrieve { result in
+                finish(result.taskResult)
+            }
+        }
+        
         var remoteIds: [Version.Identifier]!
         let retrieveIds = AsynchronousTask { finish in
             self.retrieveAllVersionIdentifiers { result in
@@ -57,7 +65,7 @@ public extension Exchange {
             }
         }
                     
-        [retrieveIds, retrieveVersions, addToHistory].executeInOrder { result in
+        [prepare, retrieveIds, retrieveVersions, addToHistory].executeInOrder { result in
             switch result {
             case .failure(let error):
                 completionHandler(.failure(error))
@@ -116,6 +124,12 @@ public extension Exchange {
 public extension Exchange {
     
     func send(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>) {
+        let prepare = AsynchronousTask { finish in
+            self.prepareToSend { result in
+                finish(result.taskResult)
+            }
+        }
+        
         var remoteIds: [Version.Identifier]!
         let retrieveIds = AsynchronousTask { finish in
             self.retrieveAllVersionIdentifiers { result in
@@ -148,7 +162,7 @@ public extension Exchange {
             }
         }
 
-        [retrieveIds, sendVersions].executeInOrder { result in
+        [prepare, retrieveIds, sendVersions].executeInOrder { result in
             switch result {
             case .failure(let error):
                 completionHandler(.failure(error))

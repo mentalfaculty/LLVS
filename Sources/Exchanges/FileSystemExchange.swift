@@ -39,6 +39,10 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
         NSFileCoordinator.removeFilePresenter(self)
     }
     
+    public func prepareToRetrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
+        completionHandler(.success(()))
+    }
+    
     public func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>) {
         coordinateFileAccess(.read, completionHandler: completionHandler) {
             let contents = try self.fileManager.contentsOfDirectory(at: self.versionsDirectory, includingPropertiesForKeys: nil, options: [])
@@ -69,6 +73,10 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
             let changes = try JSONDecoder().decode([Value.Change].self, from: data)
             completionHandler(.success(changes))
         }
+    }
+    
+    public func prepareToSend(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
+        completionHandler(.success(()))
     }
     
     public func send(_ version: Version, with valueChanges: [Value.Change], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
