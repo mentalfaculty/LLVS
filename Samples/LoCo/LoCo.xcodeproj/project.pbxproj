@@ -18,6 +18,7 @@
 		07734EDF21F10CC300BB9EFA /* Contact.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EDE21F10CC300BB9EFA /* Contact.swift */; };
 		07734EE321F11EC200BB9EFA /* PropertiesContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EE221F11EC200BB9EFA /* PropertiesContainer.swift */; };
 		07734EF021F5140800BB9EFA /* ContactBook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EEF21F5140800BB9EFA /* ContactBook.swift */; };
+		0787521722441ACB0041780E /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0787521622441ACB0041780E /* CloudKit.framework */; };
 		079D144021F6482B0091BCA9 /* Fault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 079D143F21F6482B0091BCA9 /* Fault.swift */; };
 /* End PBXBuildFile section */
 
@@ -79,6 +80,8 @@
 		07734EDE21F10CC300BB9EFA /* Contact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contact.swift; sourceTree = "<group>"; };
 		07734EE221F11EC200BB9EFA /* PropertiesContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PropertiesContainer.swift; sourceTree = "<group>"; };
 		07734EEF21F5140800BB9EFA /* ContactBook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactBook.swift; sourceTree = "<group>"; };
+		0787521422441AC90041780E /* LoCo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LoCo.entitlements; sourceTree = "<group>"; };
+		0787521622441ACB0041780E /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
 		079D143F21F6482B0091BCA9 /* Fault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fault.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -88,6 +91,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				07734ED921F10BBC00BB9EFA /* LLVS.framework in Frameworks */,
+				0787521722441ACB0041780E /* CloudKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -100,6 +104,7 @@
 				07734EBB21F10B2700BB9EFA /* LLVS.xcodeproj */,
 				07734EA621F109D100BB9EFA /* LoCo */,
 				07734EA521F109D100BB9EFA /* Products */,
+				0787521522441ACB0041780E /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -114,6 +119,7 @@
 		07734EA621F109D100BB9EFA /* LoCo */ = {
 			isa = PBXGroup;
 			children = (
+				0787521422441AC90041780E /* LoCo.entitlements */,
 				07734EA721F109D100BB9EFA /* AppDelegate.swift */,
 				07734EA921F109D100BB9EFA /* ContactsViewController.swift */,
 				07734EAB21F109D100BB9EFA /* ContactViewController.swift */,
@@ -137,6 +143,14 @@
 				07734ED821F10BBC00BB9EFA /* LLVS.framework */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		0787521522441ACB0041780E /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				0787521622441ACB0041780E /* CloudKit.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -173,6 +187,14 @@
 				TargetAttributes = {
 					07734EA321F109D100BB9EFA = {
 						CreatedOnToolsVersion = 10.1;
+						SystemCapabilities = {
+							com.apple.Push = {
+								enabled = 1;
+							};
+							com.apple.iCloud = {
+								enabled = 1;
+							};
+						};
 					};
 				};
 			};
@@ -403,6 +425,7 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = LoCo/LoCo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = P7BXV6PHLD;
 				INFOPLIST_FILE = LoCo/Info.plist;
@@ -422,6 +445,7 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = LoCo/LoCo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = P7BXV6PHLD;
 				INFOPLIST_FILE = LoCo/Info.plist;

@@ -166,7 +166,7 @@ extension Store {
 
 extension Store {
     
-    func merge(version firstVersionIdentifier: Version.Identifier, with secondVersionIdentifier: Version.Identifier, resolvingWith arbiter: MergeArbiter) throws -> Version {
+    public func merge(version firstVersionIdentifier: Version.Identifier, with secondVersionIdentifier: Version.Identifier, resolvingWith arbiter: MergeArbiter) throws -> Version {
         var firstVersion, secondVersion, commonVersion: Version?
         var commonVersionIdentifier: Version.Identifier?
         try historyAccessQueue.sync {
@@ -363,6 +363,14 @@ extension Store {
         var version: Version?
         queryHistory { history in
             version = history.version(identifiedBy: versionId)
+        }
+        return version
+    }
+    
+    public var mostRecentHead: Version? {
+        var version: Version?
+        queryHistory { history in
+            version = history.mostRecentHead
         }
         return version
     }

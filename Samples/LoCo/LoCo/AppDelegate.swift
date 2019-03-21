@@ -31,10 +31,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDele
         let book: ContactBook
         let versionIdentifier: Version.Identifier
         if let versionString = UserDefaults.standard.string(forKey: storeVersionKey),
-            let version = store.history.version(identifiedBy: .init(versionString)) {
+            let version = try! store.version(identifiedBy: .init(versionString)) {
             book = try! ContactBook(prevailingAt: version.identifier, loadingFrom: store)
             versionIdentifier = version.identifier
-        } else if let version = store.history.mostRecentHead?.identifier {
+        } else if let version = store.mostRecentHead?.identifier {
             versionIdentifier = version
             book = try! ContactBook(prevailingAt: version, loadingFrom: store)
         } else {

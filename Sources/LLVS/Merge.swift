@@ -29,6 +29,8 @@ public protocol MergeArbiter {
 /// When conflicting, always favor the branch with the most recent version.
 public class MostRecentBranchFavoringArbiter: MergeArbiter {
     
+    public init() {}
+
     public func changes(toResolve merge: Merge, in store: Store) throws -> [Value.Change] {
         let v = merge.versions
         let favoredBranch: Value.Fork.Branch = v.first.timestamp >= v.second.timestamp ? .first : .second
@@ -58,6 +60,8 @@ public class MostRecentBranchFavoringArbiter: MergeArbiter {
 /// Favors the most recent change on a conflict by conflict basis.
 /// Will pick an update over a removal, regardless of recency.
 public class MostRecentChangeFavoringArbiter: MergeArbiter {
+    
+    public init() {}
     
     public func changes(toResolve merge: Merge, in store: Store) throws -> [Value.Change] {
         let v = merge.versions

@@ -8,18 +8,20 @@
 
 import Foundation
 import LLVS
+import CloudKit
 
 extension Notification.Name {
     static let contactBookVersionDidChange = Notification.Name("contactBookVersionDidChange")
 }
 
-class ContactBook {
-    
+final class ContactBook {
+
     enum Error: Swift.Error {
         case contactNotFound(String)
     }
     
     let store: Store
+    let cloudKitExchange: CloudKitExchange
     private(set) var contacts: [Fault<Contact>] = []
     
     private static let sharedIdentifier: Value.Identifier = .init("ContactBook")
@@ -33,7 +35,8 @@ class ContactBook {
     
     init(prevailingAt version: Version.Identifier, loadingFrom store: Store) throws {
         self.store = store
-        currentVersion = version
+        self.currentVersion = version
+        self.cloudKitExchange = CloudKitExchange(with: store, zoneIdentifier: "ContactBook", cloudDatabase: CKContainer.default().privateCloudDatabase)
         try fetchContacts()
     }
     
@@ -42,8 +45,12 @@ class ContactBook {
         let emptyArrayData = try JSONSerialization.data(withJSONObject: [], options: [])
         let newValue = Value(identifier: ContactBook.sharedIdentifier, version: nil, data: emptyArrayData)
         let insert: Value.Change = .insert(newValue)
-        currentVersion = try store.addVersion(basedOnPredecessor: nil, storing: [insert]).identifier
+        self.currentVersion = try store.addVersion(basedOnPredecessor: nil, storing: [insert]).identifier
+        self.cloudKitExchange = CloudKitExchange(with: store, zoneIdentifier: "ContactBook", cloudDatabase: CKContainer.default().privateCloudDatabase)
     }
+    
+    
+    // MARK: Work with Contacts
     
     func add(_ contact: Contact) throws {
         var valueIdentifiers = contacts.map { $0.valueIdentifier }
@@ -82,6 +89,9 @@ class ContactBook {
         currentVersion = try store.addVersion(basedOnPredecessor: currentVersion, storing: [change]).identifier
     }
     
+    
+    // MARK: Fetch and Save in Store
+    
     private func fetchContacts() throws {
         let data = try store.value(ContactBook.sharedIdentifier, prevailingAt: currentVersion)!.data
         let idStrings = try JSONSerialization.jsonObject(with: data, options: []) as! [String]
@@ -97,4 +107,73 @@ class ContactBook {
         return update
     }
 
+    
+    // MARK: Sync
+    
+    func sync() {
+        var downloadedNewVersions = false
+        let retrieve = AsynchronousTask { finish in
+            self.cloudKitExchange.retrieve { result in
+                switch result {
+                case let .failure(error):
+                    finish(.failure(error))
+                case let .success(versionIds):
+                    downloadedNewVersions = !versionIds.isEmpty
+                    finish(.success)
+                }
+            }
+        }
+        
+        let send = AsynchronousTask { finish in
+            self.cloudKitExchange.send { result in
+                switch result {
+                case let .failure(error):
+                    finish(.failure(error))
+                case .success:
+                    finish(.success)
+                }
+            }
+        }
+        
+        [retrieve, send].executeInOrder { result in
+            switch result {
+            case let .failure(error):
+                NSLog("Failed to sync: \(error)")
+            case .success:
+                NSLog("Sync successful")
+                if downloadedNewVersions {
+                    self.mergeHeads()
+                }
+            }
+        }
+    }
+    
+    func mergeHeads() {
+        var heads: Set<Version.Identifier> = []
+        store.queryHistory { history in
+            heads = history.headIdentifiers
+        }
+        heads.remove(currentVersion)
+        
+        let arbiter = ContactMergeArbiter()
+        var versionIdentifier: Version.Identifier = currentVersion
+        for otherHead in heads {
+            let newVersion = try! store.merge(version: versionIdentifier, with: otherHead, resolvingWith: arbiter)
+            versionIdentifier = newVersion.identifier
+        }
+        
+        DispatchQueue.main.async {
+            self.currentVersion = versionIdentifier
+        }
+    }
+
+}
+
+class ContactMergeArbiter: MergeArbiter {
+    
+    func changes(toResolve merge: Merge, in store: Store) throws -> [Value.Change] {
+        let defaultArbiter = MostRecentChangeFavoringArbiter()
+        return []
+    }
+    
 }
