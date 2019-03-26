@@ -35,12 +35,12 @@ public struct Value: Codable {
 
 public extension Value {
     
-    public struct Reference: Codable, Hashable {
+    struct Reference: Codable, Hashable {
         public var identifier: Identifier
         public var version: Version.Identifier
     }
     
-    public struct Identifier: StringIdentifiable, Hashable, Codable {
+    struct Identifier: StringIdentifiable, Hashable, Codable {
         public var identifierString: String
         
         public init(_ identifierString: String = UUID().uuidString) {
@@ -48,7 +48,7 @@ public extension Value {
         }
     }
     
-    public enum Change: Codable {
+    enum Change: Codable {
         case insert(Value)
         case update(Value)
         case remove(Identifier)
@@ -100,7 +100,7 @@ public extension Value {
         }
     }
     
-    public enum Fork: Equatable {
+    enum Fork: Equatable {
         public enum Branch: Equatable {
             case first
             case second
