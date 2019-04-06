@@ -10,7 +10,7 @@ public func allTests() -> [XCTestCaseEntry] {
         testCase(MergeTests.allTests),
         testCase(MostRecentBranchArbiterTests.allTests),
         testCase(MostRecentChangeArbiterTests.allTests),
-        testCase(LongestCommonSubsequenceTests.allTests),
+        testCase(ArrayDiffTests.allTests),
         testCase(ValueChangesInVersionsTests.allTests),
         testCase(ZoneTests.allTests),
         testCase(MapTests.allTests),
