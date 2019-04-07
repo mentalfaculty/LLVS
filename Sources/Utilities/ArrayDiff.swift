@@ -28,9 +28,11 @@ public extension Array where Element: Equatable {
     mutating func apply(_ diff: ArrayDiff<Element>.IncrementalChange) {
         switch diff {
         case let .delete(index, _):
+            guard indices ~= index else { return }
             remove(at: index)
         case let .insert(index, value):
-            insert(value, at: index)
+            let insertIndex = Swift.min(index, count)
+            insert(value, at: insertIndex)
         }
     }
     
