@@ -30,30 +30,34 @@ public extension Array where Element: Equatable {
         case let .delete(index, _):
             guard indices ~= index else { return }
             remove(at: index)
-        case let .insert(index, value):
-            let insertIndex = Swift.min(index, count)
+        case let .insert(finalIndex, value):
+            let insertIndex = Swift.min(finalIndex, count)
             insert(value, at: insertIndex)
         }
     }
     
 }
 
+/// Uses longest common subsequence algorithm to find difference between two arrays.
+/// Can be used to update to take the deletions and insertions
+/// applied to one array, and apply them to a related array.
 /// See https://en.wikipedia.org/wiki/Longest_common_subsequence_problem
-public final class ArrayDiff<T: Equatable> {
+public struct ArrayDiff<T: Equatable> {
     
     /// IncrementalChange indicates a change to the original array.
     /// Indexes of deletions are relative to the original indexes of the original array.
-    /// Indexes of insertions are relative to the final array.
+    /// Indexes of insertions are given relative both the original and final array.
     public enum IncrementalChange: Equatable {
         case insert(finalIndex: Int, value: T)
         case delete(originalIndex: Int, value: T)
     }
     
-    public let originalValues: [T]
-    public let finalValues: [T]
-    
-    public private(set) var originalIndexesOfCommonElements: [Int] = []
-    public private(set) var finalIndexesOfCommonElements: [Int] = []
+    /// How to handle two insertions at given location
+    enum InsertionMergePolicy {
+        case keepFirst
+        case keepSecond
+        case keepBoth
+    }
     
     /// Changes are ordered so that you can apply them in order to the original array,
     /// and end up with the final array. Deletions come first, indexes according to the
@@ -62,6 +66,70 @@ public final class ArrayDiff<T: Equatable> {
     /// They apply from the beginning toward the end, ie, standard order.
     public private(set) var incrementalChanges: [IncrementalChange] = []
     
+    init(withChanges incrementalChanges: [IncrementalChange]) {
+        self.incrementalChanges = incrementalChanges
+    }
+    
+    init(originalValues: [T], finalValues: [T]) {
+        let lcs = LongestCommonSubsequence(originalValues: originalValues, finalValues: finalValues)
+        self.incrementalChanges = lcs.incrementalChanges
+    }
+    
+    /// Creates a new diff from two existing ones, by merging them. Can be used for a 3 way merge.
+    /// Can pass a merge policy if needed to handle case where two insertions conflict.
+//    init(merging first: ArrayDiff, with second: ArrayDiff, resolvingInsertConflictsAccordingTo mergePolicy: InsertionMergePolicy = .keepBoth) {
+//        var firstIterator = first.incrementalChanges.makeIterator()
+//        var secondIterator = second.incrementalChanges.makeIterator()
+//        var first = firstIterator.next()
+//        var second = secondIterator.next()
+//        var offset1: [Int] = Array(repeating: 0, count: first)
+//        var offset2 = 0
+//        var newChanges: [IncrementalChange] = []
+//        repeat {
+//            switch (first, second) {
+//            case let (.delete(originalIndex1, value1)?, .delete(originalIndex2, value2)?):
+//                if originalIndex1 < originalIndex2 {
+//                    newChanges.append(.delete(originalIndex: originalIndex1, value: value1))
+//                    first = firstIterator.next()
+//                    offset2 -= 1
+//                } else if originalIndex1 > originalIndex2 {
+//                    newChanges.append(.delete(originalIndex: originalIndex2, value: value2))
+//                    second = secondIterator.next()
+//                    offset1 -= 1
+//                } else {
+//                    newChanges.append(.delete(originalIndex: resultOriginalIndex, value: value1))
+//                    first = firstIterator.next()
+//                    second = secondIterator.next()
+//                }
+//            case let (.insert(finalIndex1, value)?, .insert(finalIndex2, value)?):
+//                break
+//            case let (.insert?, .delete(originalIndex2, _)?):
+//                break
+//            case let (.delete(originalIndex1, _)?, .insert?):
+//                break
+//            case let (.delete(originalIndex, _)?,  nil):
+//            case let (nil, .delete(originalIndex, _)?):
+//            case let (.insert(finalIndex, value)?,  nil):
+//            case let (nil, .insert(finalIndex, value)?):
+//            case (nil, nil):
+//                break
+//            }
+//        } while first != nil || second != nil
+//        self.init(withChanges: newChanges)
+//    }
+}
+
+internal final class LongestCommonSubsequence<T: Equatable> {
+    typealias Change = ArrayDiff<T>.IncrementalChange
+    
+    public let originalValues: [T]
+    public let finalValues: [T]
+    
+    public private(set) var originalIndexesOfCommonElements: [Int] = []
+    public private(set) var finalIndexesOfCommonElements: [Int] = []
+    
+    public private(set) var incrementalChanges: [Change] = []
+
     public var length: Int {
         guard !originalValues.isEmpty, !finalValues.isEmpty else { return 0 }
         return table[(originalValues.count-1, finalValues.count-1)].length
@@ -107,10 +175,10 @@ public final class ArrayDiff<T: Equatable> {
         }
     }
     
-    private func findLongestSubsequence() {        
+    private func findLongestSubsequence() {
         // Begin at end and walk back to origin
-        var deletions: [IncrementalChange] = []
-        var insertions: [IncrementalChange] = []
+        var deletions: [Change] = []
+        var insertions: [Change] = []
         var coord = (originalValues.count-1, finalValues.count-1)
         while coord.0 > -1 || coord.1 > -1 {
             let sub = table[coord]
@@ -135,12 +203,12 @@ public final class ArrayDiff<T: Equatable> {
             preferred = sub.contributors.first
             switch preferred! {
             case .left:
-                if coord.1 == -1 { break }
-                let delta: IncrementalChange = .insert(finalIndex: coord.1, value: finalValues[coord.1])
+                if coord.1 == -1, coord.0 == -1 { break }
+                let delta: Change = .insert(finalIndex: coord.1, value: finalValues[coord.1])
                 insertions.insert(delta, at: 0)
             case .top:
-                if coord.0 == -1 { break }
-                let delta: IncrementalChange = .delete(originalIndex: coord.0, value: originalValues[coord.0])
+                if coord.1 == -1, coord.0 == -1 { break }
+                let delta: Change = .delete(originalIndex: coord.0, value: originalValues[coord.0])
                 deletions.insert(delta, at: 0)
             case .topLeft:
                 fatalError()
@@ -155,7 +223,7 @@ public final class ArrayDiff<T: Equatable> {
     }
 }
 
-fileprivate extension ArrayDiff {
+fileprivate extension LongestCommonSubsequence {
     
     /// Memoization table
     final class Table: CustomDebugStringConvertible {

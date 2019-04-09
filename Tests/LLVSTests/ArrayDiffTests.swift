@@ -10,10 +10,10 @@ import XCTest
 
 class ArrayDiffTests: XCTestCase {
 
-    var diff: ArrayDiff<Int>!
+    var diff: LongestCommonSubsequence<Int>!
     
     func testSimpleSequence() {
-        diff = ArrayDiff(originalValues: [1,3], finalValues: [1,2])
+        diff = LongestCommonSubsequence(originalValues: [1,3], finalValues: [1,2])
         XCTAssertEqual(diff.length, 1)
         XCTAssertEqual(diff.originalIndexesOfCommonElements, [0])
         XCTAssertEqual(diff.finalIndexesOfCommonElements, [0])
@@ -21,7 +21,7 @@ class ArrayDiffTests: XCTestCase {
     }
     
     func testDifferingFirstElement() {
-        diff = ArrayDiff(originalValues: [1,3], finalValues: [2,3])
+        diff = LongestCommonSubsequence(originalValues: [1,3], finalValues: [2,3])
         XCTAssertEqual(diff.length, 1)
         XCTAssertEqual(diff.originalIndexesOfCommonElements, [1])
         XCTAssertEqual(diff.finalIndexesOfCommonElements, [1])
@@ -29,7 +29,7 @@ class ArrayDiffTests: XCTestCase {
     }
     
     func testRemovingFromSequence() {
-        diff = ArrayDiff(originalValues: [1,2,3,4,5,6,7], finalValues: [1,2,4,5,7])
+        diff = LongestCommonSubsequence(originalValues: [1,2,3,4,5,6,7], finalValues: [1,2,4,5,7])
         XCTAssertEqual(diff.length, 5)
         XCTAssertEqual(diff.originalIndexesOfCommonElements, [0,1,3,4,6])
         XCTAssertEqual(diff.finalIndexesOfCommonElements, [0,1,2,3,4])
@@ -37,7 +37,7 @@ class ArrayDiffTests: XCTestCase {
     }
     
     func testAddingAndRemovingSequence() {
-        diff = ArrayDiff(originalValues: [1,2,3,4,5,6,7], finalValues: [2,33,4,36,55,6,7])
+        diff = LongestCommonSubsequence(originalValues: [1,2,3,4,5,6,7], finalValues: [2,33,4,36,55,6,7])
         XCTAssertEqual(diff.length, 4)
         XCTAssertEqual(diff.originalIndexesOfCommonElements, [1,3,5,6])
         XCTAssertEqual(diff.finalIndexesOfCommonElements, [0,2,5,6])
