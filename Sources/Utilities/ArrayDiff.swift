@@ -50,6 +50,14 @@ public struct ArrayDiff<T: Equatable> {
     public enum IncrementalChange: Equatable {
         case insert(finalIndex: Int, value: T)
         case delete(originalIndex: Int, value: T)
+        var isDeletion: Bool {
+            if case .delete = self { return true }
+            return false
+        }
+        var isInsertion: Bool {
+            if case .insert = self { return true }
+            return false
+        }
     }
     
     /// How to handle two insertions at given location
@@ -77,46 +85,84 @@ public struct ArrayDiff<T: Equatable> {
     
     /// Creates a new diff from two existing ones, by merging them. Can be used for a 3 way merge.
     /// Can pass a merge policy if needed to handle case where two insertions conflict.
-//    init(merging first: ArrayDiff, with second: ArrayDiff, resolvingInsertConflictsAccordingTo mergePolicy: InsertionMergePolicy = .keepBoth) {
-//        var firstIterator = first.incrementalChanges.makeIterator()
-//        var secondIterator = second.incrementalChanges.makeIterator()
-//        var first = firstIterator.next()
-//        var second = secondIterator.next()
-//        var offset1: [Int] = Array(repeating: 0, count: first)
-//        var offset2 = 0
-//        var newChanges: [IncrementalChange] = []
-//        repeat {
-//            switch (first, second) {
-//            case let (.delete(originalIndex1, value1)?, .delete(originalIndex2, value2)?):
-//                if originalIndex1 < originalIndex2 {
-//                    newChanges.append(.delete(originalIndex: originalIndex1, value: value1))
-//                    first = firstIterator.next()
-//                    offset2 -= 1
-//                } else if originalIndex1 > originalIndex2 {
-//                    newChanges.append(.delete(originalIndex: originalIndex2, value: value2))
-//                    second = secondIterator.next()
-//                    offset1 -= 1
-//                } else {
-//                    newChanges.append(.delete(originalIndex: resultOriginalIndex, value: value1))
-//                    first = firstIterator.next()
-//                    second = secondIterator.next()
-//                }
-//            case let (.insert(finalIndex1, value)?, .insert(finalIndex2, value)?):
-//                break
-//            case let (.insert?, .delete(originalIndex2, _)?):
-//                break
-//            case let (.delete(originalIndex1, _)?, .insert?):
-//                break
-//            case let (.delete(originalIndex, _)?,  nil):
-//            case let (nil, .delete(originalIndex, _)?):
-//            case let (.insert(finalIndex, value)?,  nil):
-//            case let (nil, .insert(finalIndex, value)?):
-//            case (nil, nil):
-//                break
-//            }
-//        } while first != nil || second != nil
-//        self.init(withChanges: newChanges)
-//    }
+    init(merging first: ArrayDiff, with second: ArrayDiff, resolvingInsertConflictsAccordingTo mergePolicy: InsertionMergePolicy = .keepBoth) {
+        enum DiffLabel {
+            case first, second
+        }
+        
+        var firstInsertions = first.incrementalChanges.filter({ $0.isInsertion })
+        var secondInsertions = second.incrementalChanges.filter({ $0.isInsertion })
+        
+        func changeInsertionIndexes(in position: DiffLabel, fromIndex index: Int, by increment: Int) {
+            
+        }
+        
+        let firstDeletions = first.incrementalChanges.filter({ $0.isDeletion }).reversed
+        let secondDeletions = second.incrementalChanges.filter({ $0.isDeletion }).reversed
+        var combinedDeletions: [incrementalChanges] = []
+        var firstIterator = firstDeletions.makeIterator()
+        var secondIterator = secondDeletions.makeIterator()
+        var first = firstIterator.next()
+        var second = secondIterator.next()
+        repeat {
+            switch (first, second) {
+            case let (.delete(o1, v1)?, .delete(o2, v2)?):
+                if o1 < o2 {
+                    newChanges.append(.delete(originalIndex: o1, value: v1))
+                    first = firstIterator.next()
+                    changeInsertionIndexes(in: .second, fromIndex: o1, by: -1)
+                } else if o1 > o2 {
+                    newChanges.append(.delete(originalIndex: o2, value: v2))
+                    second = secondIterator.next()
+                    changeInsertionIndexes(in: .first, fromIndex: o2, by: -1)
+                } else {
+                    newChanges.append(.delete(originalIndex: o1, value: value1))
+                    first = firstIterator.next()
+                    second = secondIterator.next()
+                }
+            }
+        } while first != nil || second != nil
+
+        
+        var firstIterator = first.incrementalChanges.makeIterator()
+        var secondIterator = second.incrementalChanges.makeIterator()
+        var first = firstIterator.next()
+        var second = secondIterator.next()
+        var offset1: [Int] = Array(repeating: 0, count: first)
+        var offset2 = 0
+        var newChanges: [IncrementalChange] = []
+        repeat {
+            switch (first, second) {
+            case let (.delete(originalIndex1, value1)?, .delete(originalIndex2, value2)?):
+                if originalIndex1 < originalIndex2 {
+                    newChanges.append(.delete(originalIndex: originalIndex1, value: value1))
+                    first = firstIterator.next()
+                    offset2 -= 1
+                } else if originalIndex1 > originalIndex2 {
+                    newChanges.append(.delete(originalIndex: originalIndex2, value: value2))
+                    second = secondIterator.next()
+                    offset1 -= 1
+                } else {
+                    newChanges.append(.delete(originalIndex: resultOriginalIndex, value: value1))
+                    first = firstIterator.next()
+                    second = secondIterator.next()
+                }
+            case let (.insert(finalIndex1, value)?, .insert(finalIndex2, value)?):
+                break
+            case let (.insert?, .delete(originalIndex2, _)?):
+                break
+            case let (.delete(originalIndex1, _)?, .insert?):
+                break
+            case let (.delete(originalIndex, _)?,  nil):
+            case let (nil, .delete(originalIndex, _)?):
+            case let (.insert(finalIndex, value)?,  nil):
+            case let (nil, .insert(finalIndex, value)?):
+            case (nil, nil):
+                break
+            }
+        } while first != nil || second != nil
+        self.init(withChanges: newChanges)
+    }
 }
 
 internal final class LongestCommonSubsequence<T: Equatable> {
