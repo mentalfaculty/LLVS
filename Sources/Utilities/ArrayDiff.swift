@@ -69,13 +69,6 @@ public struct ArrayDiff<T: Equatable> {
         }
     }
     
-    /// How to handle two insertions at given location
-    enum InsertionMergePolicy {
-        case keepFirst
-        case keepSecond
-        case keepBoth
-    }
-    
     /// Changes are ordered so that you can apply them in order to the original array,
     /// and end up with the final array. Deletions come first, indexes according to the
     /// original array. They are in reversed order, applying to the end first.
@@ -92,90 +85,82 @@ public struct ArrayDiff<T: Equatable> {
         self.incrementalChanges = lcs.incrementalChanges
     }
     
+    /// Type used to stage intermediate form of merged changes
+    private struct MergedChange {
+        enum Position {
+            case first, second
+        }
+        var deletions: [Position:IncrementalChange?] = [.first: nil, .second: nil]
+        var insertions: [Position:[IncrementalChange]] = [.first: [], .second: []]
+    }
+    
     /// Creates a new diff from two existing ones, by merging them. Can be used for a 3 way merge.
     /// Can pass a merge policy if needed to handle case where two insertions conflict.
-    init(merging first: ArrayDiff, with second: ArrayDiff, resolvingInsertConflictsAccordingTo mergePolicy: InsertionMergePolicy = .keepBoth) {
-        var firstInsertions = first.incrementalChanges.filter({ $0.isInsertion })
-        var secondInsertions = second.incrementalChanges.filter({ $0.isInsertion })
+    init(merging first: ArrayDiff, with second: ArrayDiff) {
+        var mergedChangesByOriginalIndex: [Int:MergedChange] = [:]
         
-        func handleExtraDeletion(at deletionIndex: Int, adaptingIndexesOfInsertions insertions: inout [IncrementalChange]) {
-            var inRunFromDeletionPosition = false
-            var runIndex: Int?
-            for (i, insert) in insertions.enumerated() {
-                if insert.index == deletionIndex {
-                    inRunFromDeletionPosition = true
-                    runIndex = insert.index
-                } else if inRunFromDeletionPosition {
-                    
+        func addDeletions(in changes: [IncrementalChange], position: MergedChange.Position) {
+            for change in changes {
+                switch change {
+                case let .delete(i, _):
+                    var m = mergedChangesByOriginalIndex[i, default: MergedChange()]
+                    m.deletions[position] = change
+                    mergedChangesByOriginalIndex[i] = m
+                case .insert:
+                    break
                 }
             }
         }
+        addDeletions(in: first.incrementalChanges, position: .first)
+        addDeletions(in: second.incrementalChanges, position: .second)
         
-        let firstDeletions = first.incrementalChanges.filter({ $0.isDeletion }).reversed
-        let secondDeletions = second.incrementalChanges.filter({ $0.isDeletion }).reversed
-        var combinedDeletions: [IncrementalChange] = []
-        var firstIterator = firstDeletions.makeIterator()
-        var secondIterator = secondDeletions.makeIterator()
-        var first = firstIterator.next()
-        var second = secondIterator.next()
-        repeat {
-            switch (first, second) {
-            case let (.delete(o1, v1)?, .delete(o2, v2)?):
-                if o1 < o2 {
-                    combinedDeletions.append(.delete(originalIndex: o1, value: v1))
-                    first = firstIterator.next()
-                    handleExtraDeletion(atIndex: o1, adaptingIndexesOfInsertions: secondInsertions)
-                } else if o1 > o2 {
-                    combinedDeletions.append(.delete(originalIndex: o2, value: v2))
-                    second = secondIterator.next()
-                    changeInsertionIndexes(in: .first, fromIndex: o2+1, by: -1)
-                } else {
-                    combinedDeletions.append(.delete(originalIndex: o1, value: v1))
-                    first = firstIterator.next()
-                    second = secondIterator.next()
+        func addInsertions(from changes: [IncrementalChange], position: MergedChange.Position) {
+            let insertions = changes.filter({ $0.isInsertion })
+            var originalIndex = -1
+            var finalIndex = -1
+            for (i, insertion) in insertions.enumerated() {
+                let insertionsContiguous = i > 0 && (insertions[i].index - insertions[i-1].index == 1)
+                while !insertionsContiguous, insertion.index != finalIndex {
+                    let deletions = mergedChangesByOriginalIndex[originalIndex]?.deletions
+                    if  deletions?[position] != nil { finalIndex -= 1 }
+                    originalIndex += 1
+                    finalIndex += 1
                 }
+                var m = mergedChangesByOriginalIndex[originalIndex, default: MergedChange()]
+                m.insertions[position]!.append(insertion)
+                mergedChangesByOriginalIndex[originalIndex] = m
+                finalIndex += 1
             }
-        } while first != nil || second != nil
+        }
+        addInsertions(from: first.incrementalChanges, position: .first)
+        addInsertions(from: second.incrementalChanges, position: .second)
 
+        // Build result from merged changes
+        var resultDeletions: [IncrementalChange] = []
+        var resultInsertions: [IncrementalChange] = []
+        var finalIndex = -1
+        var previousOriginalIndex = -1
+        for originalIndex in mergedChangesByOriginalIndex.keys.sorted() {
+            let mergedChange = mergedChangesByOriginalIndex[originalIndex]!
+            
+            // Update final index for any items with no changes
+            finalIndex += originalIndex - previousOriginalIndex
+            
+            // Add deletion
+            if let change = mergedChange.deletions[.first]! ?? mergedChange.deletions[.second]!, case let .delete(_, value) = change {
+                resultDeletions.append(.delete(originalIndex: originalIndex, value: value))
+            }
+            
+            // Add insertions
+            for case let .insert(_, value) in mergedChange.insertions[.first]! + mergedChange.insertions[.second]! {
+                resultInsertions.append(.insert(finalIndex: finalIndex, value: value))
+                finalIndex += 1
+            }
+            
+            previousOriginalIndex = originalIndex
+        }
         
-//        var firstIterator = first.incrementalChanges.makeIterator()
-//        var secondIterator = second.incrementalChanges.makeIterator()
-//        var first = firstIterator.next()
-//        var second = secondIterator.next()
-//        var offset1: [Int] = Array(repeating: 0, count: first)
-//        var offset2 = 0
-//        var newChanges: [IncrementalChange] = []
-//        repeat {
-//            switch (first, second) {
-//            case let (.delete(originalIndex1, value1)?, .delete(originalIndex2, value2)?):
-//                if originalIndex1 < originalIndex2 {
-//                    newChanges.append(.delete(originalIndex: originalIndex1, value: value1))
-//                    first = firstIterator.next()
-//                    offset2 -= 1
-//                } else if originalIndex1 > originalIndex2 {
-//                    newChanges.append(.delete(originalIndex: originalIndex2, value: value2))
-//                    second = secondIterator.next()
-//                    offset1 -= 1
-//                } else {
-//                    newChanges.append(.delete(originalIndex: resultOriginalIndex, value: value1))
-//                    first = firstIterator.next()
-//                    second = secondIterator.next()
-//                }
-//            case let (.insert(finalIndex1, value)?, .insert(finalIndex2, value)?):
-//                break
-//            case let (.insert?, .delete(originalIndex2, _)?):
-//                break
-//            case let (.delete(originalIndex1, _)?, .insert?):
-//                break
-//            case let (.delete(originalIndex, _)?,  nil):
-//            case let (nil, .delete(originalIndex, _)?):
-//            case let (.insert(finalIndex, value)?,  nil):
-//            case let (nil, .insert(finalIndex, value)?):
-//            case (nil, nil):
-//                break
-//            }
-//        } while first != nil || second != nil
-        self.init(withChanges: newChanges)
+        self.init(withChanges: resultDeletions.reversed() + resultInsertions)
     }
 }
 

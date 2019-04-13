@@ -71,11 +71,88 @@ class ArrayDiffTests: XCTestCase {
         let diff = original.diff(leadingTo: new)
         XCTAssertEqual(new, original.applying(diff))
     }
+    
+    func testMerge() {
+        let original: [Int] = [1,2]
+        let new1: [Int] = [1,4]
+        let new2: [Int] = [1,2,3]
+        let diff1 = original.diff(leadingTo: new1)
+        let diff2 = original.diff(leadingTo: new2)
+        let mergeDiff = ArrayDiff(merging: diff1, with: diff2)
+        XCTAssertEqual([1,4,3], original.applying(mergeDiff))
+    }
+    
+    func testMergeLongSequence() {
+        let original: [Int] = [1,2,3,4,5,6,7,8,9,10]
+        let new1: [Int] = [1,2,3,4,5,5,7,8,9,10]
+        let new2: [Int] = [1,2,3,4,5,6,7,8,10,10]
+        let diff1 = original.diff(leadingTo: new1)
+        let diff2 = original.diff(leadingTo: new2)
+        let mergeDiff = ArrayDiff(merging: diff1, with: diff2)
+        XCTAssertEqual([1,2,3,4,5,5,7,8,10,10], original.applying(mergeDiff))
+    }
+    
+    func testTwoDeleteMerge() {
+        let original: [Int] = [1,2,3]
+        let new1: [Int] = [2,3]
+        let new2: [Int] = [2,3,4]
+        let diff1 = original.diff(leadingTo: new1)
+        let diff2 = original.diff(leadingTo: new2)
+        let mergeDiff = ArrayDiff(merging: diff1, with: diff2)
+        XCTAssertEqual([2,3,4], original.applying(mergeDiff))
+    }
+    
+    func testMergeBranchEmpty() {
+        let original: [Int] = [1,2,3]
+        let new1: [Int] = []
+        let new2: [Int] = [2,3,4]
+        let diff1 = original.diff(leadingTo: new1)
+        let diff2 = original.diff(leadingTo: new2)
+        let mergeDiff = ArrayDiff(merging: diff1, with: diff2)
+        XCTAssertEqual([4], original.applying(mergeDiff))
+    }
+    
+    func testMergeOriginalEmpty() {
+        let original: [Int] = []
+        let new1: [Int] = [1,2,3]
+        let new2: [Int] = [2,3,4]
+        let diff1 = original.diff(leadingTo: new1)
+        let diff2 = original.diff(leadingTo: new2)
+        let mergeDiff = ArrayDiff(merging: diff1, with: diff2)
+        XCTAssertEqual([1,2,3,2,3,4], original.applying(mergeDiff))
+    }
+    
+    func testMergeAllEmpty() {
+        let original: [Int] = []
+        let new1: [Int] = []
+        let new2: [Int] = []
+        let diff1 = original.diff(leadingTo: new1)
+        let diff2 = original.diff(leadingTo: new2)
+        let mergeDiff = ArrayDiff(merging: diff1, with: diff2)
+        XCTAssertEqual([], original.applying(mergeDiff))
+    }
+    
+    func testComplexMerge() {
+        let original: [Int] = [1,2,3,4,5]
+        let new1: [Int] = [2,3,6,7]
+        let new2: [Int] = [0,2,3,4,8,9]
+        let diff1 = original.diff(leadingTo: new1)
+        let diff2 = original.diff(leadingTo: new2)
+        let mergeDiff = ArrayDiff(merging: diff1, with: diff2)
+        XCTAssertEqual([0,2,3,6,7,8,9], original.applying(mergeDiff))
+    }
 
     static var allTests = [
         ("testSimpleSequence", testSimpleSequence),
         ("testDifferingFirstElement", testDifferingFirstElement),
         ("testRemovingFromSequence", testRemovingFromSequence),
         ("testAddingAndRemovingSequence", testAddingAndRemovingSequence),
+        ("testMerge", testMerge),
+        ("testMergeLongSequence", testMergeLongSequence),
+        ("testTwoDeleteMerge", testTwoDeleteMerge),
+        ("testMergeBranchEmpty", testMergeBranchEmpty),
+        ("testMergeOriginalEmpty", testMergeOriginalEmpty),
+        ("testMergeAllEmpty", testMergeAllEmpty),
+        ("testComplexMerge", testComplexMerge),
     ]
 }
