@@ -51,17 +51,17 @@ public struct ArrayDiff<T: Equatable> {
         case insert(finalIndex: Int, value: T)
         case delete(originalIndex: Int, value: T)
         
-        var isDeletion: Bool {
+        public var isDeletion: Bool {
             if case .delete = self { return true }
             return false
         }
         
-        var isInsertion: Bool {
+        public var isInsertion: Bool {
             if case .insert = self { return true }
             return false
         }
         
-        var index: Int {
+        public var index: Int {
             switch self {
             case let .delete(index, _), let .insert(index, _):
                 return index
@@ -76,11 +76,11 @@ public struct ArrayDiff<T: Equatable> {
     /// They apply from the beginning toward the end, ie, standard order.
     public private(set) var incrementalChanges: [IncrementalChange] = []
     
-    init(withChanges incrementalChanges: [IncrementalChange]) {
+    public init(withChanges incrementalChanges: [IncrementalChange]) {
         self.incrementalChanges = incrementalChanges
     }
     
-    init(originalValues: [T], finalValues: [T]) {
+    public init(originalValues: [T], finalValues: [T]) {
         let lcs = LongestCommonSubsequence(originalValues: originalValues, finalValues: finalValues)
         self.incrementalChanges = lcs.incrementalChanges
     }
@@ -96,7 +96,7 @@ public struct ArrayDiff<T: Equatable> {
     
     /// Creates a new diff from two existing ones, by merging them. Can be used for a 3 way merge.
     /// Can pass a merge policy if needed to handle case where two insertions conflict.
-    init(merging first: ArrayDiff, with second: ArrayDiff) {
+    public init(merging first: ArrayDiff, with second: ArrayDiff) {
         var mergedChangesByOriginalIndex: [Int:MergedChange] = [:]
         
         func addDeletions(in changes: [IncrementalChange], position: MergedChange.Position) {

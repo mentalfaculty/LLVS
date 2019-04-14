@@ -13,11 +13,11 @@ public struct Merge {
     public var versions: (first: Version, second: Version)
     public var forksByValueIdentifier: [Value.Identifier:Value.Fork] = [:]
     
-    internal init(versions: (first: Version, second: Version), commonAncestor: Version) {
+    public init(versions: (first: Version, second: Version), commonAncestor: Version) {
         self.commonAncestor = commonAncestor
         self.versions = versions
     }
-    
+
 }
 
 public protocol MergeArbiter {
