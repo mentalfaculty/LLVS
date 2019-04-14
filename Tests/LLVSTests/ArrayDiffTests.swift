@@ -102,6 +102,16 @@ class ArrayDiffTests: XCTestCase {
         XCTAssertEqual([2,3,4], original.applying(mergeDiff))
     }
     
+    func testFourDeleteMerge() {
+        let original: [Int] = [1,2,3]
+        let new1: [Int] = [3]
+        let new2: [Int] = [1]
+        let diff1 = original.diff(leadingTo: new1)
+        let diff2 = original.diff(leadingTo: new2)
+        let mergeDiff = ArrayDiff(merging: diff1, with: diff2)
+        XCTAssertEqual([], original.applying(mergeDiff))
+    }
+    
     func testMergeBranchEmpty() {
         let original: [Int] = [1,2,3]
         let new1: [Int] = []
@@ -141,7 +151,37 @@ class ArrayDiffTests: XCTestCase {
         let mergeDiff = ArrayDiff(merging: diff1, with: diff2)
         XCTAssertEqual([0,2,3,6,7,8,9], original.applying(mergeDiff))
     }
+    
+    func testDeletesOverlappingInsertsMerge() {
+        let original: [Int] = [1,2,3,4,5]
+        let new1: [Int] = [1,4,5]
+        let new2: [Int] = [1,6,7,2,3,4,5]
+        let diff1 = original.diff(leadingTo: new1)
+        let diff2 = original.diff(leadingTo: new2)
+        let mergeDiff = ArrayDiff(merging: diff1, with: diff2)
+        XCTAssertEqual([1,6,7,4,5], original.applying(mergeDiff))
+    }
+    
+    func testInsertAtEndMerge() {
+        let original: [Int] = [1,2,3]
+        let new1: [Int] = [1,2,3,4]
+        let new2: [Int] = [1,2,3]
+        let diff1 = original.diff(leadingTo: new1)
+        let diff2 = original.diff(leadingTo: new2)
+        let mergeDiff = ArrayDiff(merging: diff1, with: diff2)
+        XCTAssertEqual([1,2,3,4], original.applying(mergeDiff))
+    }
 
+    func testDeleteAndInsertAtEndMerge() {
+        let original: [Int] = [1,2,3]
+        let new1: [Int] = [1,2,3,4]
+        let new2: [Int] = [1,2]
+        let diff1 = original.diff(leadingTo: new1)
+        let diff2 = original.diff(leadingTo: new2)
+        let mergeDiff = ArrayDiff(merging: diff1, with: diff2)
+        XCTAssertEqual([1,2,4], original.applying(mergeDiff))
+    }
+    
     static var allTests = [
         ("testSimpleSequence", testSimpleSequence),
         ("testDifferingFirstElement", testDifferingFirstElement),
@@ -150,9 +190,13 @@ class ArrayDiffTests: XCTestCase {
         ("testMerge", testMerge),
         ("testMergeLongSequence", testMergeLongSequence),
         ("testTwoDeleteMerge", testTwoDeleteMerge),
+        ("testFourDeleteMerge", testFourDeleteMerge),
         ("testMergeBranchEmpty", testMergeBranchEmpty),
         ("testMergeOriginalEmpty", testMergeOriginalEmpty),
         ("testMergeAllEmpty", testMergeAllEmpty),
         ("testComplexMerge", testComplexMerge),
+        ("testDeletesOverlappingInsertsMerge", testDeletesOverlappingInsertsMerge),
+        ("testInsertAtEndMerge", testInsertAtEndMerge),
+        ("testDeleteAndInsertAtEndMerge", testDeleteAndInsertAtEndMerge),
     ]
 }
