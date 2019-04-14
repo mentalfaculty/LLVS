@@ -184,6 +184,13 @@ extension Store {
             }
         }
         
+        // Check for fast forward cases where no merge is needed
+        if firstVersionIdentifier == commonVersionIdentifier {
+            return secondVersion!
+        } else if secondVersionIdentifier == commonVersionIdentifier {
+            return firstVersion!
+        }
+        
         // Prepare merge
         let predecessors = Version.Predecessors(identifierOfFirst: firstVersionIdentifier, identifierOfSecond: secondVersionIdentifier)
         let diffs = try valuesMap.differences(between: firstVersionIdentifier, and: secondVersionIdentifier, withCommonAncestor: commonVersionIdentifier!)
