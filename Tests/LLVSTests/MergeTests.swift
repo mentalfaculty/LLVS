@@ -185,6 +185,14 @@ class MergeTests: XCTestCase {
         XCTAssertEqual(insertedValue.data, "Dave".data(using: .utf8)!)
     }
     
+    func testTwoWayMergeDeletion() {
+        let changes: [Value.Change] = []
+        let secondVersion = try! store.addVersion(basedOn: nil, storing: changes)
+        let mergeVersion = try! store.mergeUnrelated(version: originalVersion.identifier, withDominantVersion: secondVersion.identifier)
+        let mergeValue = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)
+        XCTAssertNotNil(mergeValue)
+    }
+    
     static var allTests = [
         ("testUnresolveMergeFails", testUnresolveMergeFails),
         ("testResolvedMergeSucceeds", testResolvedMergeSucceeds),
@@ -195,6 +203,7 @@ class MergeTests: XCTestCase {
         ("testTwiceRemoved", testTwiceRemoved),
         ("testTwiceUpdated", testTwiceUpdated),
         ("testTwoWayMerge", testTwoWayMerge),
+        ("testTwoWayMergeDeletion", testTwoWayMergeDeletion),
     ]
 }
 
