@@ -137,7 +137,7 @@ class FileSystemExchangeTests: XCTestCase {
         }
         wait(for: [expect], timeout: 10.0)
         
-        let merge = try! store1.merge(version: versions1.last!.identifier, with: versions2.last!.identifier, resolvingWith: MostRecentBranchFavoringArbiter())
+        let merge = try! store1.mergeRelated(version: versions1.last!.identifier, with: versions2.last!.identifier, resolvingWith: MostRecentBranchFavoringArbiter())
         let expectMerge = self.expectation(description: "Merge")
         exchange1.send { _ in
             self.exchange2.retrieve { result in

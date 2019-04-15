@@ -40,7 +40,7 @@ class MostRecentBranchMergeArbiterTests: XCTestCase {
     func testRemove() {
         let ver1 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [.remove(.init("CDEFGH"))])
         let ver2 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [])
-        let mergeVersion = try! store.merge(version: ver1.identifier, with: ver2.identifier, resolvingWith: recentBranchArbiter)
+        let mergeVersion = try! store.mergeRelated(version: ver1.identifier, with: ver2.identifier, resolvingWith: recentBranchArbiter)
         let f = try! store.value(.init("CDEFGH"), prevailingAt: mergeVersion.identifier)
         XCTAssertNil(f)
     }
@@ -48,7 +48,7 @@ class MostRecentBranchMergeArbiterTests: XCTestCase {
     func testTwiceRemove() {
         let ver1 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [.remove(.init("CDEFGH"))])
         let ver2 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [.remove(.init("CDEFGH"))])
-        let mergeVersion = try! store.merge(version: ver1.identifier, with: ver2.identifier, resolvingWith: recentBranchArbiter)
+        let mergeVersion = try! store.mergeRelated(version: ver1.identifier, with: ver2.identifier, resolvingWith: recentBranchArbiter)
         let f = try! store.value(.init("CDEFGH"), prevailingAt: mergeVersion.identifier)
         XCTAssertNil(f)
     }
@@ -58,7 +58,7 @@ class MostRecentBranchMergeArbiterTests: XCTestCase {
             let val1 = value("ABCDEF", stringData: "Bob")
             let ver1 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [.insert(val1)])
             let ver2 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [])
-            let mergeVersion = try! store.merge(version: ver1.identifier, with: ver2.identifier, resolvingWith: recentBranchArbiter)
+            let mergeVersion = try! store.mergeRelated(version: ver1.identifier, with: ver2.identifier, resolvingWith: recentBranchArbiter)
             let f = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)!
             XCTAssertEqual(f.data, "Bob".data(using: .utf8))
             XCTAssertEqual(f.version, ver1.identifier)
@@ -68,7 +68,7 @@ class MostRecentBranchMergeArbiterTests: XCTestCase {
             let val1 = value("ABCDEF", stringData: "Bob")
             let ver1 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [])
             let ver2 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [.insert(val1)])
-            let mergeVersion = try! store.merge(version: ver1.identifier, with: ver2.identifier, resolvingWith: recentBranchArbiter)
+            let mergeVersion = try! store.mergeRelated(version: ver1.identifier, with: ver2.identifier, resolvingWith: recentBranchArbiter)
             let f = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)!
             XCTAssertEqual(f.data, "Bob".data(using: .utf8))
             XCTAssertEqual(f.version, ver2.identifier)
@@ -80,7 +80,7 @@ class MostRecentBranchMergeArbiterTests: XCTestCase {
         let val2 = value("ABCDEF", stringData: "Tom")
         let ver1 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [.insert(val1)])
         let ver2 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [.insert(val2)])
-        let mergeVersion = try! store.merge(version: ver1.identifier, with: ver2.identifier, resolvingWith: recentBranchArbiter)
+        let mergeVersion = try! store.mergeRelated(version: ver1.identifier, with: ver2.identifier, resolvingWith: recentBranchArbiter)
         let f = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)!
         XCTAssertEqual(f.data, "Tom".data(using: .utf8))
         XCTAssertEqual(f.version, ver2.identifier)
@@ -90,7 +90,7 @@ class MostRecentBranchMergeArbiterTests: XCTestCase {
         let val1 = value("CDEFGH", stringData: "Bob")
         let ver1 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [.update(val1)])
         let ver2 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [])
-        let mergeVersion = try! store.merge(version: ver1.identifier, with: ver2.identifier, resolvingWith: recentBranchArbiter)
+        let mergeVersion = try! store.mergeRelated(version: ver1.identifier, with: ver2.identifier, resolvingWith: recentBranchArbiter)
         let f = try! store.value(.init("CDEFGH"), prevailingAt: mergeVersion.identifier)!
         XCTAssertEqual(f.data, "Bob".data(using: .utf8))
         XCTAssertEqual(f.version, ver1.identifier)
@@ -101,7 +101,7 @@ class MostRecentBranchMergeArbiterTests: XCTestCase {
         let val2 = value("CDEFGH", stringData: "Tom")
         let ver1 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [.update(val1)])
         let ver2 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [.update(val2)])
-        let mergeVersion = try! store.merge(version: ver1.identifier, with: ver2.identifier, resolvingWith: recentBranchArbiter)
+        let mergeVersion = try! store.mergeRelated(version: ver1.identifier, with: ver2.identifier, resolvingWith: recentBranchArbiter)
         let f = try! store.value(.init("CDEFGH"), prevailingAt: mergeVersion.identifier)!
         XCTAssertEqual(f.data, "Tom".data(using: .utf8))
         XCTAssertEqual(f.version, ver2.identifier)
@@ -112,7 +112,7 @@ class MostRecentBranchMergeArbiterTests: XCTestCase {
             let val1 = value("CDEFGH", stringData: "Bob")
             let ver1 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [.update(val1)])
             let ver2 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [.remove(.init("CDEFGH"))])
-            let mergeVersion = try! store.merge(version: ver1.identifier, with: ver2.identifier, resolvingWith: recentBranchArbiter)
+            let mergeVersion = try! store.mergeRelated(version: ver1.identifier, with: ver2.identifier, resolvingWith: recentBranchArbiter)
             let f = try! store.value(.init("CDEFGH"), prevailingAt: mergeVersion.identifier)
             XCTAssertNil(f)
         }
@@ -121,7 +121,7 @@ class MostRecentBranchMergeArbiterTests: XCTestCase {
             let val1 = value("CDEFGH", stringData: "Bob")
             let ver1 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [.remove(.init("CDEFGH"))])
             let ver2 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [.update(val1)])
-            let mergeVersion = try! store.merge(version: ver1.identifier, with: ver2.identifier, resolvingWith: recentBranchArbiter)
+            let mergeVersion = try! store.mergeRelated(version: ver1.identifier, with: ver2.identifier, resolvingWith: recentBranchArbiter)
             let f = try! store.value(.init("CDEFGH"), prevailingAt: mergeVersion.identifier)!
             XCTAssertEqual(f.data, "Bob".data(using: .utf8))
             XCTAssertEqual(f.version, ver2.identifier)
