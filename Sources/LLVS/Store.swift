@@ -176,7 +176,7 @@ extension Store {
     }
     
     /// Two-way merge between two versions that have no common ancestry. Effectively we assume an empty common ancestor,
-    /// so that all 
+    /// so that all changes are inserts, or conflicting twiceInserts.
     public func mergeUnrelated(version firstVersionIdentifier: Version.Identifier, with secondVersionIdentifier: Version.Identifier, resolvingWith arbiter: MergeArbiter) throws -> Version {
         var firstVersion, secondVersion: Version?
         try historyAccessQueue.sync {
@@ -222,7 +222,7 @@ extension Store {
     }
     
     /// Two or three-way merge. Does no check to see if fast forwarding is possible. Will carry out the merge regardless of history.
-    /// If a common ancestor is supplied, it is 3 way, and otherwise 2-way.
+    /// If a common ancestor is supplied, it is 3-way, and otherwise 2-way.
     private func merge(_ firstVersion: Version, and secondVersion: Version, withCommonAncestor commonAncestor: Version?, resolvingWith arbiter: MergeArbiter) throws -> Version {
         // Prepare merge
         let predecessors = Version.Predecessors(identifierOfFirst: firstVersion.identifier, identifierOfSecond: secondVersion.identifier)
