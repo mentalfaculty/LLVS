@@ -178,7 +178,8 @@ class MergeTests: XCTestCase {
         let newValue = Value(identifier: .init("ABCDEF"), version: nil, data: "Joyce".data(using: .utf8)!)
         let changes: [Value.Change] = [.insert(secondValue), .update(newValue)]
         let secondVersion = try! store.addVersion(basedOn: nil, storing: changes)
-        let mergeVersion = try! store.mergeUnrelated(version: originalVersion.identifier, withDominantVersion: secondVersion.identifier)
+        let arbiter = MostRecentChangeFavoringArbiter()
+        let mergeVersion = try! store.mergeUnrelated(version: originalVersion.identifier, with: secondVersion.identifier, resolvingWith: arbiter)
         let mergeValue = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)!
         XCTAssertEqual(mergeValue.data, "Joyce".data(using: .utf8)!)
         let insertedValue = try! store.value(.init("CDEFGH"), prevailingAt: mergeVersion.identifier)!
@@ -187,8 +188,9 @@ class MergeTests: XCTestCase {
     
     func testTwoWayMergeDeletion() {
         let changes: [Value.Change] = []
+        let arbiter = MostRecentChangeFavoringArbiter()
         let secondVersion = try! store.addVersion(basedOn: nil, storing: changes)
-        let mergeVersion = try! store.mergeUnrelated(version: originalVersion.identifier, withDominantVersion: secondVersion.identifier)
+        let mergeVersion = try! store.mergeUnrelated(version: originalVersion.identifier, with: secondVersion.identifier, resolvingWith: arbiter)
         let mergeValue = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)
         XCTAssertNotNil(mergeValue)
     }

@@ -166,30 +166,29 @@ extension Store {
 
 extension Store {
     
-    /// Two-way merge between two versions that have no common ancestry. This is equivalent to a three-way merge where
-    /// the common ancestor is the same as the first version. Effectively, changes made in the second version take
-    /// precedence. There is no check that the versions are unrelated.
-    public func mergeUnrelated(version firstVersionIdentifier: Version.Identifier, withDominantVersion secondVersionIdentifier: Version.Identifier) throws -> Version {
+    /// Will choose between a three way merge, and a two way merge, based on whether a common ancestor is found.
+    public func merge(version firstVersionIdentifier: Version.Identifier, with secondVersionIdentifier: Version.Identifier, resolvingWith arbiter: MergeArbiter) throws -> Version {
+        do {
+            return try mergeRelated(version: firstVersionIdentifier, with: secondVersionIdentifier, resolvingWith: arbiter)
+        } catch Error.noCommonAncestor {
+            return try mergeUnrelated(version: firstVersionIdentifier, with: secondVersionIdentifier, resolvingWith: arbiter)
+        }
+    }
+    
+    /// Two-way merge between two versions that have no common ancestry. Effectively we assume an empty common ancestor,
+    /// so that all 
+    public func mergeUnrelated(version firstVersionIdentifier: Version.Identifier, with secondVersionIdentifier: Version.Identifier, resolvingWith arbiter: MergeArbiter) throws -> Version {
         var firstVersion, secondVersion: Version?
         try historyAccessQueue.sync {
             firstVersion = history.version(identifiedBy: firstVersionIdentifier)
             secondVersion = history.version(identifiedBy: secondVersionIdentifier)
-            
+
             guard firstVersion != nil, secondVersion != nil else {
                 throw Error.missingVersion
             }
         }
-        
-        /// Arbiter that does nothing
-        class NullArbiter: MergeArbiter {
-            func changes(toResolve merge: Merge, in store: Store) throws -> [Value.Change] {
-                return []
-            }
-        }
-        let nullArbiter = NullArbiter()
-        
-        // Should never be a conflict, so pass an arbiter that does nothing
-        return try merge(version: firstVersion!, andVersion: secondVersion!, withCommonAncestor: firstVersion!, resolvingWith: nullArbiter)
+
+        return try merge(firstVersion!, and: secondVersion!, withCommonAncestor: nil, resolvingWith: arbiter)
     }
     
     /// Three-way merge between two versions, and a common ancestor. If no common ancestor is found, a .noCommonAncestor error is thrown.
@@ -219,14 +218,15 @@ extension Store {
             return firstVersion!
         }
         
-        return try merge(version: firstVersion!, andVersion: secondVersion!, withCommonAncestor: commonVersion!, resolvingWith: arbiter)
+        return try merge(firstVersion!, and: secondVersion!, withCommonAncestor: commonVersion!, resolvingWith: arbiter)
     }
     
-    /// Three-way merge. Does no check to see if fast forwarding is possible. Will carry out the merge regardless of history
-    private func merge(version firstVersion: Version, andVersion secondVersion: Version, withCommonAncestor commonAncestor: Version, resolvingWith arbiter: MergeArbiter) throws -> Version {
+    /// Two or three-way merge. Does no check to see if fast forwarding is possible. Will carry out the merge regardless of history.
+    /// If a common ancestor is supplied, it is 3 way, and otherwise 2-way.
+    private func merge(_ firstVersion: Version, and secondVersion: Version, withCommonAncestor commonAncestor: Version?, resolvingWith arbiter: MergeArbiter) throws -> Version {
         // Prepare merge
         let predecessors = Version.Predecessors(identifierOfFirst: firstVersion.identifier, identifierOfSecond: secondVersion.identifier)
-        let diffs = try valuesMap.differences(between: firstVersion.identifier, and: secondVersion.identifier, withCommonAncestor: commonAncestor.identifier)
+        let diffs = try valuesMap.differences(between: firstVersion.identifier, and: secondVersion.identifier, withCommonAncestor: commonAncestor?.identifier)
         var merge = Merge(versions: (firstVersion, secondVersion), commonAncestor: commonAncestor)
         let forkTuples = diffs.map({ ($0.valueIdentifier, $0.valueFork) })
         merge.forksByValueIdentifier = .init(uniqueKeysWithValues: forkTuples)

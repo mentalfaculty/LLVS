@@ -92,27 +92,35 @@ final class Map {
         try zone.store(data, for: rootNode.reference)
     }
     
-    func differences(between firstVersion: Version.Identifier, and secondVersion: Version.Identifier, withCommonAncestor commonAncestor: Version.Identifier) throws -> [Diff] {
-        let originRef = Zone.Reference(key: rootKey, version: commonAncestor)
+    func differences(between firstVersion: Version.Identifier, and secondVersion: Version.Identifier, withCommonAncestor commonAncestor: Version.Identifier?) throws -> [Diff] {
+        let originRef = commonAncestor.flatMap { Zone.Reference(key: rootKey, version: $0) }
         let rootRef1 = Zone.Reference(key: rootKey, version: firstVersion)
         let rootRef2 = Zone.Reference(key: rootKey, version: secondVersion)
         
-        guard let originNode = try node(for: originRef),
+        let originNode = try originRef.flatMap { try node(for: $0) }
+        guard
             let rootNode1 = try node(for: rootRef1),
             let rootNode2 = try node(for: rootRef2) else {
             throw Error.missingVersionRoot
         }
 
-        guard case let .nodes(nodesOrigin) = originNode.children,
+        let nodesOrigin: [Zone.Reference]?
+        if case let .nodes(n)? = originNode?.children {
+            nodesOrigin = n
+        } else {
+            nodesOrigin = nil
+        }
+        guard
             case let .nodes(subNodes1) = rootNode1.children,
             case let .nodes(subNodes2) = rootNode2.children else {
             throw Error.unexpectedNodeContent
         }
 
-        let refOriginByKey: [String:Zone.Reference] = .init(uniqueKeysWithValues: nodesOrigin.map({ ($0.key, $0) }))
+        let refOriginByKey: [String:Zone.Reference]? = nodesOrigin.flatMap { refs in .init(uniqueKeysWithValues: refs.map({ ($0.key, $0) })) }
         let subNodeRefs1ByKey: [String:Zone.Reference] = .init(uniqueKeysWithValues: subNodes1.map({ ($0.key, $0) }))
         let subNodeRefs2ByKey: [String:Zone.Reference] = .init(uniqueKeysWithValues: subNodes2.map({ ($0.key, $0) }))
-        let allSubNodeKeys = Set(subNodeRefs1ByKey.keys).union(subNodeRefs2ByKey.keys).union(refOriginByKey.keys)
+        var allSubNodeKeys = Set(subNodeRefs1ByKey.keys).union(subNodeRefs2ByKey.keys)
+        if let r = refOriginByKey { allSubNodeKeys.formUnion(r.keys) }
         
         var diffs: [Diff] = []
         for subNodeKey in allSubNodeKeys {
@@ -157,7 +165,7 @@ final class Map {
             
             let ref1 = subNodeRefs1ByKey[subNodeKey]
             let ref2 = subNodeRefs2ByKey[subNodeKey]
-            let origin = refOriginByKey[subNodeKey]
+            let origin = refOriginByKey?[subNodeKey]
             switch (origin, ref1, ref2) {
             case let (o?, r1?, r2?):
                 let vo = try valueReferences(forRootSubNode: o)
