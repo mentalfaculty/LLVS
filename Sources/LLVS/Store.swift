@@ -179,6 +179,7 @@ extension Store {
     /// so that all changes are inserts, or conflicting twiceInserts.
     public func mergeUnrelated(version firstVersionIdentifier: Version.Identifier, with secondVersionIdentifier: Version.Identifier, resolvingWith arbiter: MergeArbiter) throws -> Version {
         var firstVersion, secondVersion: Version?
+        var fastForwardVersion: Version?
         try historyAccessQueue.sync {
             firstVersion = history.version(identifiedBy: firstVersionIdentifier)
             secondVersion = history.version(identifiedBy: secondVersionIdentifier)
@@ -186,6 +187,17 @@ extension Store {
             guard firstVersion != nil, secondVersion != nil else {
                 throw Error.missingVersion
             }
+            
+            // Check for fast forward
+            if history.isAncestralLine(from: firstVersion!.identifier, to: secondVersion!.identifier) {
+                fastForwardVersion = secondVersion
+            } else if history.isAncestralLine(from: secondVersion!.identifier, to: firstVersion!.identifier) {
+                fastForwardVersion = firstVersion
+            }
+        }
+        
+        if let fastForwardVersion = fastForwardVersion {
+            return fastForwardVersion
         }
 
         return try merge(firstVersion!, and: secondVersion!, withCommonAncestor: nil, resolvingWith: arbiter)

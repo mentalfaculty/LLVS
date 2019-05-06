@@ -54,6 +54,10 @@ public class History {
         return nil
     }
     
+    internal func isAncestralLine(from ancestor: Version.Identifier, to descendant: Version.Identifier) -> Bool {
+         return nil != version(prevailingFromCandidates: [ancestor], at: descendant)
+    }
+    
     /// If updatingPredecessorVersions is true, the successors of other versions may be updated.
     /// Use this when adding a new head when storing.
     /// Pass in false if more control is needed over setting the successors, such as
