@@ -22,10 +22,9 @@ public class CloudKitExchange: Exchange {
 
     public let zoneIdentifier: String
     public let database: CKDatabase
-    public private(set) var zone: CKRecordZone?
+    public let zone: CKRecordZone
     
     private let createZoneOperation: CKModifyRecordZonesOperation
-    private let fetchZoneOperation: CKFetchRecordZonesOperation
     
     private var versionsInCloud: Set<Version.Identifier> = []
     private var fetchRecordChangesToken: CKServerChangeToken?
@@ -38,29 +37,12 @@ public class CloudKitExchange: Exchange {
         self.store = store
         self.zoneIdentifier = identifier
         self.database = cloudDatabase
-        
-        let zone = CKRecordZone(zoneName: zoneIdentifier)
+        self.zone = CKRecordZone(zoneName: zoneIdentifier)
         self.createZoneOperation = CKModifyRecordZonesOperation(recordZonesToSave: [zone], recordZoneIDsToDelete: nil)
         self.database.add(self.createZoneOperation)
-        
-        self.fetchZoneOperation = CKFetchRecordZonesOperation(recordZoneIDs: [.init(zoneName: zoneIdentifier)])
-        self.fetchZoneOperation.fetchRecordZonesCompletionBlock = { recordZonesByZoneID, error in
-            if let zone = recordZonesByZoneID?.first?.value {
-                self.zone = zone
-            } else {
-                NSLog("failed to create zone: \(zone)")
-            }
-        }
-        self.fetchZoneOperation.addDependency(self.createZoneOperation)
-        self.database.add(self.fetchZoneOperation)
     }
 
     public func removeZone(completionHandler completion: @escaping CompletionHandler<Void>) {
-        guard let zone = self.zone else {
-            completion(.failure(Error.noZoneFound))
-            return
-        }
-        
         database.delete(withRecordZoneID: zone.zoneID) { zoneID, error in
             if let error = error {
                 completion(.failure(error))
@@ -75,7 +57,7 @@ public class CloudKitExchange: Exchange {
         options.previousServerChangeToken = fetchRecordChangesToken
         
         let operation = CKFetchRecordZoneChangesOperation(recordZoneIDs: [zoneID], optionsByRecordZoneID: [zoneID : options])
-        operation.addDependency(fetchZoneOperation)
+        operation.addDependency(createZoneOperation)
         operation.fetchAllChanges = true
         operation.recordChangedBlock = { record in
             let versionString = record.recordID.recordName
