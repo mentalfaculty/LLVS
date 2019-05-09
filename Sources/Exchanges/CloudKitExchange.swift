@@ -20,8 +20,8 @@ public class CloudKitExchange: Exchange {
     public weak var client: ExchangeClient?
 
     public let zoneIdentifier: String
-    private let database: CKDatabase
-    private let zone: CKRecordZone
+    public let database: CKDatabase
+    public let zone: CKRecordZone
     private let prepareZoneOperation: CKDatabaseOperation
     
     private var versionsInCloud: Set<Version.Identifier> = []
@@ -169,6 +169,26 @@ public extension CloudKitExchange {
             self.database.add(modifyOperation)
         } catch {
             completionHandler(.failure(error))
+        }
+    }
+    
+}
+
+
+public extension CloudKitExchange {
+    
+    func subscribeForPushNotifications() {
+        let info = CKSubscription.NotificationInfo()
+        info.shouldSendContentAvailable = true
+        
+        let predicate = NSPredicate(value: true)
+        let subscription = CKQuerySubscription(recordType: .init("Version"), predicate: predicate, subscriptionID: "VersionCreated", options: CKQuerySubscription.Options.firesOnRecordCreation)
+        subscription.notificationInfo = info
+        
+        database.save(subscription) { (_, error) in
+            if let error = error {
+                NSLog("Error creating subscription: \(error)")
+            }
         }
     }
     

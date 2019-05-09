@@ -114,7 +114,7 @@ final class ContactBook {
     
     // MARK: Sync
     
-    func sync() {
+    func sync(executingUponCompletion completionHandler: ((Swift.Error?) -> Void)? = nil) {
         var downloadedNewVersions = false
         let retrieve = AsynchronousTask { finish in
             self.cloudKitExchange.retrieve { result in
@@ -140,14 +140,19 @@ final class ContactBook {
         }
         
         [retrieve, send].executeInOrder { result in
+            var returnError: Swift.Error?
             switch result {
             case let .failure(error):
+                returnError = error
                 NSLog("Failed to sync: \(error)")
             case .success:
                 NSLog("Sync successful")
                 if downloadedNewVersions {
                     self.mergeHeads()
                 }
+            }
+            DispatchQueue.main.async {
+                completionHandler?(returnError)
             }
         }
     }
@@ -186,7 +191,13 @@ class ContactMergeArbiter: MergeArbiter {
         if let contactBookFork = merge.forksByValueIdentifier[ContactBook.sharedContactBookIdentifier] {
             switch contactBookFork {
             case .twiceUpdated, .twiceInserted:
-                let contactIdsAncestor = try contactBook.fetchContactIdentifiers(atVersionIdentifiedBy: merge.commonAncestor.identifier)
+                let contactIdsAncestor:  [Value.Identifier]
+                if let v = merge.commonAncestor?.identifier {
+                    contactIdsAncestor = try contactBook.fetchContactIdentifiers(atVersionIdentifiedBy: v)
+                } else {
+                    contactIdsAncestor = []
+                }
+                
                 let contactIds1 = try contactBook.fetchContactIdentifiers(atVersionIdentifiedBy: merge.versions.first.identifier)
                 let contactIds2 = try contactBook.fetchContactIdentifiers(atVersionIdentifiedBy: merge.versions.second.identifier)
                 let diff1 = ArrayDiff(originalValues: contactIdsAncestor, finalValues: contactIds1)

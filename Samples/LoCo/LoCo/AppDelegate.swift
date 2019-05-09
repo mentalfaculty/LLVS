@@ -8,6 +8,7 @@
 
 import UIKit
 import LLVS
+import CloudKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDelegate {
@@ -47,7 +48,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDele
     }()
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        NotificationCenter.default.addObserver(forName: .contactBookVersionDidChange, object: contactBook, queue: nil) { notif in
+        NotificationCenter.default.addObserver(forName: .contactBookVersionDidChange, object: contactBook, queue: nil) { [unowned self] notif in
             self.storeCurrentVersion()
         }
     
@@ -60,7 +61,30 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDele
         let contactsController = masterNavController.topViewController as! ContactsViewController
         contactsController.contactBook = contactBook
         
+        contactBook.cloudKitExchange.subscribeForPushNotifications()
+        contactBook.sync()
+        
         return true
+    }
+    
+    func applicationDidEnterBackground(_ application: UIApplication) {
+        let task = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
+        contactBook.sync { _ in
+            UIApplication.shared.endBackgroundTask(task)
+        }
+    }
+    
+    func applicationWillEnterForeground(_ application: UIApplication) {
+        contactBook.sync()
+    }
+    
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        let preVersion = contactBook.currentVersion
+        contactBook.sync { error in
+            let versionChanged = self.contactBook.currentVersion != preVersion
+            let success = error == nil
+            completionHandler(versionChanged ? .newData : success ? .noData : .failed)
+        }
     }
     
     func storeCurrentVersion() {
