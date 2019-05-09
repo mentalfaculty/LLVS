@@ -13,6 +13,7 @@ public class CloudKitExchange: Exchange {
     
     public enum Error: Swift.Error {
         case couldNotGetVersionFromRecord
+        case noZoneFound
     }
     
     public var store: Store
@@ -21,22 +22,45 @@ public class CloudKitExchange: Exchange {
 
     public let zoneIdentifier: String
     public let database: CKDatabase
-    public let zone: CKRecordZone
-    private let prepareZoneOperation: CKDatabaseOperation
+    public private(set) var zone: CKRecordZone?
+    
+    private let createZoneOperation: CKModifyRecordZonesOperation
+    private let fetchZoneOperation: CKFetchRecordZonesOperation
     
     private var versionsInCloud: Set<Version.Identifier> = []
     private var fetchRecordChangesToken: CKServerChangeToken?
+    
+    private var zoneID: CKRecordZone.ID {
+        return CKRecordZone.ID(zoneName: zoneIdentifier, ownerName: CKCurrentUserDefaultName)
+    }
     
     public init(with store: Store, zoneIdentifier identifier: String, cloudDatabase: CKDatabase) {
         self.store = store
         self.zoneIdentifier = identifier
         self.database = cloudDatabase
-        self.zone = CKRecordZone(zoneName: zoneIdentifier)
-        self.prepareZoneOperation = CKModifyRecordZonesOperation(recordZonesToSave: [self.zone], recordZoneIDsToDelete: nil)
-        self.database.add(self.prepareZoneOperation)
+        
+        let zone = CKRecordZone(zoneName: zoneIdentifier)
+        self.createZoneOperation = CKModifyRecordZonesOperation(recordZonesToSave: [zone], recordZoneIDsToDelete: nil)
+        self.database.add(self.createZoneOperation)
+        
+        self.fetchZoneOperation = CKFetchRecordZonesOperation(recordZoneIDs: [.init(zoneName: zoneIdentifier)])
+        self.fetchZoneOperation.fetchRecordZonesCompletionBlock = { recordZonesByZoneID, error in
+            if let zone = recordZonesByZoneID?.first?.value {
+                self.zone = zone
+            } else {
+                NSLog("failed to create zone: \(zone)")
+            }
+        }
+        self.fetchZoneOperation.addDependency(self.createZoneOperation)
+        self.database.add(self.fetchZoneOperation)
     }
-    
+
     public func removeZone(completionHandler completion: @escaping CompletionHandler<Void>) {
+        guard let zone = self.zone else {
+            completion(.failure(Error.noZoneFound))
+            return
+        }
+        
         database.delete(withRecordZoneID: zone.zoneID) { zoneID, error in
             if let error = error {
                 completion(.failure(error))
@@ -50,8 +74,8 @@ public class CloudKitExchange: Exchange {
         let options = CKFetchRecordZoneChangesOperation.ZoneOptions()
         options.previousServerChangeToken = fetchRecordChangesToken
         
-        let operation = CKFetchRecordZoneChangesOperation(recordZoneIDs: [zone.zoneID], optionsByRecordZoneID: [zone.zoneID : options])
-        operation.addDependency(prepareZoneOperation)
+        let operation = CKFetchRecordZoneChangesOperation(recordZoneIDs: [zoneID], optionsByRecordZoneID: [zoneID : options])
+        operation.addDependency(fetchZoneOperation)
         operation.fetchAllChanges = true
         operation.recordChangedBlock = { record in
             let versionString = record.recordID.recordName
@@ -85,7 +109,7 @@ public extension CloudKitExchange {
     }
     
     func retrieveVersions(identifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
-        let recordIDs = versionIdentifiers.map { CKRecord.ID(recordName: $0.identifierString) }
+        let recordIDs = versionIdentifiers.map { CKRecord.ID(recordName: $0.identifierString, zoneID: zoneID) }
         let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
         fetchOperation.desiredKeys = ["version"]
         fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
@@ -116,7 +140,7 @@ public extension CloudKitExchange {
     }
     
     func retrieveValueChanges(forVersionIdentifiedBy versionIdentifier: Version.Identifier, executingUponCompletion completionHandler: @escaping CompletionHandler<[Value.Change]>) {
-        let recordID = CKRecord.ID(recordName: versionIdentifier.identifierString)
+        let recordID = CKRecord.ID(recordName: versionIdentifier.identifierString, zoneID: zoneID)
         let fetchOperation = CKFetchRecordsOperation(recordIDs: [recordID])
         fetchOperation.desiredKeys = ["valueChanges"]
         fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
@@ -150,7 +174,8 @@ public extension CloudKitExchange {
     
     func send(_ version: Version, with valueChanges: [Value.Change], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         do {
-            let record = CKRecord(recordType: .init("Version"), recordID: .init(recordName: version.identifier.identifierString))
+            let recordID = CKRecord.ID(recordName: version.identifier.identifierString, zoneID: zoneID)
+            let record = CKRecord(recordType: .init("Version"), recordID: recordID)
             let versionData = try JSONEncoder().encode([version]) // Use an array, because JSON needs root dict or array
             let changesData = try JSONEncoder().encode(valueChanges)
             record.setValue(versionData, forKey: "version")
