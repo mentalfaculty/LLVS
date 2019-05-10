@@ -46,6 +46,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDele
         UserDefaults.standard.synchronize()
         return book
     }()
+    
+    func application(_ application: UIApplication, willFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+        log.level = .verbose
+        return true
+    }
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         NotificationCenter.default.addObserver(forName: .contactBookVersionDidChange, object: contactBook, queue: nil) { [unowned self] notif in
@@ -79,6 +84,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDele
     }
     
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        log.trace("Received push notification")
         let preVersion = contactBook.currentVersion
         contactBook.sync { error in
             let versionChanged = self.contactBook.currentVersion != preVersion

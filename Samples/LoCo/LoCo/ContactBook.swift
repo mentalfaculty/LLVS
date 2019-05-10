@@ -29,6 +29,7 @@ final class ContactBook {
     var currentVersion: Version.Identifier {
         didSet {
             guard self.currentVersion != oldValue else { return }
+            log.trace("Current version of ContactBook changed to \(self.currentVersion.identifierString)")
             try! fetchContacts()
             NotificationCenter.default.post(name: .contactBookVersionDidChange, object: self)
         }
@@ -145,9 +146,9 @@ final class ContactBook {
             switch result {
             case let .failure(error):
                 returnError = error
-                NSLog("Failed to sync: \(error)")
+                log.error("Failed to sync: \(error)")
             case .success:
-                NSLog("Sync successful")
+                log.trace("Sync successful")
                 if downloadedNewVersions {
                     self.mergeHeads()
                 }

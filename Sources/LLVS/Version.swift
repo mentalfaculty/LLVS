@@ -77,10 +77,23 @@ extension Version {
 }
 
 
-extension Collection where Element == Version {
+public extension Collection where Element == Version {
     
     var identifiers: [Version.Identifier] {
         return map { $0.identifier }
+    }
+    
+    var identifierStrings: [String] {
+        return map { $0.identifier.identifierString }
+    }
+    
+}
+
+
+public extension Collection where Element == Version.Identifier {
+
+    var identifierStrings: [String] {
+        return map { $0.identifierString }
     }
     
 }

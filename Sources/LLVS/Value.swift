@@ -1,6 +1,6 @@
 //
-//  JSON.swift
-//  llvs
+//  Value.swift
+//  LLVS
 //
 //  Created by Drew McCormack on 31/10/2018.
 //

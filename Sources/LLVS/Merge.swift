@@ -1,5 +1,5 @@
 //
-//  Resolver.swift
+//  Merge.swift
 //  LLVS
 //
 //  Created by Drew McCormack on 19/12/2018.

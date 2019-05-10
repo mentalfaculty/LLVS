@@ -36,6 +36,8 @@ public protocol Exchange {
 public extension Exchange {
     
     func retrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>) {
+        log.trace("Retrieving")
+        
         let prepare = AsynchronousTask { finish in
             self.prepareToRetrieve { result in
                 finish(result.taskResult)
@@ -53,6 +55,7 @@ public extension Exchange {
         var remoteVersions: [Version]!
         let retrieveVersions = AsynchronousTask { finish in
             let toRetrieveIds = self.versionIdentifiersMissingFromHistory(forRemoteIdentifiers: remoteIds)
+            log.verbose("Version identifiers to retrieve: \(toRetrieveIds.identifierStrings)")
             self.retrieveVersions(identifiedBy: toRetrieveIds) { result in
                 remoteVersions = result.value
                 finish(result.taskResult)
@@ -60,6 +63,7 @@ public extension Exchange {
         }
         
         let addToHistory = AsynchronousTask { finish in
+            log.verbose("Adding to history versions: \(remoteVersions.identifierStrings)")
             self.addToHistory(remoteVersions) { result in
                 finish(result.taskResult)
             }
@@ -68,8 +72,10 @@ public extension Exchange {
         [prepare, retrieveIds, retrieveVersions, addToHistory].executeInOrder { result in
             switch result {
             case .failure(let error):
+                log.error("Failed to retrieve: \(error)")
                 completionHandler(.failure(error))
             case .success:
+                log.trace("Retrieved")
                 completionHandler(.success(remoteIds!))
             }
         }
@@ -87,16 +93,21 @@ public extension Exchange {
     
     private func addToHistory(_ versions: [Version], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         if versions.isEmpty {
+            log.trace("No versions. Finished adding to history")
             completionHandler(.success(()))
         } else if let version = appendableVersion(from: versions) {
             retrieveValueChanges(forVersionIdentifiedBy: version.identifier) { result in
                 switch result {
                 case let .failure(error):
+                    log.error("Failed adding to history: \(error)")
                     completionHandler(.failure(error))
                 case let .success(valueChanges):
                     do {
+                        log.trace("Adding version to store: \(version.identifier.identifierString)")
+                        log.verbose("Value changes for \(version.identifier.identifierString): \(valueChanges)")
                         try self.store.addVersion(version, storing: valueChanges)
                     } catch {
+                        log.error("Failed adding to history: \(error)")
                         completionHandler(.failure(error))
                         return
                     }
@@ -107,6 +118,7 @@ public extension Exchange {
                 }
             }
         } else {
+            log.error("Failed to add to history due to missing predecessors")
             completionHandler(.failure(ExchangeError.remoteVersionsWithUnknownPredecessors))
         }
     }
