@@ -21,22 +21,29 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
     public let rootDirectoryURL: URL
     public var versionsDirectory: URL { return rootDirectoryURL.appendingPathComponent("versions") }
     public var changesDirectory: URL { return rootDirectoryURL.appendingPathComponent("changes") }
+    
+    public let usesFileCoordination: Bool
 
     fileprivate let fileManager = FileManager()
     fileprivate let queue = OperationQueue()
 
-    init(rootDirectoryURL: URL, store: Store) {
+    init(rootDirectoryURL: URL, store: Store, usesFileCoordination: Bool) {
         self.rootDirectoryURL = rootDirectoryURL
         self.store = store
+        self.usesFileCoordination = usesFileCoordination
         super.init()
         try? fileManager.createDirectory(at: rootDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: versionsDirectory, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: changesDirectory, withIntermediateDirectories: true, attributes: nil)
-        NSFileCoordinator.addFilePresenter(self)
+        if self.usesFileCoordination {
+            NSFileCoordinator.addFilePresenter(self)
+        }
     }
     
     deinit {
-        NSFileCoordinator.removeFilePresenter(self)
+        if self.usesFileCoordination {
+            NSFileCoordinator.removeFilePresenter(self)
+        }
     }
     
     public func prepareToRetrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
@@ -102,26 +109,34 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
     
     private func coordinateFileAccess<ResultType>(_ access: FileAccess, completionHandler: @escaping CompletionHandler<ResultType>, by block: @escaping () throws -> Void) {
         queue.addOperation {
-            let coordinator = NSFileCoordinator(filePresenter: self)
-            var error: NSError?
-            
-            let accessor: (URL)->Void = { url in
+            if self.usesFileCoordination {
+                let coordinator = NSFileCoordinator(filePresenter: self)
+                var error: NSError?
+                
+                let accessor: (URL)->Void = { url in
+                    do {
+                        try block()
+                    } catch {
+                        completionHandler(.failure(error))
+                    }
+                }
+                
+                switch access {
+                case .read:
+                    coordinator.coordinate(readingItemAt: self.rootDirectoryURL, options: [], error: &error, byAccessor: accessor)
+                case .write:
+                    coordinator.coordinate(writingItemAt: self.rootDirectoryURL, options: [], error: &error, byAccessor: accessor)
+                }
+                
+                if let error = error {
+                    completionHandler(.failure(error))
+                }
+            } else {
                 do {
                     try block()
                 } catch {
                     completionHandler(.failure(error))
                 }
-            }
-            
-            switch access {
-            case .read:
-                coordinator.coordinate(readingItemAt: self.rootDirectoryURL, options: [], error: &error, byAccessor: accessor)
-            case .write:
-                coordinator.coordinate(writingItemAt: self.rootDirectoryURL, options: [], error: &error, byAccessor: accessor)
-            }
-            
-            if let error = error {
-                completionHandler(.failure(error))
             }
         }
     }

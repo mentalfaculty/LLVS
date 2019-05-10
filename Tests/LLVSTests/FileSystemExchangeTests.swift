@@ -28,8 +28,8 @@ class FileSystemExchangeTests: XCTestCase {
         store2 = try! Store(rootDirectoryURL: rootURL2)
         recentChangeArbiter = MostRecentChangeFavoringArbiter()
         exchangeURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
-        exchange1 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store1)
-        exchange2 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store2)
+        exchange1 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store1, usesFileCoordination: false)
+        exchange2 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store2, usesFileCoordination: false)
     }
     
     override func tearDown() {
@@ -153,6 +153,8 @@ class FileSystemExchangeTests: XCTestCase {
     }
     
     func testNewVersionAvailableNotification() {
+        exchange1 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store1, usesFileCoordination: true)
+        exchange2 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store2, usesFileCoordination: true)
         
         class MockClient: ExchangeClient {
             let block: () -> Void
