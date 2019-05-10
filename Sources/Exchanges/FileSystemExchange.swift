@@ -66,12 +66,15 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
         }
     }
     
-    public func retrieveValueChanges(forVersionIdentifiedBy versionIdentifier: Version.Identifier, executingUponCompletion completionHandler: @escaping CompletionHandler<[Value.Change]>) {
+    public func retrieveValueChanges(forVersionsIdentifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier:[Value.Change]]>) {
         coordinateFileAccess(.read, completionHandler: completionHandler) {
-            let url = self.changesDirectory.appendingPathComponent(versionIdentifier.identifierString)
-            let data = try Data(contentsOf: url)
-            let changes = try JSONDecoder().decode([Value.Change].self, from: data)
-            completionHandler(.success(changes))
+            let result: [Version.Identifier:[Value.Change]] = try versionIdentifiers.reduce(into: [:]) { result, versionId in
+                let url = self.changesDirectory.appendingPathComponent(versionId.identifierString)
+                let data = try Data(contentsOf: url)
+                let changes = try JSONDecoder().decode([Value.Change].self, from: data)
+                result[versionId] = changes
+            }
+            completionHandler(.success(result))
         }
     }
     

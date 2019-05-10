@@ -14,6 +14,7 @@ public class CloudKitExchange: Exchange {
     public enum Error: Swift.Error {
         case couldNotGetVersionFromRecord
         case noZoneFound
+        case invalidValueChangesDataInRecord
     }
     
     public var store: Store
@@ -135,26 +136,30 @@ public extension CloudKitExchange {
         completionHandler(.success(Array(versionsInCloud)))
     }
     
-    func retrieveValueChanges(forVersionIdentifiedBy versionIdentifier: Version.Identifier, executingUponCompletion completionHandler: @escaping CompletionHandler<[Value.Change]>) {
-        log.trace("Retrieving value changes for version: \(versionIdentifier)")
-        let recordID = CKRecord.ID(recordName: versionIdentifier.identifierString, zoneID: zoneID)
-        let fetchOperation = CKFetchRecordsOperation(recordIDs: [recordID])
+    func retrieveValueChanges(forVersionsIdentifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier:[Value.Change]]>) {
+        log.trace("Retrieving value changes for versions: \(versionIdentifiers)")
+        let recordIDs = versionIdentifiers.map { CKRecord.ID(recordName: $0.identifierString, zoneID: zoneID) }
+        let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
         fetchOperation.desiredKeys = ["valueChanges"]
         fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
-            guard error == nil else {
+            guard error == nil, let recordsByRecordID = recordsByRecordID else {
                 completionHandler(.failure(error!))
                 return
             }
             
             do {
-                if let record = recordsByRecordID?.values.first, let data = record.value(forKey: "valueChanges") as? Data {
+                let changesByVersion: [(Version.Identifier, [Value.Change])] = try recordsByRecordID.map { keyValue in
+                    let record = keyValue.value
+                    let recordID = keyValue.key
+                    guard let data = record.value(forKey: "valueChanges") as? Data else {
+                        throw Error.invalidValueChangesDataInRecord
+                    }
                     let valueChanges: [Value.Change] = try JSONDecoder().decode([Value.Change].self, from: data)
-                    log.verbose("Retrieved value changes: \(valueChanges)")
-                    completionHandler(.success(valueChanges))
-                } else {
-                    log.verbose("No value changes found")
-                    completionHandler(.success([]))
+                    log.verbose("Retrieved value changes for \(recordID.recordName): \(valueChanges)")
+                    return (Version.Identifier(recordID.recordName), valueChanges)
                 }
+                
+                completionHandler(.success(.init(uniqueKeysWithValues: changesByVersion)))
             } catch {
                 log.error("Failed to retrieve: \(error)")
                 completionHandler(.failure(error))

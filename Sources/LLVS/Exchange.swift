@@ -24,7 +24,7 @@ public protocol Exchange {
     func prepareToRetrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>)
     func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>)
     func retrieveVersions(identifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>)
-    func retrieveValueChanges(forVersionIdentifiedBy versionIdentifier: Version.Identifier, executingUponCompletion completionHandler: @escaping CompletionHandler<[Value.Change]>)
+    func retrieveValueChanges(forVersionsIdentifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier:[Value.Change]]>)
 
     func send(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>)
     func prepareToSend(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>)
@@ -96,13 +96,14 @@ public extension Exchange {
             log.trace("No versions. Finished adding to history")
             completionHandler(.success(()))
         } else if let version = appendableVersion(from: versions) {
-            retrieveValueChanges(forVersionIdentifiedBy: version.identifier) { result in
+            retrieveValueChanges(forVersionsIdentifiedBy: [version.identifier]) { result in
                 switch result {
                 case let .failure(error):
                     log.error("Failed adding to history: \(error)")
                     completionHandler(.failure(error))
-                case let .success(valueChanges):
+                case let .success(valueChangesByVersion):
                     do {
+                        let valueChanges = valueChangesByVersion[version.identifier]!
                         log.trace("Adding version to store: \(version.identifier.identifierString)")
                         log.verbose("Value changes for \(version.identifier.identifierString): \(valueChanges)")
                         try self.store.addVersion(version, storing: valueChanges)
