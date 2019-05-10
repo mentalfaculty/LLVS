@@ -11,6 +11,8 @@ import UIKit
 class ContactsViewController: UITableViewController {
     
     var contactBook: ContactBook!
+    
+    private var versionDidChangeObserver: AnyObject?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -19,6 +21,10 @@ class ContactsViewController: UITableViewController {
 
         let addButton = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addContact(_:)))
         navigationItem.rightBarButtonItem = addButton
+        
+        versionDidChangeObserver = NotificationCenter.default.addObserver(forName: .contactBookVersionDidChange, object: contactBook, queue: nil) { [unowned self] notif in
+            self.tableView.reloadData()
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {

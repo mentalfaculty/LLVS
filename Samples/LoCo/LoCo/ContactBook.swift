@@ -28,6 +28,7 @@ final class ContactBook {
     
     var currentVersion: Version.Identifier {
         didSet {
+            guard self.currentVersion != oldValue else { return }
             try! fetchContacts()
             NotificationCenter.default.post(name: .contactBookVersionDidChange, object: self)
         }
@@ -209,6 +210,16 @@ class ContactMergeArbiter: MergeArbiter {
                 let deletes1 = Set(contactIdsAncestor).subtracting(contactIds1)
                 let deletes2 = Set(contactIdsAncestor).subtracting(contactIds2)
                 mergedContactIds = mergedContactIds.filter { !deletes1.contains($0) && !deletes2.contains($0) }
+                
+                // Need to enforce uniqueness
+                var encountered: Set<Value.Identifier> = []
+                var uniqued: [Value.Identifier] = []
+                for id in mergedContactIds {
+                    guard !encountered.contains(id) else { continue }
+                    uniqued.append(id)
+                    encountered.insert(id)
+                }
+                mergedContactIds = uniqued
                 
                 // Convert these ids to a change
                 let change = try contactBook.updateContactsChange(withContactIdentifiers: mergedContactIds)
