@@ -12,7 +12,7 @@ class ContactsViewController: UITableViewController {
     
     var contactBook: ContactBook!
     
-    private var versionDidChangeObserver: AnyObject?
+    private var contactBookSyncObserver: AnyObject?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -22,7 +22,7 @@ class ContactsViewController: UITableViewController {
         let addButton = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addContact(_:)))
         navigationItem.rightBarButtonItem = addButton
         
-        versionDidChangeObserver = NotificationCenter.default.addObserver(forName: .contactBookVersionDidChange, object: contactBook, queue: nil) { [unowned self] notif in
+        contactBookSyncObserver = NotificationCenter.default.addObserver(forName: .contactBookDidSaveSyncChanges, object: contactBook, queue: nil) { [unowned self] notif in
             self.tableView.reloadData()
         }
     }
@@ -34,10 +34,13 @@ class ContactsViewController: UITableViewController {
     }
 
     @objc func addContact(_ sender: Any) {
+        tableView.beginUpdates()
         let contact = Contact()
         try! contactBook.add(contact)
         let indexPath = IndexPath(row: contactBook.contacts.count-1, section: 0)
         tableView.insertRows(at: [indexPath], with: .automatic)
+        tableView.endUpdates()
+        
         view.isUserInteractionEnabled = false
         DispatchQueue.main.asyncAfter(deadline: .now()+0.3) {
             self.tableView.selectRow(at: indexPath, animated: true, scrollPosition: .none)

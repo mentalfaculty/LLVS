@@ -11,7 +11,8 @@ import LLVS
 import CloudKit
 
 extension Notification.Name {
-    static let contactBookVersionDidChange = Notification.Name("contactBookVersionDidChange")
+    static let contactBookDidSaveLocalChanges = Notification.Name("contactBookDidSaveLocalChanges")
+    static let contactBookDidSaveSyncChanges = Notification.Name("contactBookDidSaveSyncChanges")
 }
 
 final class ContactBook {
@@ -31,7 +32,9 @@ final class ContactBook {
             guard self.currentVersion != oldValue else { return }
             log.trace("Current version of ContactBook changed to \(self.currentVersion.identifierString)")
             try! fetchContacts()
-            NotificationCenter.default.post(name: .contactBookVersionDidChange, object: self)
+            if !isSyncing {
+                NotificationCenter.default.post(name: .contactBookDidSaveLocalChanges, object: self)
+            }
         }
     }
     
@@ -116,7 +119,11 @@ final class ContactBook {
     
     // MARK: Sync
     
+    private var isSyncing = false
+    
     func sync(executingUponCompletion completionHandler: ((Swift.Error?) -> Void)? = nil) {
+        isSyncing = true
+    
         var downloadedNewVersions = false
         let retrieve = AsynchronousTask { finish in
             self.cloudKitExchange.retrieve { result in
@@ -142,6 +149,7 @@ final class ContactBook {
         }
         
         [retrieve, send].executeInOrder { result in
+            var syncMadeChanges = false
             var returnError: Swift.Error?
             switch result {
             case let .failure(error):
@@ -150,21 +158,28 @@ final class ContactBook {
             case .success:
                 log.trace("Sync successful")
                 if downloadedNewVersions {
-                    self.mergeHeads()
+                    syncMadeChanges = self.mergeHeads()
                 }
             }
             DispatchQueue.main.async {
                 completionHandler?(returnError)
+                if syncMadeChanges {
+                    NotificationCenter.default.post(name: .contactBookDidSaveSyncChanges, object: self, userInfo: nil)
+                }
+                
+                self.isSyncing = false
             }
         }
     }
     
-    func mergeHeads() {
+    func mergeHeads() -> Bool {
         var heads: Set<Version.Identifier> = []
         store.queryHistory { history in
             heads = history.headIdentifiers
         }
         heads.remove(currentVersion)
+        
+        guard !heads.isEmpty else { return false }
         
         let arbiter = ContactMergeArbiter(contactBook: self)
         var versionIdentifier: Version.Identifier = currentVersion
@@ -176,6 +191,8 @@ final class ContactBook {
         DispatchQueue.main.async {
             self.currentVersion = versionIdentifier
         }
+        
+        return true
     }
 
 }

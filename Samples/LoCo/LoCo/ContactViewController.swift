@@ -25,7 +25,7 @@ class ContactViewController: UIViewController {
     @IBOutlet weak var emailField: UITextField!
     @IBOutlet weak var phoneNumberField: UITextField!
     
-    private var versionDidChangeObserver: AnyObject?
+    private var didSyncChangesObserver: AnyObject?
     
     private var contact: Contact? {
         guard let book = contactBook, let identifier = contactIdentifier else { return nil }
@@ -33,15 +33,15 @@ class ContactViewController: UIViewController {
     }
     
     deinit {
-        if let o = versionDidChangeObserver {
+        if let o = didSyncChangesObserver {
             NotificationCenter.default.removeObserver(o)
-            versionDidChangeObserver = nil
+            didSyncChangesObserver = nil
         }
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        versionDidChangeObserver = NotificationCenter.default.addObserver(forName: .contactBookVersionDidChange, object: contactBook, queue: nil) { notif in
+        didSyncChangesObserver = NotificationCenter.default.addObserver(forName: .contactBookDidSaveSyncChanges, object: contactBook, queue: nil) { notif in
             self.updateView()
         }
     }

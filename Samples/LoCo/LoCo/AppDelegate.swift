@@ -53,7 +53,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDele
     }
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        NotificationCenter.default.addObserver(forName: .contactBookVersionDidChange, object: contactBook, queue: nil) { [unowned self] notif in
+        NotificationCenter.default.addObserver(forName: .contactBookDidSaveLocalChanges, object: contactBook, queue: nil) { [unowned self] notif in
+            self.storeCurrentVersion()
+            self.contactBook.sync()
+        }
+        NotificationCenter.default.addObserver(forName: .contactBookDidSaveSyncChanges, object: contactBook, queue: nil) { [unowned self] notif in
             self.storeCurrentVersion()
         }
     
