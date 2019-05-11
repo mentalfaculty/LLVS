@@ -73,6 +73,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDele
         contactBook.cloudKitExchange.subscribeForPushNotifications()
         contactBook.sync()
         
+        UIApplication.shared.registerForRemoteNotifications()
+        
         return true
     }
     
@@ -95,6 +97,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDele
             let success = error == nil
             completionHandler(versionChanged ? .newData : success ? .noData : .failed)
         }
+    }
+    
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any]) {
+        self.application(application, didReceiveRemoteNotification: userInfo) { result in }
+    }
+    
+    func application(_ application: UIApplication, performFetchWithCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        self.application(application, didReceiveRemoteNotification: [:], fetchCompletionHandler: completionHandler)
     }
     
     func storeCurrentVersion() {
