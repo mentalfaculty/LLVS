@@ -121,6 +121,18 @@ final class ContactBook {
     
     private var isSyncing = false
     
+    private lazy var syncQueue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        return queue
+    }()
+    
+    func enqueueSync(executingUponCompletion completionHandler: ((Swift.Error?) -> Void)? = nil) {
+        syncQueue.addOperation {
+            self.sync(executingUponCompletion: completionHandler)
+        }
+    }
+    
     func sync(executingUponCompletion completionHandler: ((Swift.Error?) -> Void)? = nil) {
         isSyncing = true
     
@@ -149,7 +161,7 @@ final class ContactBook {
         }
         
         [retrieve, send].executeInOrder { result in
-            var syncMadeChanges = false
+            var madeChanges = false
             var returnError: Swift.Error?
             switch result {
             case let .failure(error):
@@ -158,15 +170,14 @@ final class ContactBook {
             case .success:
                 log.trace("Sync successful")
                 if downloadedNewVersions {
-                    syncMadeChanges = self.mergeHeads()
+                    madeChanges = self.mergeHeads()
                 }
             }
             DispatchQueue.main.async {
                 completionHandler?(returnError)
-                if syncMadeChanges {
-                    NotificationCenter.default.post(name: .contactBookDidSaveSyncChanges, object: self, userInfo: nil)
+                if madeChanges {
+                    NotificationCenter.default.post(name: .contactBookManagerDidSaveSyncChanges, object: self, userInfo: nil)
                 }
-                
                 self.isSyncing = false
             }
         }
