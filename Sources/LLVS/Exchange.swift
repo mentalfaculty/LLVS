@@ -31,7 +31,7 @@ public protocol Exchange {
     func send(_ version: Version, with valueChanges: [Value.Change], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>)
 }
 
-// MARK:- Receiving
+// MARK:- Retrieving
 
 public extension Exchange {
     
@@ -92,32 +92,45 @@ public extension Exchange {
     }
     
     private func addToHistory(_ versions: [Version], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
+        let versionsByIdentifier = versions.reduce(into: [:]) { result, version in
+            result[version.identifier] = version
+        }
+        retrieveValueChanges(forVersionsIdentifiedBy: versions.identifiers) { result in
+            switch result {
+            case let .failure(error):
+                log.error("Failed adding to history: \(error)")
+                completionHandler(.failure(error))
+            case let .success(valueChangesByVersionIdentifier):
+                let valueChangesByVersion: [Version:[Value.Change]] = valueChangesByVersionIdentifier.reduce(into: [:]) { result, keyValue in
+                    let version = versionsByIdentifier[keyValue.key]!
+                    result[version] = keyValue.value
+                }
+                self.addToHistory(versionsWithValueChanges: valueChangesByVersion, executingUponCompletion: completionHandler)
+            }
+        }
+    }
+    
+    private func addToHistory(versionsWithValueChanges: [Version:[Value.Change]], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
+        let versions = Array(versionsWithValueChanges.keys)
         if versions.isEmpty {
             log.trace("No versions. Finished adding to history")
             completionHandler(.success(()))
         } else if let version = appendableVersion(from: versions) {
-            retrieveValueChanges(forVersionsIdentifiedBy: [version.identifier]) { result in
-                switch result {
-                case let .failure(error):
-                    log.error("Failed adding to history: \(error)")
-                    completionHandler(.failure(error))
-                case let .success(valueChangesByVersion):
-                    do {
-                        let valueChanges = valueChangesByVersion[version.identifier]!
-                        log.trace("Adding version to store: \(version.identifier.identifierString)")
-                        log.verbose("Value changes for \(version.identifier.identifierString): \(valueChanges)")
-                        try self.store.addVersion(version, storing: valueChanges)
-                    } catch {
-                        log.error("Failed adding to history: \(error)")
-                        completionHandler(.failure(error))
-                        return
-                    }
-                    
-                    var reducedVersions = versions
-                    reducedVersions.removeAll(where: { $0.identifier == version.identifier })
-                    self.addToHistory(reducedVersions, executingUponCompletion: completionHandler)
-                }
+            let valueChanges = versionsWithValueChanges[version]!
+            log.trace("Adding version to store: \(version.identifier.identifierString)")
+            log.verbose("Value changes for \(version.identifier.identifierString): \(valueChanges)")
+            
+            do {
+                try self.store.addVersion(version, storing: valueChanges)
+            } catch {
+                log.error("Failed adding to history: \(error)")
+                completionHandler(.failure(error))
+                return
             }
+            
+            var reducedVersions = versionsWithValueChanges
+            reducedVersions[version] = nil
+            self.addToHistory(versionsWithValueChanges: reducedVersions, executingUponCompletion: completionHandler)
         } else {
             log.error("Failed to add to history due to missing predecessors")
             completionHandler(.failure(ExchangeError.remoteVersionsWithUnknownPredecessors))

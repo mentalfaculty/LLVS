@@ -176,7 +176,7 @@ final class ContactBook {
             DispatchQueue.main.async {
                 completionHandler?(returnError)
                 if madeChanges {
-                    NotificationCenter.default.post(name: .contactBookManagerDidSaveSyncChanges, object: self, userInfo: nil)
+                    NotificationCenter.default.post(name: .contactBookDidSaveSyncChanges, object: self, userInfo: nil)
                 }
                 self.isSyncing = false
             }
