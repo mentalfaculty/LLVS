@@ -17,6 +17,12 @@ public class CloudKitExchange: Exchange {
         case invalidValueChangesDataInRecord
     }
     
+    fileprivate lazy var temporaryDirectory: URL = {
+        let result = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try? FileManager.default.createDirectory(at: result, withIntermediateDirectories: true, attributes: nil)
+        return result
+    }()
+    
     public var store: Store
     
     public weak var client: ExchangeClient?
@@ -106,7 +112,7 @@ public extension CloudKitExchange {
         log.trace("Retrieving versions")
         let recordIDs = versionIdentifiers.map { CKRecord.ID(recordName: $0.identifierString, zoneID: zoneID) }
         let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
-        fetchOperation.desiredKeys = ["version"]
+        fetchOperation.desiredKeys = [CKRecord.ExchangeKey.version.rawValue]
         fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
             guard error == nil else {
                 completionHandler(.failure(error!))
@@ -116,7 +122,7 @@ public extension CloudKitExchange {
             do {
                 var versions: [Version] = []
                 for record in recordsByRecordID!.values {
-                    if let data = record.value(forKey: "version") as? Data, let version = try JSONDecoder().decode([Version].self, from: data).first {
+                    if let data = record.exchangeValue(forKey: .version) as? Data, let version = try JSONDecoder().decode([Version].self, from: data).first {
                         versions.append(version)
                     } else {
                         throw Error.couldNotGetVersionFromRecord
@@ -140,7 +146,7 @@ public extension CloudKitExchange {
         log.trace("Retrieving value changes for versions: \(versionIdentifiers)")
         let recordIDs = versionIdentifiers.map { CKRecord.ID(recordName: $0.identifierString, zoneID: zoneID) }
         let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
-        fetchOperation.desiredKeys = ["valueChanges"]
+        fetchOperation.desiredKeys = [CKRecord.ExchangeKey.valueChanges.rawValue, CKRecord.ExchangeKey.valueChangesAsset.rawValue]
         fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
             guard error == nil, let recordsByRecordID = recordsByRecordID else {
                 completionHandler(.failure(error!))
@@ -151,7 +157,12 @@ public extension CloudKitExchange {
                 let changesByVersion: [(Version.Identifier, [Value.Change])] = try recordsByRecordID.map { keyValue in
                     let record = keyValue.value
                     let recordID = keyValue.key
-                    guard let data = record.value(forKey: "valueChanges") as? Data else {
+                    let data: Data
+                    if let d = record.exchangeValue(forKey: .valueChanges) as? Data {
+                        data = d
+                    } else if let asset = record.exchangeValue(forKey: .valueChangesAsset) as? CKAsset, let url = asset.fileURL {
+                        data = try Data(contentsOf: url)
+                    } else {
                         throw Error.invalidValueChangesDataInRecord
                     }
                     let valueChanges: [Value.Change] = try JSONDecoder().decode([Value.Change].self, from: data)
@@ -180,18 +191,30 @@ public extension CloudKitExchange {
     func send(_ version: Version, with valueChanges: [Value.Change], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         log.trace("Sending version: \(version.identifier)")
         log.verbose("Value changes: \(valueChanges)")
+    
         do {
+            var tempFileURL: URL?
             let recordID = CKRecord.ID(recordName: version.identifier.identifierString, zoneID: zoneID)
-            let record = CKRecord(recordType: .init("Version"), recordID: recordID)
+            let record = CKRecord(recordType: .init(CKRecord.ExchangeType.Version.rawValue), recordID: recordID)
             let versionData = try JSONEncoder().encode([version]) // Use an array, because JSON needs root dict or array
             let changesData = try JSONEncoder().encode(valueChanges)
-            record.setValue(versionData, forKey: "version")
-            record.setValue(changesData, forKey: "valueChanges")
+            record.setExchangeValue(versionData, forKey: .version)
+            
+            // Use an asset for bigger values (>10Kb)
+            if changesData.count <= 10000 {
+                record.setExchangeValue(changesData, forKey: .valueChanges)
+            } else {
+                tempFileURL = temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                try changesData.write(to: tempFileURL!)
+                let asset = CKAsset(fileURL: tempFileURL!)
+                record.setExchangeValue(asset, forKey: .valueChangesAsset)
+            }
             
             let modifyOperation = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
             modifyOperation.isAtomic = true
             modifyOperation.savePolicy = .allKeys
             modifyOperation.modifyRecordsCompletionBlock = { _, _, error in
+                tempFileURL.flatMap { try? FileManager.default.removeItem(at: $0) }
                 if let error = error {
                     log.error("Failed to send: \(error)")
                     completionHandler(.failure(error))
@@ -219,7 +242,7 @@ public extension CloudKitExchange {
         info.shouldSendContentAvailable = true
         
         let predicate = NSPredicate(value: true)
-        let subscription = CKQuerySubscription(recordType: .init("Version"), predicate: predicate, subscriptionID: "VersionCreated", options: CKQuerySubscription.Options.firesOnRecordCreation)
+        let subscription = CKQuerySubscription(recordType: .init(CKRecord.ExchangeType.Version.rawValue), predicate: predicate, subscriptionID: CKRecord.ExchangeSubscription.VersionCreated.rawValue, options: CKQuerySubscription.Options.firesOnRecordCreation)
         subscription.notificationInfo = info
         
         database.save(subscription) { (_, error) in
@@ -229,6 +252,31 @@ public extension CloudKitExchange {
                 log.trace("Successfully subscribed")
             }
         }
+    }
+    
+}
+
+
+fileprivate extension CKRecord {
+    
+    enum ExchangeSubscription: String {
+        case VersionCreated
+    }
+    
+    enum ExchangeType: String {
+        case Version
+    }
+    
+    enum ExchangeKey: String {
+        case version, valueChanges, valueChangesAsset
+    }
+    
+    func exchangeValue(forKey key: ExchangeKey) -> Any? {
+        return value(forKey: key.rawValue)
+    }
+    
+    func setExchangeValue(_ value: Any, forKey key: ExchangeKey) {
+        setValue(value, forKey: key.rawValue)
     }
     
 }
