@@ -9,7 +9,7 @@
 import UIKit
 import LLVS
 
-class ContactViewController: UIViewController {
+class ContactViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
 
     @IBOutlet weak var detailDescriptionLabel: UILabel?
     
@@ -24,6 +24,7 @@ class ContactViewController: UIViewController {
     @IBOutlet weak var countryField: UITextField!
     @IBOutlet weak var emailField: UITextField!
     @IBOutlet weak var phoneNumberField: UITextField!
+    @IBOutlet weak var avatarButton: UIButton!
     
     private var didSyncChangesObserver: AnyObject?
     
@@ -55,7 +56,7 @@ class ContactViewController: UIViewController {
         super.viewWillDisappear(animated)
         extractContactFromView()
     }
-
+    
     func showContact(at index: Int, in book: ContactBook) {
         contactBook = book
         contactIdentifier = contactBook!.contacts[index].valueIdentifier
@@ -73,6 +74,7 @@ class ContactViewController: UIViewController {
             countryField.text = contact.address?.country
             emailField.text = contact.email
             phoneNumberField.text = contact.phoneNumber
+            avatarButton.setBackgroundImage(contact.avatarJPEGData.flatMap({ UIImage(data: $0) }), for: .normal)
         } else {
             firstNameField.text = nil
             secondNameField.text = nil
@@ -82,6 +84,7 @@ class ContactViewController: UIViewController {
             countryField.text = nil
             emailField.text = nil
             phoneNumberField.text = nil
+            avatarButton.setBackgroundImage(nil, for: .normal)
         }
     }
     
@@ -107,6 +110,30 @@ class ContactViewController: UIViewController {
         newContact.email = emailField.text
         newContact.phoneNumber = phoneNumberField.text
         
+        newContact.avatarJPEGData = avatarButton.backgroundImage(for: .normal)?.jpegData(compressionQuality: 0.8)
+        
         try! contactBook?.update(newContact)
+    }
+    
+    
+    // MARK: Avatar
+    
+    @IBAction func chooseAvatar(_ sender: Any) {
+        let picker = UIImagePickerController()
+        picker.delegate = self
+        picker.sourceType = .photoLibrary
+        picker.modalPresentationStyle = .fullScreen
+        present(picker, animated: true, completion: nil)
+    }
+    
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+        self.dismiss(animated: true) {
+            let image = (info[.editedImage] ?? info[.originalImage]) as? UIImage
+            self.avatarButton.setBackgroundImage(image, for: .normal)
+        }
+    }
+    
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        self.dismiss(animated: true, completion: nil)
     }
 }

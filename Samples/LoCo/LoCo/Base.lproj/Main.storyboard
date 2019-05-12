@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="14460.31" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="H1p-Uh-vWS">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="14490.70" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="H1p-Uh-vWS">
     <device id="retina4_7" orientation="portrait">
         <adaptation id="fullscreen"/>
     </device>
     <dependencies>
         <deployment identifier="iOS"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="14460.20"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="14490.49"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
@@ -148,6 +148,17 @@
                                         <nil key="textColor"/>
                                         <nil key="highlightedColor"/>
                                     </label>
+                                    <button opaque="NO" contentMode="scaleToFill" misplaced="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="InW-P0-ItX" userLabel="Avatar Button">
+                                        <rect key="frame" x="147" y="407" width="66" height="66"/>
+                                        <color key="backgroundColor" white="0.66666666666666663" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                        <constraints>
+                                            <constraint firstAttribute="height" constant="66" id="Xb5-Wq-mSx"/>
+                                            <constraint firstAttribute="width" constant="66" id="wec-7z-X5E"/>
+                                        </constraints>
+                                        <connections>
+                                            <action selector="chooseAvatar:" destination="JEX-9P-axG" eventType="touchUpInside" id="hii-5y-6LX"/>
+                                        </connections>
+                                    </button>
                                 </subviews>
                                 <constraints>
                                     <constraint firstItem="llF-iK-c6u" firstAttribute="centerY" secondItem="1nx-4F-MUo" secondAttribute="centerY" id="2Ib-bb-pEJ"/>
@@ -179,7 +190,9 @@
                                     <constraint firstItem="1QK-2I-hiB" firstAttribute="centerY" secondItem="fd8-47-3Fx" secondAttribute="centerY" id="Zhy-WF-bEs"/>
                                     <constraint firstItem="xT3-de-Inn" firstAttribute="centerY" secondItem="H8Z-DK-O0k" secondAttribute="centerY" id="cBv-18-9NZ"/>
                                     <constraint firstItem="4Kt-oR-i4r" firstAttribute="leading" secondItem="0pH-9n-b97" secondAttribute="trailing" constant="8" id="e3i-t9-X0y"/>
+                                    <constraint firstItem="InW-P0-ItX" firstAttribute="leading" secondItem="fd8-47-3Fx" secondAttribute="leading" id="eQV-cp-PgB"/>
                                     <constraint firstItem="VKY-Xl-CVp" firstAttribute="leading" secondItem="H8Z-DK-O0k" secondAttribute="leading" id="eyg-9q-7o6"/>
+                                    <constraint firstItem="InW-P0-ItX" firstAttribute="top" secondItem="fd8-47-3Fx" secondAttribute="bottom" constant="15" id="fE3-I4-j6U"/>
                                     <constraint firstAttribute="bottom" secondItem="fd8-47-3Fx" secondAttribute="bottom" constant="500" id="h3j-qy-aVu"/>
                                     <constraint firstItem="0pH-9n-b97" firstAttribute="centerY" secondItem="4Kt-oR-i4r" secondAttribute="centerY" id="oPS-Nq-9yF"/>
                                     <constraint firstItem="P08-XP-c6V" firstAttribute="centerY" secondItem="rX4-kr-ELp" secondAttribute="centerY" id="oRT-gU-yKD"/>
@@ -206,6 +219,7 @@
                     <toolbarItems/>
                     <navigationItem key="navigationItem" title="Contact" id="mOI-FS-AaM"/>
                     <connections>
+                        <outlet property="avatarButton" destination="InW-P0-ItX" id="BYj-k0-8o1"/>
                         <outlet property="cityField" destination="rX4-kr-ELp" id="Hm4-z3-6ZG"/>
                         <outlet property="countryField" destination="4Kt-oR-i4r" id="CgI-Kl-mZp"/>
                         <outlet property="emailField" destination="1nx-4F-MUo" id="TUE-NR-PM0"/>

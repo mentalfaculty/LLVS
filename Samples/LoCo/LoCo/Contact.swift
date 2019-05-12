@@ -50,6 +50,7 @@ struct Contact: Equatable, Faultable {
     var address: Address?
     var email: String?
     var phoneNumber: String?
+    var avatarJPEGData: Data?
     var friends: [Value.Identifier] = []
     
     init() {
@@ -62,6 +63,7 @@ struct Contact: Equatable, Faultable {
         self.address = try loader.load(.address)
         self.email = try loader.load(.email)
         self.phoneNumber = try loader.load(.phoneNumber)
+        self.avatarJPEGData = try loader.load(.avatarJPEGData)
         self.friends = try loader.load(.friends)!
         self.valueIdentifier = valueIdentifier
         self.prevailingVersionWhenLoaded = version
@@ -74,6 +76,7 @@ struct Contact: Equatable, Faultable {
         try changeGenerator.generate(.address, propertyValue: address, originalPropertyValue: originalContact?.address)
         try changeGenerator.generate(.email, propertyValue: email, originalPropertyValue: originalContact?.email)
         try changeGenerator.generate(.phoneNumber, propertyValue: phoneNumber, originalPropertyValue: originalContact?.phoneNumber)
+        try changeGenerator.generate(.avatarJPEGData, propertyValue: avatarJPEGData, originalPropertyValue: originalContact?.avatarJPEGData)
         try changeGenerator.generate(.friends, propertyValue: friends, originalPropertyValue: originalContact?.friends)
         return changeGenerator.propertyChanges
     }
@@ -83,6 +86,7 @@ struct Contact: Equatable, Faultable {
         case address
         case email
         case phoneNumber
+        case avatarJPEGData
         case friends
         
         func key(forIdentifier identifier: Value.Identifier) -> String {
