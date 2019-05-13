@@ -9,6 +9,9 @@ let package = Package(
         .library(
             name: "LLVS",
             targets: ["LLVS"]),
+        .library(
+            name: "LLVSCloudKit",
+            targets: ["LLVSCloudKit"]),
     ],
     dependencies: [
     ],
@@ -19,6 +22,8 @@ let package = Package(
         .testTarget(
             name: "LLVSTests",
             dependencies: ["LLVS"]),
-    ],
-    exclude: ["Samples"],
+        .target(
+            name: "LLVSCloudKit",
+            dependencies: ["LLVS"])
+    ]
 )

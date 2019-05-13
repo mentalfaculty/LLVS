@@ -7,6 +7,7 @@
 
 import Foundation
 import CloudKit
+import LLVS
 
 @available(macOS 10.12, *)
 public class CloudKitExchange: Exchange {
@@ -233,6 +234,7 @@ public extension CloudKitExchange {
 }
 
 
+@available(macOS 10.12, *)
 public extension CloudKitExchange {
     
     func subscribeForPushNotifications() {
@@ -257,6 +259,7 @@ public extension CloudKitExchange {
 }
 
 
+@available(macOS 10.12, *)
 fileprivate extension CKRecord {
     
     enum ExchangeSubscription: String {
