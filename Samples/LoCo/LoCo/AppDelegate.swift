@@ -18,7 +18,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDele
     private let storeVersionKey = "storeVersion"
     
     lazy var rootStoreDirectory: URL = {
-        let docDir = try! FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+        let docDir = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.mentalfaculty.LoCo")!
         let rootDir = docDir.appendingPathComponent("ContactBook")
         try? FileManager.default.createDirectory(at: rootDir, withIntermediateDirectories: true, attributes: nil)
         return rootDir

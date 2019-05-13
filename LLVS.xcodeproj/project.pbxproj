@@ -43,8 +43,6 @@
 		078752072235557B0041780E /* MostRecentChangeArbiterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 078752062235557B0041780E /* MostRecentChangeArbiterTests.swift */; };
 		07875209223988220041780E /* ValueChangesInVersionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07875208223988220041780E /* ValueChangesInVersionTests.swift */; };
 		0787520B223D06B70041780E /* SharedStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0787520A223D06B70041780E /* SharedStoreTests.swift */; };
-		0787520D223D0DA00041780E /* CloudKitExchange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0787520C223D0DA00041780E /* CloudKitExchange.swift */; };
-		0787520E223D0DA00041780E /* CloudKitExchange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0787520C223D0DA00041780E /* CloudKitExchange.swift */; };
 		07BC4A7721E9184E0024242B /* DiffTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BC4A7621E9184E0024242B /* DiffTests.swift */; };
 		07BC4A7921EA6AD40024242B /* MergeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BC4A7821EA6AD40024242B /* MergeTests.swift */; };
 		07BCE1F62208B13200FF203F /* SerialHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BCE1F52208B13200FF203F /* SerialHistoryTests.swift */; };
@@ -373,7 +371,6 @@
 			buildActionMask = 0;
 			files = (
 				07734EC821F10B7600BB9EFA /* Map.swift in Sources */,
-				0787520E223D0DA00041780E /* CloudKitExchange.swift in Sources */,
 				07734EC921F10B7600BB9EFA /* General.swift in Sources */,
 				07734ECA21F10B7600BB9EFA /* Zone.swift in Sources */,
 				07734ECB21F10B7600BB9EFA /* Merge.swift in Sources */,
@@ -394,7 +391,6 @@
 			buildActionMask = 0;
 			files = (
 				07C1AE3021B1C89E00663A8C /* Map.swift in Sources */,
-				0787520D223D0DA00041780E /* CloudKitExchange.swift in Sources */,
 				OBJ_25 /* General.swift in Sources */,
 				07C1AE3921B44EFF00663A8C /* Zone.swift in Sources */,
 				07C3F80921CAB08600ABB459 /* Merge.swift in Sources */,

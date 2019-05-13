@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		071E25F4228A0598007BCFB3 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 071E25F3228A0598007BCFB3 /* ShareViewController.swift */; };
+		071E25F7228A0598007BCFB3 /* MainInterface.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 071E25F5228A0598007BCFB3 /* MainInterface.storyboard */; };
+		071E25FB228A0598007BCFB3 /* AvatarSharingExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 071E25F1228A0598007BCFB3 /* AvatarSharingExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		071E2605228A0761007BCFB3 /* LLVS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 07734EC321F10B2700BB9EFA /* LLVS.framework */; };
 		07734EA821F109D100BB9EFA /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EA721F109D100BB9EFA /* AppDelegate.swift */; };
 		07734EAA21F109D100BB9EFA /* ContactsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EA921F109D100BB9EFA /* ContactsViewController.swift */; };
 		07734EAC21F109D100BB9EFA /* ContactViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EAB21F109D100BB9EFA /* ContactViewController.swift */; };
@@ -23,6 +27,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		071E25F9228A0598007BCFB3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 07734E9C21F109D100BB9EFA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 071E25F0228A0598007BCFB3;
+			remoteInfo = AvatarSharingExtension;
+		};
 		07734EC221F10B2700BB9EFA /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 07734EBB21F10B2700BB9EFA /* LLVS.xcodeproj */;
@@ -54,6 +65,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		071E2603228A0598007BCFB3 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				071E25FB228A0598007BCFB3 /* AvatarSharingExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		07734EDD21F10BBC00BB9EFA /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -68,6 +90,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		071E25F1228A0598007BCFB3 /* AvatarSharingExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AvatarSharingExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		071E25F3228A0598007BCFB3 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		071E25F6228A0598007BCFB3 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/MainInterface.storyboard; sourceTree = "<group>"; };
+		071E25F8228A0598007BCFB3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		071E2604228A0747007BCFB3 /* AvatarSharingExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AvatarSharingExtension.entitlements; sourceTree = "<group>"; };
 		07734EA421F109D100BB9EFA /* LoCo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LoCo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		07734EA721F109D100BB9EFA /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		07734EA921F109D100BB9EFA /* ContactsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsViewController.swift; sourceTree = "<group>"; };
@@ -86,6 +113,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		071E25EE228A0598007BCFB3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				071E2605228A0761007BCFB3 /* LLVS.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		07734EA121F109D100BB9EFA /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -98,11 +133,23 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		071E25F2228A0598007BCFB3 /* AvatarSharingExtension */ = {
+			isa = PBXGroup;
+			children = (
+				071E2604228A0747007BCFB3 /* AvatarSharingExtension.entitlements */,
+				071E25F3228A0598007BCFB3 /* ShareViewController.swift */,
+				071E25F5228A0598007BCFB3 /* MainInterface.storyboard */,
+				071E25F8228A0598007BCFB3 /* Info.plist */,
+			);
+			path = AvatarSharingExtension;
+			sourceTree = "<group>";
+		};
 		07734E9B21F109D100BB9EFA = {
 			isa = PBXGroup;
 			children = (
 				07734EBB21F10B2700BB9EFA /* LLVS.xcodeproj */,
 				07734EA621F109D100BB9EFA /* LoCo */,
+				071E25F2228A0598007BCFB3 /* AvatarSharingExtension */,
 				07734EA521F109D100BB9EFA /* Products */,
 				0787521522441ACB0041780E /* Frameworks */,
 			);
@@ -112,6 +159,7 @@
 			isa = PBXGroup;
 			children = (
 				07734EA421F109D100BB9EFA /* LoCo.app */,
+				071E25F1228A0598007BCFB3 /* AvatarSharingExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -156,6 +204,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		071E25F0228A0598007BCFB3 /* AvatarSharingExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 071E2602228A0598007BCFB3 /* Build configuration list for PBXNativeTarget "AvatarSharingExtension" */;
+			buildPhases = (
+				071E25ED228A0598007BCFB3 /* Sources */,
+				071E25EE228A0598007BCFB3 /* Frameworks */,
+				071E25EF228A0598007BCFB3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AvatarSharingExtension;
+			productName = AvatarSharingExtension;
+			productReference = 071E25F1228A0598007BCFB3 /* AvatarSharingExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		07734EA321F109D100BB9EFA /* LoCo */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 07734EB821F109D300BB9EFA /* Build configuration list for PBXNativeTarget "LoCo" */;
@@ -164,11 +229,13 @@
 				07734EA121F109D100BB9EFA /* Frameworks */,
 				07734EA221F109D100BB9EFA /* Resources */,
 				07734EDD21F10BBC00BB9EFA /* Embed Frameworks */,
+				071E2603228A0598007BCFB3 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				07734EDC21F10BBC00BB9EFA /* PBXTargetDependency */,
+				071E25FA228A0598007BCFB3 /* PBXTargetDependency */,
 			);
 			name = LoCo;
 			productName = LoCo;
@@ -181,13 +248,24 @@
 		07734E9C21F109D100BB9EFA /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastSwiftUpdateCheck = 1010;
+				LastSwiftUpdateCheck = 1020;
 				LastUpgradeCheck = 1010;
 				ORGANIZATIONNAME = "The Mental Faculty B.V.";
 				TargetAttributes = {
+					071E25F0228A0598007BCFB3 = {
+						CreatedOnToolsVersion = 10.2.1;
+						SystemCapabilities = {
+							com.apple.ApplicationGroups.iOS = {
+								enabled = 1;
+							};
+						};
+					};
 					07734EA321F109D100BB9EFA = {
 						CreatedOnToolsVersion = 10.1;
 						SystemCapabilities = {
+							com.apple.ApplicationGroups.iOS = {
+								enabled = 1;
+							};
 							com.apple.BackgroundModes = {
 								enabled = 1;
 							};
@@ -221,6 +299,7 @@
 			projectRoot = "";
 			targets = (
 				07734EA321F109D100BB9EFA /* LoCo */,
+				071E25F0228A0598007BCFB3 /* AvatarSharingExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -250,6 +329,14 @@
 /* End PBXReferenceProxy section */
 
 /* Begin PBXResourcesBuildPhase section */
+		071E25EF228A0598007BCFB3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				071E25F7228A0598007BCFB3 /* MainInterface.storyboard in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		07734EA221F109D100BB9EFA /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -263,6 +350,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		071E25ED228A0598007BCFB3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				071E25F4228A0598007BCFB3 /* ShareViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		07734EA021F109D100BB9EFA /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -280,6 +375,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		071E25FA228A0598007BCFB3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 071E25F0228A0598007BCFB3 /* AvatarSharingExtension */;
+			targetProxy = 071E25F9228A0598007BCFB3 /* PBXContainerItemProxy */;
+		};
 		07734EDC21F10BBC00BB9EFA /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = "LLVS-iOS";
@@ -288,6 +388,14 @@
 /* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
+		071E25F5228A0598007BCFB3 /* MainInterface.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				071E25F6228A0598007BCFB3 /* Base */,
+			);
+			name = MainInterface.storyboard;
+			sourceTree = "<group>";
+		};
 		07734EAD21F109D100BB9EFA /* Main.storyboard */ = {
 			isa = PBXVariantGroup;
 			children = (
@@ -307,6 +415,48 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		071E25FC228A0598007BCFB3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = AvatarSharingExtension/AvatarSharingExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = P7BXV6PHLD;
+				INFOPLIST_FILE = AvatarSharingExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.mentalfaculty.LoCo.AvatarSharingExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		071E25FD228A0598007BCFB3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = AvatarSharingExtension/AvatarSharingExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = P7BXV6PHLD;
+				INFOPLIST_FILE = AvatarSharingExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.mentalfaculty.LoCo.AvatarSharingExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		07734EB621F109D300BB9EFA /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -466,6 +616,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		071E2602228A0598007BCFB3 /* Build configuration list for PBXNativeTarget "AvatarSharingExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				071E25FC228A0598007BCFB3 /* Debug */,
+				071E25FD228A0598007BCFB3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		07734E9F21F109D100BB9EFA /* Build configuration list for PBXProject "LoCo" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
