@@ -12,6 +12,9 @@ internal final class FileZone: Zone {
     let rootDirectory: URL
     let fileExtension: String
     
+    private let uncachableDataSizeLimit = 10000 // 10KB
+    private let cache: Cache<Data> = .init(numberOfGenerations: 2, regenerationLimit: 1000)
+    
     fileprivate let fileManager = FileManager()
     
     init(rootDirectory: URL, fileExtension: String) {
@@ -20,20 +23,30 @@ internal final class FileZone: Zone {
         self.fileExtension = fileExtension
     }
     
+    private func cacheIfNeeded(_ data: Data, for reference: ZoneReference) {
+        if data.count < uncachableDataSizeLimit {
+            cache.setValue(data, for: reference)
+        }
+    }
+    
     internal func store(_ data: Data, for reference: ZoneReference) throws {
         let (dir, file) = try fileSystemLocation(for: reference)
         try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
         try data.write(to: file)
+        cacheIfNeeded(data, for: reference)
     }
     
     internal func data(for reference: ZoneReference) throws -> Data? {
+        if let data = cache.value(for: reference) { return data }
         let (_, file) = try fileSystemLocation(for: reference)
         guard let data = try? Data(contentsOf: file) else { return nil }
+        cacheIfNeeded(data, for: reference)
         return data
     }
     
     func fileSystemLocation(for reference: ZoneReference) throws -> (directoryURL: URL, fileURL: URL) {
-        let valueDirectoryURL = rootDirectory.appendingSplitPathComponent(reference.key)
+        let safeKey = reference.key.replacingOccurrences(of: "/", with: "LLVSSLASH").replacingOccurrences(of: ":", with: "LLVSCOLON")
+        let valueDirectoryURL = rootDirectory.appendingSplitPathComponent(safeKey)
         let versionName = reference.version.identifierString + "." + fileExtension
         let fileURL = valueDirectoryURL.appendingSplitPathComponent(versionName, prefixLength: 1)
         let directoryURL = fileURL.deletingLastPathComponent()
