@@ -18,6 +18,7 @@ final class Map {
     }
         
     let zone: Zone
+    private let nodeCache: Cache<Node> = .init()
     
     fileprivate let encoder = JSONEncoder()
     fileprivate let decoder = JSONDecoder()
@@ -280,8 +281,15 @@ final class Map {
     }
     
     fileprivate func node(for reference: ZoneReference) throws -> Node? {
-        guard let data = try zone.data(for: reference) else { return nil }
-        return try decoder.decode(Node.self, from: data)
+        if let node = nodeCache.value(for: reference) {
+            return node
+        } else if let data = try zone.data(for: reference) {
+            let node = try decoder.decode(Node.self, from: data)
+            nodeCache.setValue(node, for: reference)
+            return node
+        } else {
+            return nil
+        }
     }
     
     private func valueReferences(forRootSubNode subNodeRef: ZoneReference) throws -> [Value.Reference] {
