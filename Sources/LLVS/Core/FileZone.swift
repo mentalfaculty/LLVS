@@ -7,6 +7,29 @@
 
 import Foundation
 
+public class FileStorage: Storage {
+    
+    public let fileExtension: String
+    
+    public init(fileExtension: String) {
+        self.fileExtension = fileExtension
+    }
+
+    public func makeMapZone(for type: MapType, in store: Store) -> Zone {
+        switch type {
+        case .valuesByVersion:
+            return FileZone(rootDirectory: store.valuesMapDirectoryURL, fileExtension: fileExtension)
+        case .userDefined:
+            fatalError("User defined maps not yet supported")
+        }
+    }
+    
+    public func makeValuesZone(in store: Store) -> Zone {
+        return FileZone(rootDirectory: store.valuesDirectoryURL, fileExtension: fileExtension)
+    }
+    
+}
+
 internal final class FileZone: Zone {
     
     let rootDirectory: URL
