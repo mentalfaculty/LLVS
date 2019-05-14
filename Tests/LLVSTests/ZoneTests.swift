@@ -13,16 +13,16 @@ class ZoneTests: XCTestCase {
 
     let fm = FileManager.default
     
-    var zone: Zone!
+    var zone: FileZone!
     var rootURL: URL!
-    var ref: Zone.Reference!
+    var ref: ZoneReference!
     
     override func setUp() {
         super.setUp()
 
         rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
-        zone = Zone(rootDirectory: rootURL, fileExtension: "json")
-        ref = Zone.Reference(key: "ABCDEF", version: .init("1234"))
+        zone = FileZone(rootDirectory: rootURL, fileExtension: "json")
+        ref = ZoneReference(key: "ABCDEF", version: .init("1234"))
     }
     
     override func tearDown() {

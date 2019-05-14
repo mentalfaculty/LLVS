@@ -49,9 +49,9 @@ public final class Store {
         try? fileManager.createDirectory(at: self.versionsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.mapsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         
-        let valuesMapZone = Zone(rootDirectory: self.mapsDirectoryURL.appendingPathComponent(valuesMapName), fileExtension: "json")
+        let valuesMapZone = FileZone(rootDirectory: self.mapsDirectoryURL.appendingPathComponent(valuesMapName), fileExtension: "json")
         valuesMap = Map(zone: valuesMapZone)
-        valuesZone = Zone(rootDirectory: self.valuesDirectoryURL, fileExtension: "json")
+        valuesZone = FileZone(rootDirectory: self.valuesDirectoryURL, fileExtension: "json")
 
         try reloadHistory()
     }
@@ -296,14 +296,8 @@ extension Store {
         return value
     }
     
-    internal func values(_ valueIdentifier: Value.Identifier) throws -> [Value] {
-        let versionIdentifiers = try valuesZone.versionIdentifiers(for: valueIdentifier.identifierString)
-        return try versionIdentifiers.map { version in
-            let data = try valuesZone.data(for: .init(key: valueIdentifier.identifierString, version: version))!
-            return Value(identifier: valueIdentifier, version: version, data: data)
-        }
-    }
 }
+
 
 // MARK:- Value Changes
 

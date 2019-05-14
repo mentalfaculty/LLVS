@@ -30,9 +30,9 @@ final class Map {
     
     func addVersion(_ version: Version.Identifier, basedOn baseVersion: Version.Identifier?, applying deltas: [Delta]) throws {
         var rootNode: Node
-        let rootRef = Zone.Reference(key: rootKey, version: version)
+        let rootRef = ZoneReference(key: rootKey, version: version)
         if let baseVersion = baseVersion {
-            let oldRootRef = Zone.Reference(key: rootKey, version: baseVersion)
+            let oldRootRef = ZoneReference(key: rootKey, version: baseVersion)
             guard let oldRoot = try node(for: oldRootRef) else { throw Error.missingNode }
             rootNode = oldRoot
         }
@@ -47,7 +47,7 @@ final class Map {
             let key = delta.key
             
             let subNodeKey = Key(String(key.keyString.prefix(2)))
-            let subNodeRef = Zone.Reference(key: subNodeKey.keyString, version: version)
+            let subNodeRef = ZoneReference(key: subNodeKey.keyString, version: version)
             var subNode: Node
             if let n = subNodesByKey[subNodeKey] {
                 subNode = n
@@ -80,7 +80,7 @@ final class Map {
         }
         
         // Update and save subnodes and rootnode
-        var rootRefsByIdentifier: [String:Zone.Reference] = Dictionary(uniqueKeysWithValues: rootChildRefs.map({ ($0.key, $0) }) )
+        var rootRefsByIdentifier: [String:ZoneReference] = Dictionary(uniqueKeysWithValues: rootChildRefs.map({ ($0.key, $0) }) )
         for subNode in subNodesByKey.values {
             let key = subNode.reference.key
             let data = try encoder.encode(subNode)
@@ -93,9 +93,9 @@ final class Map {
     }
     
     func differences(between firstVersion: Version.Identifier, and secondVersion: Version.Identifier, withCommonAncestor commonAncestor: Version.Identifier?) throws -> [Diff] {
-        let originRef = commonAncestor.flatMap { Zone.Reference(key: rootKey, version: $0) }
-        let rootRef1 = Zone.Reference(key: rootKey, version: firstVersion)
-        let rootRef2 = Zone.Reference(key: rootKey, version: secondVersion)
+        let originRef = commonAncestor.flatMap { ZoneReference(key: rootKey, version: $0) }
+        let rootRef1 = ZoneReference(key: rootKey, version: firstVersion)
+        let rootRef2 = ZoneReference(key: rootKey, version: secondVersion)
         
         let originNode = try originRef.flatMap { try node(for: $0) }
         guard
@@ -104,7 +104,7 @@ final class Map {
             throw Error.missingVersionRoot
         }
 
-        let nodesOrigin: [Zone.Reference]?
+        let nodesOrigin: [ZoneReference]?
         if case let .nodes(n)? = originNode?.children {
             nodesOrigin = n
         } else {
@@ -116,9 +116,9 @@ final class Map {
             throw Error.unexpectedNodeContent
         }
 
-        let refOriginByKey: [String:Zone.Reference]? = nodesOrigin.flatMap { refs in .init(uniqueKeysWithValues: refs.map({ ($0.key, $0) })) }
-        let subNodeRefs1ByKey: [String:Zone.Reference] = .init(uniqueKeysWithValues: subNodes1.map({ ($0.key, $0) }))
-        let subNodeRefs2ByKey: [String:Zone.Reference] = .init(uniqueKeysWithValues: subNodes2.map({ ($0.key, $0) }))
+        let refOriginByKey: [String:ZoneReference]? = nodesOrigin.flatMap { refs in .init(uniqueKeysWithValues: refs.map({ ($0.key, $0) })) }
+        let subNodeRefs1ByKey: [String:ZoneReference] = .init(uniqueKeysWithValues: subNodes1.map({ ($0.key, $0) }))
+        let subNodeRefs2ByKey: [String:ZoneReference] = .init(uniqueKeysWithValues: subNodes2.map({ ($0.key, $0) }))
         var allSubNodeKeys = Set(subNodeRefs1ByKey.keys).union(subNodeRefs2ByKey.keys)
         if let r = refOriginByKey { allSubNodeKeys.formUnion(r.keys) }
         
@@ -132,12 +132,12 @@ final class Map {
                 }
             }
             
-            func appendDiffs(forSubNode subNodeRef: Zone.Reference, fork: Value.Fork) throws {
+            func appendDiffs(forSubNode subNodeRef: ZoneReference, fork: Value.Fork) throws {
                 let refs = try valueReferences(forRootSubNode: subNodeRef)
                 try appendDiffs(forIdentifiers: refs.map({ $0.identifier }), fork: fork)
             }
             
-            func appendDiffs(forOriginNode originNode: Zone.Reference, onlyBranchNode branchNode: Zone.Reference, branch: Value.Fork.Branch) throws {
+            func appendDiffs(forOriginNode originNode: ZoneReference, onlyBranchNode branchNode: ZoneReference, branch: Value.Fork.Branch) throws {
                 let vo = try valueReferences(forRootSubNode: originNode)
                 let vb = try valueReferences(forRootSubNode: branchNode)
                 let refOById: [Value.Identifier:Value.Reference] = .init(uniqueKeysWithValues: vo.map({ ($0.identifier, $0) }))
@@ -251,7 +251,7 @@ final class Map {
     }
     
     func enumerateValueReferences(forVersionIdentifiedBy versionId: Version.Identifier, executingForEach block: (Value.Reference) throws -> Void) throws {
-        let rootRef = Zone.Reference(key: rootKey, version: versionId)
+        let rootRef = ZoneReference(key: rootKey, version: versionId)
         guard let rootNode = try node(for: rootRef) else { throw Error.missingVersionRoot }
         guard case let .nodes(subNodeRefs) = rootNode.children else { throw Error.missingNode }
         for subNodeRef in subNodeRefs {
@@ -264,7 +264,7 @@ final class Map {
     }
     
     func valueReferences(matching key: Map.Key, at version: Version.Identifier) throws -> [Value.Reference] {
-        let rootRef = Zone.Reference(key: rootKey, version: version)
+        let rootRef = ZoneReference(key: rootKey, version: version)
         guard let rootNode = try node(for: rootRef) else { throw Error.missingVersionRoot }
         guard case let .nodes(subNodeRefs) = rootNode.children else { throw Error.missingNode }
         let subNodeKey = String(key.keyString.prefix(2))
@@ -275,16 +275,16 @@ final class Map {
     }
 
     fileprivate func node(for key: String, version: Version.Identifier) throws -> Node? {
-        let ref = Zone.Reference(key: key, version: version)
+        let ref = ZoneReference(key: key, version: version)
         return try node(for: ref)
     }
     
-    fileprivate func node(for reference: Zone.Reference) throws -> Node? {
+    fileprivate func node(for reference: ZoneReference) throws -> Node? {
         guard let data = try zone.data(for: reference) else { return nil }
         return try decoder.decode(Node.self, from: data)
     }
     
-    private func valueReferences(forRootSubNode subNodeRef: Zone.Reference) throws -> [Value.Reference] {
+    private func valueReferences(forRootSubNode subNodeRef: ZoneReference) throws -> [Value.Reference] {
         guard let subNode = try node(for: subNodeRef) else { throw Error.missingNode }
         guard case let .values(keyValuePairs) = subNode.children else { throw Error.unexpectedNodeContent }
         return keyValuePairs.map({ $0.valueReference })
@@ -326,13 +326,13 @@ extension Map {
     }
     
     struct Node: Codable, Hashable {
-        var reference: Zone.Reference
+        var reference: ZoneReference
         var children: Children
     }
     
     enum Children: Codable, Hashable {
         case values([KeyValuePair])
-        case nodes([Zone.Reference])
+        case nodes([ZoneReference])
         
         enum Key: CodingKey {
             case values
@@ -343,7 +343,7 @@ extension Map {
             let container = try decoder.container(keyedBy: Key.self)
             if let values = try? container.decode([KeyValuePair].self, forKey: .values) {
                 self = .values(values)
-            } else if let nodes = try? container.decode([Zone.Reference].self, forKey: .nodes) {
+            } else if let nodes = try? container.decode([ZoneReference].self, forKey: .nodes) {
                 self = .nodes(nodes)
             } else {
                 throw Error.encodingFailure("No valid references found in decoder")

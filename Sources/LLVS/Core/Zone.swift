@@ -7,60 +7,33 @@
 
 import Foundation
 
-internal final class Zone {
-    
-    let rootDirectory: URL
-    let fileExtension: String
-    
-    fileprivate let fileManager = FileManager()
-    
-    struct Reference: Codable, Hashable {
-        var key: String
-        var version: Version.Identifier
-    }
-    
-    init(rootDirectory: URL, fileExtension: String) {
-        self.rootDirectory = rootDirectory.resolvingSymlinksInPath()
-        try? fileManager.createDirectory(at: rootDirectory, withIntermediateDirectories: true, attributes: nil)
-        self.fileExtension = fileExtension
-    }
+public struct ZoneReference: Codable, Hashable {
+    var key: String
+    var version: Version.Identifier
+}
 
-    internal func store(_ data: Data, for reference: Reference) throws {
-        let (dir, file) = try fileSystemLocation(for: reference)
-        try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
-        try data.write(to: file)
-    }
+public protocol Zone {
+    func store(_ data: Data, for reference: ZoneReference) throws
     
-    internal func data(for reference: Reference) throws -> Data? {
-        let (_, file) = try fileSystemLocation(for: reference)
-        guard let data = try? Data(contentsOf: file) else { return nil }
-        return data
-    }
+    // Default provided, but zone implementations can optimize this.
+    func store(_ data: [Data], for references: [ZoneReference]) throws
+
+    func data(for reference: ZoneReference) throws -> Data?
     
-    internal func versionIdentifiers(for key: String) throws -> [Version.Identifier] {
-        let valueDirectoryURL = rootDirectory.appendingSplitPathComponent(key)
-        let valueDirLength = valueDirectoryURL.path.count
-        let enumerator = fileManager.enumerator(at: valueDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
-        var versions: [Version.Identifier] = []
-        let slash = Character("/")
-        for any in enumerator {
-            var isDirectory: ObjCBool = true
-            guard let url = any as? URL else { continue }
-            guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) && !isDirectory.boolValue else { continue }
-            let path = url.resolvingSymlinksInPath().deletingPathExtension().path
-            let index = path.index(path.startIndex, offsetBy: Int(valueDirLength))
-            let version = String(path[index...]).filter { $0 != slash }
-            versions.append(Version.Identifier(version))
+    // Default provided, but zone implementations can optimize this.
+    func data(for references: [ZoneReference]) throws -> [Data?]
+}
+
+public extension Zone {
+    
+    func store(_ data: [Data], for references: [ZoneReference]) throws {
+        try zip(data, references).forEach { data, ref in
+            try store(data, for: ref)
         }
-        return versions
     }
     
-    func fileSystemLocation(for reference: Reference) throws -> (directoryURL: URL, fileURL: URL) {
-        let valueDirectoryURL = rootDirectory.appendingSplitPathComponent(reference.key)
-        let versionName = reference.version.identifierString + "." + fileExtension
-        let fileURL = valueDirectoryURL.appendingSplitPathComponent(versionName, prefixLength: 1)
-        let directoryURL = fileURL.deletingLastPathComponent()
-        return (directoryURL: directoryURL, fileURL: fileURL)
+    func data(for references: [ZoneReference]) throws -> [Data?] {
+        return try references.map { try data(for: $0) }
     }
-        
+    
 }
