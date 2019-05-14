@@ -13,7 +13,7 @@ internal final class FileZone: Zone {
     let fileExtension: String
     
     private let uncachableDataSizeLimit = 10000 // 10KB
-    private let cache: Cache<Data> = .init(numberOfGenerations: 2, regenerationLimit: 1000)
+    private let cache: Cache<Data> = .init()
     
     fileprivate let fileManager = FileManager()
     
