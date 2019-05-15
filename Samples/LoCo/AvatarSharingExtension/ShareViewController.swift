@@ -72,7 +72,10 @@ class ShareViewController: UITableViewController {
         var contact = contactBook.contacts[tableView.indexPathForSelectedRow!.row].value
         contact.avatarJPEGData = image.jpegData(compressionQuality: 0.8)
         try! contactBook.update(contact)
-        extensionContext!.completeRequest(returningItems: nil, completionHandler: nil)
+        view.isUserInteractionEnabled = false
+        contactBook.sync { _ in
+            self.extensionContext!.completeRequest(returningItems: nil, completionHandler: nil)
+        }
     }
     
     @IBAction func cancel(_ sender: Any) {
