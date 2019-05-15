@@ -19,7 +19,6 @@ class ShareViewController: UITableViewController {
     }
     
     @IBOutlet weak var imageView: UIImageView!
-    @IBOutlet weak var saveButtonItem: UIBarButtonItem!
     
     var rootStoreDirectory: URL!
     var store: Store!
@@ -29,8 +28,6 @@ class ShareViewController: UITableViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-
-        saveButtonItem.isEnabled = false
 
         let docDir = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.mentalfaculty.LoCo")!
         rootStoreDirectory = docDir.appendingPathComponent("ContactBook")
@@ -65,7 +62,6 @@ class ShareViewController: UITableViewController {
                 }
 
                 self.imageView.image = self.image
-                self.saveButtonItem.isEnabled = true
             }
         } else {
             self.cancel(self)
@@ -93,5 +89,9 @@ class ShareViewController: UITableViewController {
         let name = contact.person?.fullName ?? "Unnamed Contact"
         cell.textLabel!.text = "\(name)"
         return cell
+    }
+    
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        save(self)
     }
 }

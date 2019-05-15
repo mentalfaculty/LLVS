@@ -67,15 +67,9 @@
                                 <action selector="cancel:" destination="QWF-3O-i6j" id="isT-R6-yuD"/>
                             </connections>
                         </barButtonItem>
-                        <barButtonItem key="rightBarButtonItem" style="done" systemItem="save" id="hyC-hF-dMo">
-                            <connections>
-                                <action selector="save:" destination="QWF-3O-i6j" id="kkA-0w-uws"/>
-                            </connections>
-                        </barButtonItem>
                     </navigationItem>
                     <connections>
                         <outlet property="imageView" destination="tjs-Rk-Blg" id="Wh8-wu-bjY"/>
-                        <outlet property="saveButtonItem" destination="hyC-hF-dMo" id="ff5-6G-Jpf"/>
                     </connections>
                 </tableViewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="cJh-bn-Aop" userLabel="First Responder" sceneMemberID="firstResponder"/>

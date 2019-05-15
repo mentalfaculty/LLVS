@@ -88,6 +88,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDele
     func applicationWillEnterForeground(_ application: UIApplication) {
         // Reload history, in case the extension has added changes
         try! contactBook.store.reloadHistory()
+        let _ = contactBook.mergeHeads()
         contactBook.sync()
     }
     
