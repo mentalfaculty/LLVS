@@ -26,11 +26,19 @@ public final class Store {
     public let valuesDirectoryURL: URL
     public let versionsDirectoryURL: URL
     public let mapsDirectoryURL: URL
+    public let valuesMapDirectoryURL: URL
+    
+    public let storage: Storage
 
-    private let valuesZone: Zone
+    private lazy var valuesZone: Zone = {
+        return storage.makeValuesZone(in: self)
+    }()
     
     private let valuesMapName = "__llvs_values"
-    private let valuesMap: Map
+    private lazy var valuesMap: Map = {
+        let valuesMapZone = self.storage.makeMapZone(for: .valuesByVersion, in: self)
+        return Map(zone: valuesMapZone)
+    }()
     
     private let history = History()
     private let historyAccessQueue = DispatchQueue(label: "llvs.dispatchQueue.historyaccess")
@@ -39,20 +47,20 @@ public final class Store {
     fileprivate let encoder = JSONEncoder()
     fileprivate let decoder = JSONDecoder()
     
-    public init(rootDirectoryURL: URL) throws {
+    public init(rootDirectoryURL: URL, storage: Storage = FileStorage(fileExtension: "json")) throws {
+        self.storage = storage
+        
         self.rootDirectoryURL = rootDirectoryURL.resolvingSymlinksInPath()
         self.valuesDirectoryURL = rootDirectoryURL.appendingPathComponent("values")
         self.versionsDirectoryURL = rootDirectoryURL.appendingPathComponent("versions")
         self.mapsDirectoryURL = rootDirectoryURL.appendingPathComponent("maps")
+        self.valuesMapDirectoryURL = self.mapsDirectoryURL.appendingPathComponent(valuesMapName)
+
         try? fileManager.createDirectory(at: self.rootDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.valuesDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.versionsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.mapsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         
-        let valuesMapZone = Zone(rootDirectory: self.mapsDirectoryURL.appendingPathComponent(valuesMapName), fileExtension: "json")
-        valuesMap = Map(zone: valuesMapZone)
-        valuesZone = Zone(rootDirectory: self.valuesDirectoryURL, fileExtension: "json")
-
         try reloadHistory()
     }
     
@@ -296,14 +304,8 @@ extension Store {
         return value
     }
     
-    internal func values(_ valueIdentifier: Value.Identifier) throws -> [Value] {
-        let versionIdentifiers = try valuesZone.versionIdentifiers(for: valueIdentifier.identifierString)
-        return try versionIdentifiers.map { version in
-            let data = try valuesZone.data(for: .init(key: valueIdentifier.identifierString, version: version))!
-            return Value(identifier: valueIdentifier, version: version, data: data)
-        }
-    }
 }
+
 
 // MARK:- Value Changes
 

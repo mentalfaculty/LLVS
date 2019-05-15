@@ -46,7 +46,7 @@ class DiffTests: XCTestCase {
         super.setUp()
         
         rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
-        zone = Zone(rootDirectory: rootURL, fileExtension: ".txt")
+        zone = FileZone(rootDirectory: rootURL, fileExtension: ".txt")
         map = Map(zone: zone)
     }
     

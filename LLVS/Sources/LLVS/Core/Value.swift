@@ -14,9 +14,9 @@ public struct Value: Codable {
     public var version: Version.Identifier?
     public var data: Data
     
-    internal var zoneReference: Zone.Reference? {
+    internal var zoneReference: ZoneReference? {
         guard let version = version else { return nil }
-        return Zone.Reference(key: identifier.identifierString, version: version)
+        return ZoneReference(key: identifier.identifierString, version: version)
     }
     
     public var reference: Reference? {

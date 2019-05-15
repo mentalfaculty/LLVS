@@ -15,5 +15,4 @@ xcuserdata/
 *.moved-aside
 *.xccheckout
 *.xcscmblueprint
-/LLVS.xcodeproj/xcuserdata/cormack.xcuserdatad/xcschemes/xcschememanagement.plist
-/Samples/LoCo/LoCo.xcodeproj/xcuserdata/cormack.xcuserdatad/xcschemes/xcschememanagement.plist
+
