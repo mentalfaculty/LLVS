@@ -26,6 +26,10 @@ final class ContactBook {
     let cloudKitExchange: CloudKitExchange
     private(set) var contacts: [Fault<Contact>] = []
     
+    public var exchangeRestorationData: Data? {
+        return cloudKitExchange.restorationState
+    }
+    
     fileprivate static let sharedContactBookIdentifier: Value.Identifier = .init("ContactBook")
     
     var currentVersion: Version.Identifier {
@@ -39,10 +43,11 @@ final class ContactBook {
         }
     }
     
-    init(prevailingAt version: Version.Identifier, loadingFrom store: Store) throws {
+    init(prevailingAt version: Version.Identifier, loadingFrom store: Store, exchangeRestorationData: Data?) throws {
         self.store = store
         self.currentVersion = version
         self.cloudKitExchange = CloudKitExchange(with: store, zoneIdentifier: "ContactBook", cloudDatabase: CKContainer.default().privateCloudDatabase)
+        self.cloudKitExchange.restorationState = exchangeRestorationData
         try fetchContacts()
     }
     
@@ -70,6 +75,7 @@ final class ContactBook {
     
     func update(_ contact: Contact) throws {
         let updateChanges = try contact.changesSinceLoad(from: store)
+        guard !updateChanges.isEmpty else { return }
         currentVersion = try store.addVersion(basedOnPredecessor: currentVersion, storing: updateChanges).identifier
     }
     
@@ -180,6 +186,19 @@ final class ContactBook {
                     NotificationCenter.default.post(name: .contactBookDidSaveSyncChanges, object: self, userInfo: nil)
                 }
                 self.isSyncing = false
+            }
+        }
+    }
+    
+    func send(executingUponCompletion completionHandler: ((Swift.Error?) -> Void)? = nil) {
+        self.cloudKitExchange.send { result in
+            DispatchQueue.main.async {
+                switch result {
+                case let .failure(error):
+                    completionHandler?(error)
+                case .success:
+                    completionHandler?(nil)
+                }
             }
         }
     }

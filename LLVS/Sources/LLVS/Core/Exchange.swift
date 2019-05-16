@@ -20,6 +20,8 @@ public protocol Exchange {
     var client: ExchangeClient? { get set }
     var store: Store { get }
     
+    var restorationState: Data? { get set }
+    
     func retrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>)
     func prepareToRetrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>)
     func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>)

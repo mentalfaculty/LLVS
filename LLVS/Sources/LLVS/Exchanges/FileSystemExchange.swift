@@ -23,6 +23,11 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
     public var changesDirectory: URL { return rootDirectoryURL.appendingPathComponent("changes") }
     
     public let usesFileCoordination: Bool
+    
+    public var restorationState: Data? {
+        get { return nil }
+        set {}
+    }
 
     fileprivate let fileManager = FileManager()
     fileprivate let queue = OperationQueue()

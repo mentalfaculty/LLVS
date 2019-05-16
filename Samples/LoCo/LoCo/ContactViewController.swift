@@ -26,6 +26,8 @@ class ContactViewController: UIViewController, UIImagePickerControllerDelegate, 
     @IBOutlet weak var phoneNumberField: UITextField!
     @IBOutlet weak var avatarButton: UIButton!
     
+    private var shouldUpdateAvatar: Bool = false
+    
     private var didSyncChangesObserver: AnyObject?
     
     private var contact: Contact? {
@@ -42,7 +44,7 @@ class ContactViewController: UIViewController, UIImagePickerControllerDelegate, 
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        didSyncChangesObserver = NotificationCenter.default.addObserver(forName: .contactBookDidSaveSyncChanges, object: contactBook, queue: nil) { notif in
+        didSyncChangesObserver = NotificationCenter.default.addObserver(forName: .contactBookDidSaveSyncChanges, object: contactBook, queue: .main) { notif in
             self.updateView()
         }
     }
@@ -65,6 +67,7 @@ class ContactViewController: UIViewController, UIImagePickerControllerDelegate, 
 
     func updateView() {
         guard let _ = firstNameField else { return }
+        shouldUpdateAvatar = false
         if let contact = contact {
             firstNameField.text = contact.person?.firstName
             secondNameField.text = contact.person?.secondName
@@ -110,7 +113,11 @@ class ContactViewController: UIViewController, UIImagePickerControllerDelegate, 
         newContact.email = emailField.text
         newContact.phoneNumber = phoneNumberField.text
         
-        newContact.avatarJPEGData = avatarButton.backgroundImage(for: .normal)?.jpegData(compressionQuality: 0.8)
+        if shouldUpdateAvatar {
+            newContact.avatarJPEGData = avatarButton.backgroundImage(for: .normal)?.jpegData(compressionQuality: 0.8)
+        } else {
+            newContact.avatarJPEGData = contact.avatarJPEGData
+        }
         
         try! contactBook?.update(newContact)
     }
@@ -130,6 +137,7 @@ class ContactViewController: UIViewController, UIImagePickerControllerDelegate, 
         self.dismiss(animated: true) {
             let image = (info[.editedImage] ?? info[.originalImage]) as? UIImage
             self.avatarButton.setBackgroundImage(image, for: .normal)
+            self.shouldUpdateAvatar = true
         }
     }
     

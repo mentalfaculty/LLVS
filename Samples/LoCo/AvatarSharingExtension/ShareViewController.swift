@@ -20,6 +20,10 @@ class ShareViewController: UITableViewController {
     
     @IBOutlet weak var imageView: UIImageView!
     
+    var userDefaults: UserDefaults {
+        return UserDefaults(suiteName: appGroup)!
+    }
+    
     var rootStoreDirectory: URL!
     var store: Store!
     var image: UIImage!
@@ -29,12 +33,13 @@ class ShareViewController: UITableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        let docDir = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.mentalfaculty.LoCo")!
+        let docDir = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)!
         rootStoreDirectory = docDir.appendingPathComponent("ContactBook")
         store = try! Store(rootDirectoryURL: rootStoreDirectory)
 
         if let version = store.mostRecentHead?.identifier {
-            contactBook = try! ContactBook(prevailingAt: version, loadingFrom: store)
+            let data = userDefaults.data(forKey: UserDefaultKey.exchangeRestorationData.rawValue)
+            contactBook = try! ContactBook(prevailingAt: version, loadingFrom: store, exchangeRestorationData: data)
         } else {
             contactBook = try! ContactBook(creatingIn: store)
         }
@@ -47,21 +52,23 @@ class ShareViewController: UITableViewController {
         let provider = item.attachments!.first!
         if provider.hasItemConformingToTypeIdentifier(kUTTypeImage as String) {
             provider.loadItem(forTypeIdentifier: kUTTypeImage as String, options: nil) { item, error in
-                guard error == nil else {
-                    self.cancel(self)
-                    return
-                }
-                
-                if let image = item as? UIImage {
-                    self.image = image
-                } else if let url = item as? URL, url.isFileURL {
-                    self.image = UIImage(contentsOfFile: url.path)
-                } else {
-                    self.cancel(self)
-                    return
-                }
+                DispatchQueue.main.async {
+                    guard error == nil else {
+                        self.cancel(self)
+                        return
+                    }
+                    
+                    if let image = item as? UIImage {
+                        self.image = image
+                    } else if let url = item as? URL, url.isFileURL {
+                        self.image = UIImage(contentsOfFile: url.path)
+                    } else {
+                        self.cancel(self)
+                        return
+                    }
 
-                self.imageView.image = self.image
+                    self.imageView.image = self.image
+                }
             }
         } else {
             self.cancel(self)
@@ -73,7 +80,7 @@ class ShareViewController: UITableViewController {
         contact.avatarJPEGData = image.jpegData(compressionQuality: 0.8)
         try! contactBook.update(contact)
         view.isUserInteractionEnabled = false
-        contactBook.sync { _ in
+        contactBook.send { _ in
             self.extensionContext!.completeRequest(returningItems: nil, completionHandler: nil)
         }
     }

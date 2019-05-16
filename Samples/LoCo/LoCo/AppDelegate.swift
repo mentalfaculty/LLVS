@@ -12,13 +12,17 @@ import CloudKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDelegate {
-
+    
     var window: UIWindow?
     
+    var userDefaults: UserDefaults {
+        return UserDefaults(suiteName: appGroup)!
+    }
+
     private let storeVersionKey = "storeVersion"
     
     lazy var rootStoreDirectory: URL = {
-        let docDir = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.mentalfaculty.LoCo")!
+        let docDir = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)!
         let rootDir = docDir.appendingPathComponent("ContactBook")
         try? FileManager.default.createDirectory(at: rootDir, withIntermediateDirectories: true, attributes: nil)
         return rootDir
@@ -31,19 +35,21 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDele
     lazy var contactBook: ContactBook = {
         let book: ContactBook
         let versionIdentifier: Version.Identifier
-        if let versionString = UserDefaults.standard.string(forKey: storeVersionKey),
+        if let versionString = userDefaults.string(forKey: storeVersionKey),
             let version = try! store.version(identifiedBy: .init(versionString)) {
-            book = try! ContactBook(prevailingAt: version.identifier, loadingFrom: store)
+            let data = userDefaults.data(forKey: UserDefaultKey.exchangeRestorationData.rawValue)
+            book = try! ContactBook(prevailingAt: version.identifier, loadingFrom: store, exchangeRestorationData: data)
             versionIdentifier = version.identifier
         } else if let version = store.mostRecentHead?.identifier {
             versionIdentifier = version
-            book = try! ContactBook(prevailingAt: version, loadingFrom: store)
+            let data = userDefaults.data(forKey: UserDefaultKey.exchangeRestorationData.rawValue)
+            book = try! ContactBook(prevailingAt: version, loadingFrom: store, exchangeRestorationData: data)
         } else {
             book = try! ContactBook(creatingIn: store)
             versionIdentifier = book.currentVersion
         }
-        UserDefaults.standard.set(book.currentVersion.identifierString, forKey: self.storeVersionKey)
-        UserDefaults.standard.synchronize()
+        userDefaults.set(book.currentVersion.identifierString, forKey: self.storeVersionKey)
+        userDefaults.synchronize()
         return book
     }()
     
@@ -80,6 +86,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDele
     
     func applicationDidEnterBackground(_ application: UIApplication) {
         let task = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
+        if let data = contactBook.exchangeRestorationData {
+            userDefaults.set(data, forKey: UserDefaultKey.exchangeRestorationData.rawValue)
+        }
         contactBook.sync { _ in
             UIApplication.shared.endBackgroundTask(task)
         }
@@ -111,8 +120,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDele
     }
     
     func storeCurrentVersion() {
-        UserDefaults.standard.set(self.contactBook.currentVersion.identifierString, forKey: self.storeVersionKey)
-        UserDefaults.standard.synchronize()
+        userDefaults.set(self.contactBook.currentVersion.identifierString, forKey: self.storeVersionKey)
+        userDefaults.synchronize()
     }
 
     func splitViewController(_ splitViewController: UISplitViewController, collapseSecondary secondaryViewController:UIViewController, onto primaryViewController:UIViewController) -> Bool {

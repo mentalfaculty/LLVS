@@ -23,6 +23,8 @@
 		07354034228C7E580055EA28 /* PropertiesContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EE221F11EC200BB9EFA /* PropertiesContainer.swift */; };
 		07354035228C7EEF0055EA28 /* LLVS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 07354022228A1CF50055EA28 /* LLVS.framework */; };
 		07354036228C7EEF0055EA28 /* LLVSCloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 07354024228A1CF50055EA28 /* LLVSCloudKit.framework */; };
+		0754AA2E228DDB1400DCF659 /* Defines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0754AA2D228DDB1400DCF659 /* Defines.swift */; };
+		0754AA2F228DDB1400DCF659 /* Defines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0754AA2D228DDB1400DCF659 /* Defines.swift */; };
 		07734EA821F109D100BB9EFA /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EA721F109D100BB9EFA /* AppDelegate.swift */; };
 		07734EAA21F109D100BB9EFA /* ContactsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EA921F109D100BB9EFA /* ContactsViewController.swift */; };
 		07734EAC21F109D100BB9EFA /* ContactViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EAB21F109D100BB9EFA /* ContactViewController.swift */; };
@@ -113,6 +115,7 @@
 		071E25F8228A0598007BCFB3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		071E2604228A0747007BCFB3 /* AvatarSharingExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AvatarSharingExtension.entitlements; sourceTree = "<group>"; };
 		0735401B228A1CF50055EA28 /* LLVS.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = LLVS.xcodeproj; path = ../../LLVS/LLVS.xcodeproj; sourceTree = "<group>"; };
+		0754AA2D228DDB1400DCF659 /* Defines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Defines.swift; sourceTree = "<group>"; };
 		07734EA421F109D100BB9EFA /* LoCo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LoCo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		07734EA721F109D100BB9EFA /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		07734EA921F109D100BB9EFA /* ContactsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsViewController.swift; sourceTree = "<group>"; };
@@ -199,6 +202,7 @@
 			isa = PBXGroup;
 			children = (
 				0787521422441AC90041780E /* LoCo.entitlements */,
+				0754AA2D228DDB1400DCF659 /* Defines.swift */,
 				07734EA721F109D100BB9EFA /* AppDelegate.swift */,
 				07734EA921F109D100BB9EFA /* ContactsViewController.swift */,
 				07734EAB21F109D100BB9EFA /* ContactViewController.swift */,
@@ -384,6 +388,7 @@
 			files = (
 				07354034228C7E580055EA28 /* PropertiesContainer.swift in Sources */,
 				07354032228C7E3F0055EA28 /* Contact.swift in Sources */,
+				0754AA2F228DDB1400DCF659 /* Defines.swift in Sources */,
 				071E25F4228A0598007BCFB3 /* ShareViewController.swift in Sources */,
 				07354033228C7E3F0055EA28 /* Fault.swift in Sources */,
 				07354031228C7E3F0055EA28 /* ContactBook.swift in Sources */,
@@ -400,6 +405,7 @@
 				07734EAA21F109D100BB9EFA /* ContactsViewController.swift in Sources */,
 				07734EA821F109D100BB9EFA /* AppDelegate.swift in Sources */,
 				07734EF021F5140800BB9EFA /* ContactBook.swift in Sources */,
+				0754AA2E228DDB1400DCF659 /* Defines.swift in Sources */,
 				079D144021F6482B0091BCA9 /* Fault.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -34,11 +34,37 @@ public class CloudKitExchange: Exchange {
     
     private let createZoneOperation: CKModifyRecordZonesOperation
     
+    private var zoneID: CKRecordZone.ID {
+        return CKRecordZone.ID(zoneName: zoneIdentifier, ownerName: CKCurrentUserDefaultName)
+    }
+    
     private var versionsInCloud: Set<Version.Identifier> = []
     private var fetchRecordChangesToken: CKServerChangeToken?
     
-    private var zoneID: CKRecordZone.ID {
-        return CKRecordZone.ID(zoneName: zoneIdentifier, ownerName: CKCurrentUserDefaultName)
+    private enum RestorationKey: String {
+        case versionsInCloudData, fetchRecordChangesTokenData
+    }
+    
+    public var restorationState: Data? {
+        get {
+            let encoder = JSONEncoder()
+            var dict: [String:Data] = [RestorationKey.versionsInCloudData.rawValue : try! encoder.encode(versionsInCloud)]
+            if let token = fetchRecordChangesToken {
+                dict[RestorationKey.fetchRecordChangesTokenData.rawValue] = NSKeyedArchiver.archivedData(withRootObject: token)
+            }
+            return try? encoder.encode(dict)
+        }
+        set {
+            let decoder = JSONDecoder()
+            if let data = newValue, let dict = try? decoder.decode([String:Data].self, from: data) {
+                if let data = dict[RestorationKey.versionsInCloudData.rawValue] {
+                    versionsInCloud = (try? decoder.decode( Set<Version.Identifier>.self, from: data)) ?? []
+                }
+                if let tokenData = dict[RestorationKey.fetchRecordChangesTokenData.rawValue] {
+                    fetchRecordChangesToken = NSKeyedUnarchiver.unarchiveObject(with: tokenData) as? CKServerChangeToken
+                }
+            }
+        }
     }
     
     public init(with store: Store, zoneIdentifier identifier: String, cloudDatabase: CKDatabase) {
