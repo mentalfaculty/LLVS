@@ -23,7 +23,7 @@ class ContactsViewController: UITableViewController {
         let addButton = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addContact(_:)))
         navigationItem.rightBarButtonItem = addButton
         
-        contactBookSyncObserver = NotificationCenter.default.addObserver(forName: .contactBookDidSaveSyncChanges, object: contactBook, queue: nil) { [unowned self] notif in
+        contactBookSyncObserver = NotificationCenter.default.addObserver(forName: .contactBookDidSaveSyncChanges, object: contactBook, queue: .main) { [unowned self] notif in
             self.tableView.reloadData()
         }
     }

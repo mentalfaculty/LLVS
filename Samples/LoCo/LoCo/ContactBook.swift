@@ -96,18 +96,6 @@ final class ContactBook {
         let change = try updateContactsChange(withContactIdentifiers: identifiers)
         currentVersion = try store.addVersion(basedOnPredecessor: currentVersion, storing: [change]).identifier
     }
-
-//    func move(contactWithIdentifier moved: Value.Identifier, afterContactWithIdentifier target: Value.Identifier?) throws {
-//        var identifiers = contacts.compactMap { $0.valueIdentifier != moved ? $0.valueIdentifier : nil }
-//        if let target = target {
-//            guard let index = identifiers.firstIndex(of: target) else { throw Error.contactNotFound("No target found") }
-//            identifiers.insert(moved, at: index+1)
-//        } else {
-//            identifiers.insert(moved, at: 0)
-//        }
-//        let change = try updateContactsChange(withContactIdentifiers: identifiers)
-//        currentVersion = try store.addVersion(basedOnPredecessor: currentVersion, storing: [change]).identifier
-//    }
     
     
     // MARK: Fetch and Save in Store
