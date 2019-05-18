@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import LLVS
 
 class ContactsViewController: UITableViewController {
     
@@ -89,6 +90,10 @@ class ContactsViewController: UITableViewController {
             try! contactBook.delete(contact)
             tableView.deleteRows(at: [indexPath], with: .fade)
         }
+    }
+    
+    override func tableView(_ tableView: UITableView, moveRowAt sourceIndexPath: IndexPath, to destinationIndexPath: IndexPath) {
+        try! contactBook.move(contactAt: sourceIndexPath.row, to: destinationIndexPath.row)
     }
 
 
