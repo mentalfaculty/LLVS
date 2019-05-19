@@ -124,6 +124,8 @@ public extension Exchange {
             
             do {
                 try self.store.addVersion(version, storing: valueChanges)
+            } catch Store.Error.attemptToAddExistingVersion {
+                log.error("Failed adding to history because version already exists. Ignoring error")
             } catch {
                 log.error("Failed adding to history: \(error)")
                 completionHandler(.failure(error))
