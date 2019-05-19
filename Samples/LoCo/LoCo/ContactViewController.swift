@@ -77,7 +77,7 @@ class ContactViewController: UIViewController, UIImagePickerControllerDelegate, 
             countryField.text = contact.address?.country
             emailField.text = contact.email
             phoneNumberField.text = contact.phoneNumber
-            avatarButton.setBackgroundImage(contact.avatarJPEGData.flatMap({ UIImage(data: $0) }), for: .normal)
+            avatarButton.setImage(contact.avatarJPEGData.flatMap({ UIImage(data: $0) }), for: .normal)
         } else {
             firstNameField.text = nil
             secondNameField.text = nil
@@ -87,7 +87,7 @@ class ContactViewController: UIViewController, UIImagePickerControllerDelegate, 
             countryField.text = nil
             emailField.text = nil
             phoneNumberField.text = nil
-            avatarButton.setBackgroundImage(nil, for: .normal)
+            avatarButton.setImage(nil, for: .normal)
         }
     }
     
@@ -135,8 +135,9 @@ class ContactViewController: UIViewController, UIImagePickerControllerDelegate, 
     
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
         self.dismiss(animated: true) {
-            let image = (info[.editedImage] ?? info[.originalImage]) as? UIImage
-            self.avatarButton.setBackgroundImage(image, for: .normal)
+            let image = (info[.editedImage] ?? info[.originalImage]) as! UIImage
+            let scaledImage = image.scaledImage(withMaximumDimension: 300.0)
+            self.avatarButton.setImage(scaledImage, for: .normal)
             self.shouldUpdateAvatar = true
         }
     }
@@ -144,4 +145,18 @@ class ContactViewController: UIViewController, UIImagePickerControllerDelegate, 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         self.dismiss(animated: true, completion: nil)
     }
+}
+
+
+extension UIImage {
+    
+    func scaledImage(withMaximumDimension maxDimension: CGFloat) -> UIImage {
+        let scaleFactor = min(maxDimension / size.width, maxDimension / size.height)
+        let scaledSize = CGSize(width: size.width*scaleFactor, height: size.height*scaleFactor)
+        UIGraphicsBeginImageContextWithOptions(scaledSize, false, 1)
+        defer { UIGraphicsEndImageContext() }
+        draw(in: CGRect(x: 0.0, y: 0.0, width: scaledSize.width, height: scaledSize.height))
+        return UIGraphicsGetImageFromCurrentImageContext()!
+    }
+    
 }
