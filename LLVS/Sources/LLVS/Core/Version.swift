@@ -34,7 +34,7 @@ public struct Version: Codable, Hashable {
         identifier = try container.decode(Identifier.self, forKey: .identifier)
         predecessors = try container.decodeIfPresent(Predecessors.self, forKey: .predecessors)
         timestamp = try container.decode(TimeInterval.self, forKey: .timestamp)
-        metadata = try container.decode(Data.self, forKey: .metadata)
+        metadata = try container.decodeIfPresent(Data.self, forKey: .metadata)
     }
     
     public func encode(to encoder: Encoder) throws {
