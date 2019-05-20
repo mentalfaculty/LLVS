@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		070BE0A92199FE2B00B1005D /* HistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 070BE0A82199FE2B00B1005D /* HistoryTests.swift */; };
 		071D6C8D21FCE5AB00D9282F /* VersionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 071D6C8C21FCE5AB00D9282F /* VersionTests.swift */; };
+		072969B02293273000A5A7C7 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 072969AF2293273000A5A7C7 /* CloudKit.framework */; };
 		072D246C21BAFAD300050A1D /* ZoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 072D246B21BAFAD300050A1D /* ZoneTests.swift */; };
 		072D246E21BD852B00050A1D /* MapTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 072D246D21BD852B00050A1D /* MapTests.swift */; };
 		07353FE1228A15AD0055EA28 /* Version.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07353FCF228A15AD0055EA28 /* Version.swift */; };
@@ -61,6 +62,7 @@
 		070BE0A82199FE2B00B1005D /* HistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryTests.swift; sourceTree = "<group>"; };
 		070BE0D521A5C98300B1005D /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		071D6C8C21FCE5AB00D9282F /* VersionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VersionTests.swift; sourceTree = "<group>"; };
+		072969AF2293273000A5A7C7 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
 		072D246B21BAFAD300050A1D /* ZoneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoneTests.swift; sourceTree = "<group>"; };
 		072D246D21BD852B00050A1D /* MapTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapTests.swift; sourceTree = "<group>"; };
 		07353FCC228A15AD0055EA28 /* CloudKitExchange.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CloudKitExchange.swift; sourceTree = "<group>"; };
@@ -106,6 +108,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				072969B02293273000A5A7C7 /* CloudKit.framework in Frameworks */,
 				07354019228A169D0055EA28 /* LLVS.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -203,6 +206,7 @@
 		07354017228A16960055EA28 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				072969AF2293273000A5A7C7 /* CloudKit.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -508,9 +512,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.mentalfaculty.llvs-cloudkit";
 				PRODUCT_NAME = LLVSCloudKit;
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
-				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos macos watchos tvos";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -578,9 +580,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.mentalfaculty.llvs-cloudkit";
 				PRODUCT_NAME = LLVSCloudKit;
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
-				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos macos watchos tvos";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
