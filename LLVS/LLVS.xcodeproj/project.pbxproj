@@ -60,11 +60,8 @@
 
 /* Begin PBXFileReference section */
 		070BE0A82199FE2B00B1005D /* HistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryTests.swift; sourceTree = "<group>"; };
-		070BE0D521A5C98300B1005D /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		071D6C8C21FCE5AB00D9282F /* VersionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VersionTests.swift; sourceTree = "<group>"; };
 		072969AF2293273000A5A7C7 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
-		072969B12293297F00A5A7C7 /* LICENCE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENCE.txt; sourceTree = "<group>"; };
-		072969B22293297F00A5A7C7 /* CONTRIBUTING.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CONTRIBUTING.md; sourceTree = "<group>"; };
 		072D246B21BAFAD300050A1D /* ZoneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoneTests.swift; sourceTree = "<group>"; };
 		072D246D21BD852B00050A1D /* MapTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapTests.swift; sourceTree = "<group>"; };
 		07353FCC228A15AD0055EA28 /* CloudKitExchange.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CloudKitExchange.swift; sourceTree = "<group>"; };
@@ -261,9 +258,6 @@
 		OBJ_5 = {
 			isa = PBXGroup;
 			children = (
-				070BE0D521A5C98300B1005D /* README.md */,
-				072969B22293297F00A5A7C7 /* CONTRIBUTING.md */,
-				072969B12293297F00A5A7C7 /* LICENCE.txt */,
 				OBJ_6 /* Package.swift */,
 				07353FCA228A15AD0055EA28 /* Sources */,
 				OBJ_13 /* Tests */,
