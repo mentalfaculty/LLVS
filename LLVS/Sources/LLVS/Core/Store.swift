@@ -98,15 +98,15 @@ public final class Store {
 
 extension Store {
     
-    @discardableResult public func addVersion(basedOnPredecessor version: Version.Identifier?, storing changes: [Value.Change]) throws -> Version {
+    @discardableResult public func addVersion(basedOnPredecessor version: Version.Identifier?, storing changes: [Value.Change], metadata: Data? = nil) throws -> Version {
         let predecessors = version.flatMap { Version.Predecessors(identifierOfFirst: $0, identifierOfSecond: nil) }
-        return try addVersion(basedOn: predecessors, storing: changes)
+        return try addVersion(basedOn: predecessors, storing: changes, metadata: metadata)
     }
     
     /// Changes must include all updates to the map of the first predecessor. If necessary, preserves should be included to bring values
     /// from the second predecessor into the first predecessor map.
-    @discardableResult internal func addVersion(basedOn predecessors: Version.Predecessors?, storing changes: [Value.Change]) throws -> Version {
-        let version = Version(predecessors: predecessors)
+    @discardableResult internal func addVersion(basedOn predecessors: Version.Predecessors?, storing changes: [Value.Change], metadata: Data? = nil) throws -> Version {
+        let version = Version(predecessors: predecessors, metadata: metadata)
         try addVersion(version, storing: changes)
         return version
     }
@@ -175,17 +175,17 @@ extension Store {
 extension Store {
     
     /// Will choose between a three way merge, and a two way merge, based on whether a common ancestor is found.
-    public func merge(version firstVersionIdentifier: Version.Identifier, with secondVersionIdentifier: Version.Identifier, resolvingWith arbiter: MergeArbiter) throws -> Version {
+    public func merge(version firstVersionIdentifier: Version.Identifier, with secondVersionIdentifier: Version.Identifier, resolvingWith arbiter: MergeArbiter, metadata: Data? = nil) throws -> Version {
         do {
-            return try mergeRelated(version: firstVersionIdentifier, with: secondVersionIdentifier, resolvingWith: arbiter)
+            return try mergeRelated(version: firstVersionIdentifier, with: secondVersionIdentifier, resolvingWith: arbiter, metadata: metadata)
         } catch Error.noCommonAncestor {
-            return try mergeUnrelated(version: firstVersionIdentifier, with: secondVersionIdentifier, resolvingWith: arbiter)
+            return try mergeUnrelated(version: firstVersionIdentifier, with: secondVersionIdentifier, resolvingWith: arbiter, metadata: metadata)
         }
     }
     
     /// Two-way merge between two versions that have no common ancestry. Effectively we assume an empty common ancestor,
     /// so that all changes are inserts, or conflicting twiceInserts.
-    public func mergeUnrelated(version firstVersionIdentifier: Version.Identifier, with secondVersionIdentifier: Version.Identifier, resolvingWith arbiter: MergeArbiter) throws -> Version {
+    public func mergeUnrelated(version firstVersionIdentifier: Version.Identifier, with secondVersionIdentifier: Version.Identifier, resolvingWith arbiter: MergeArbiter, metadata: Data? = nil) throws -> Version {
         var firstVersion, secondVersion: Version?
         var fastForwardVersion: Version?
         try historyAccessQueue.sync {
@@ -208,12 +208,12 @@ extension Store {
             return fastForwardVersion
         }
 
-        return try merge(firstVersion!, and: secondVersion!, withCommonAncestor: nil, resolvingWith: arbiter)
+        return try merge(firstVersion!, and: secondVersion!, withCommonAncestor: nil, resolvingWith: arbiter, metadata: metadata)
     }
     
     /// Three-way merge between two versions, and a common ancestor. If no common ancestor is found, a .noCommonAncestor error is thrown.
     /// Conflicts are resolved using the MergeArbiter passed in.
-    public func mergeRelated(version firstVersionIdentifier: Version.Identifier, with secondVersionIdentifier: Version.Identifier, resolvingWith arbiter: MergeArbiter) throws -> Version {
+    public func mergeRelated(version firstVersionIdentifier: Version.Identifier, with secondVersionIdentifier: Version.Identifier, resolvingWith arbiter: MergeArbiter, metadata: Data? = nil) throws -> Version {
         var firstVersion, secondVersion, commonVersion: Version?
         var commonVersionIdentifier: Version.Identifier?
         try historyAccessQueue.sync {
@@ -238,12 +238,12 @@ extension Store {
             return firstVersion!
         }
         
-        return try merge(firstVersion!, and: secondVersion!, withCommonAncestor: commonVersion!, resolvingWith: arbiter)
+        return try merge(firstVersion!, and: secondVersion!, withCommonAncestor: commonVersion!, resolvingWith: arbiter, metadata: metadata)
     }
     
     /// Two or three-way merge. Does no check to see if fast forwarding is possible. Will carry out the merge regardless of history.
     /// If a common ancestor is supplied, it is 3-way, and otherwise 2-way.
-    private func merge(_ firstVersion: Version, and secondVersion: Version, withCommonAncestor commonAncestor: Version?, resolvingWith arbiter: MergeArbiter) throws -> Version {
+    private func merge(_ firstVersion: Version, and secondVersion: Version, withCommonAncestor commonAncestor: Version?, resolvingWith arbiter: MergeArbiter, metadata: Data? = nil) throws -> Version {
         // Prepare merge
         let predecessors = Version.Predecessors(identifierOfFirst: firstVersion.identifier, identifierOfSecond: secondVersion.identifier)
         let diffs = try valuesMap.differences(between: firstVersion.identifier, and: secondVersion.identifier, withCommonAncestor: commonAncestor?.identifier)
@@ -279,7 +279,7 @@ extension Store {
             }
         }
         
-        return try addVersion(basedOn: predecessors, storing: changes)
+        return try addVersion(basedOn: predecessors, storing: changes, metadata: metadata)
     }
     
 }
