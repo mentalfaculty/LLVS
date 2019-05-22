@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		071697F32295CCEE006B3BF3 /* DeveloperViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 071697F22295CCEE006B3BF3 /* DeveloperViewController.swift */; };
 		071E25F4228A0598007BCFB3 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 071E25F3228A0598007BCFB3 /* ShareViewController.swift */; };
 		071E25F7228A0598007BCFB3 /* MainInterface.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 071E25F5228A0598007BCFB3 /* MainInterface.storyboard */; };
 		071E25FB228A0598007BCFB3 /* AvatarSharingExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 071E25F1228A0598007BCFB3 /* AvatarSharingExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -109,6 +110,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		071697F22295CCEE006B3BF3 /* DeveloperViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperViewController.swift; sourceTree = "<group>"; };
 		071E25F1228A0598007BCFB3 /* AvatarSharingExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AvatarSharingExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		071E25F3228A0598007BCFB3 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		071E25F6228A0598007BCFB3 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/MainInterface.storyboard; sourceTree = "<group>"; };
@@ -206,6 +208,7 @@
 				07734EA721F109D100BB9EFA /* AppDelegate.swift */,
 				07734EA921F109D100BB9EFA /* ContactsViewController.swift */,
 				07734EAB21F109D100BB9EFA /* ContactViewController.swift */,
+				071697F22295CCEE006B3BF3 /* DeveloperViewController.swift */,
 				07734EEF21F5140800BB9EFA /* ContactBook.swift */,
 				07734EDE21F10CC300BB9EFA /* Contact.swift */,
 				079D143F21F6482B0091BCA9 /* Fault.swift */,
@@ -407,6 +410,7 @@
 				07734EF021F5140800BB9EFA /* ContactBook.swift in Sources */,
 				0754AA2E228DDB1400DCF659 /* Defines.swift in Sources */,
 				079D144021F6482B0091BCA9 /* Fault.swift in Sources */,
+				071697F32295CCEE006B3BF3 /* DeveloperViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
