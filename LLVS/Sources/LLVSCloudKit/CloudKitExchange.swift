@@ -108,13 +108,12 @@ public class CloudKitExchange: Exchange {
             log.verbose("Stored iCloud token: \(String(describing: token))")
         }
         operation.fetchRecordZoneChangesCompletionBlock = { error in
-            if let error = error as? CKError, error.code == .changeTokenExpired {
+            if let error = error as? CKError, error.code == .changeTokenExpired || error.code == .partialFailure {
                 self.fetchRecordChangesToken = nil
                 self.versionsInCloud = []
                 self.fetchCloudChanges(executingUponCompletion: completionHandler)
                 log.error("iCloud token expired. Cleared cached data")
             } else if let error = error {
-                log.error("Error fetching changes: \(error)")
                 completionHandler(.failure(error))
             } else {
                 log.trace("Fetched changes")
