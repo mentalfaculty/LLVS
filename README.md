@@ -8,30 +8,31 @@ Ever wish it was as easy to move your app's data around as it is to push and pul
 
 ### Why LLVS?
 
-Application data is more decentralized than ever. It is rare to find it concentrated on a single device. Typically, a single user will have a multitude of devices, from phones to laptops and watches, and each device may have several independent processes running (eg today extension, sharing extension), each working with a copy of the data. How can you share all this data, giving the user a consistent picture, without writing thousands of lines of custom code to handle each scenario?
+Application data is more decentralized than ever. It is rare to find it concentrated on a single device. Typically, a single user will have a multitude of devices, from phones to laptops and watches, and each device may have several independent processes running (eg today extension, sharing extension), each working with a copy of the data. How can you share all of this data, giving the user a consistent picture, without writing thousands of lines of custom code to handle each scenario?
 
 Software developers faced a similar situation in the world of source control. They were faced with this question: How can multiple individuals all work together on the same source files across multiple computers? We all know how that played out. Advances in Source Control Management (SCM) led to systems like Git and GitHub.
 
-These tools successfully solved the problem of decentralized collaboration, and it is odd that the same approach has not been applied to app data. That's where LLVS comes in. It provides a basic framework for storing and moving data through the decentralized world in which our apps live.
+These tools successfully solved the problem of decentralized collaboration, and it is odd that the same approach has not been applied to app data before. That's where LLVS comes in. It provides a basic framework for storing and moving data through the decentralized world in which our apps live.
 
 ### What is LLVS?
 
-LLVS is a new kind of beast, so it is somewhat difficult to explain where it fits in. A good start might be that it is a _decentralized, versioned, key-value storage framework_.
+LLVS is a new kind of beast, and is not easy to characterize in terms of existing technologies. A reasonable description would be that it is a _decentralized, versioned, key-value storage framework_.
 
-You can think of it a bit like a traditional key-value store, in which you can insert data values for given unique keys. But LLVS adds to this several extra dimensions, namely, that every time a value is stored, it gets assigned a version, and each version has an ancestry of other versions which you can trace back in time. Just as with Git, you can retrieve the values for any version you like, determine the differences between two versions, and merge together versions.
+It works a bit like a traditional key-value store, in which you can insert data values for given unique keys. But LLVS adds to this several extra dimensions, namely, that every time a value is stored, it gets assigned a version, and each version has an ancestry of other versions which you can trace back in time. Just as with Git, you can retrieve the values for any version at any time, determine the differences between two versions, and merge together versions.
 
-All of this would be great on its own, but if it were isolated in a single store, it still would not be very useful in our decentralized world. So LLVS can _send_ and _receive_ versions from other stores, in the same way that you _pull_ and _push_ from other repositories with Git.
+All of this would be great on its own, but if it were isolated to a single store, it still would not be very useful in our decentralized world. So LLVS can _send_ and _receive_ versions from other stores, in the same way that you _pull_ and _push_ from other repositories with Git.
 
-If this still has you wondering what LLVS is about, here are a few other descriptions which may help you grok it. LLVS is...
+If this still has you wondering what LLVS is about, here are a few other characterizations which may help you grok it. LLVS is...
 
 - A decentralized, versioned, key-value storage framework
 - An abstractive layer for handling the ancestry of a decentralized data set
 - A Directed, Acyclic Graph (DAG) history of the data in your app
 - A simple means to "sync up" data sets across devices, and in the cloud
+- An append-only distributed store, with full versioned history
 
 ### What is LLVS _Not_?
 
-At this point, you are probably trying to apply labels to LLVS; trying to categorize it in terms of what you already know. I urge you to resist that, and to keep an open mind. To help you along, here are some things that LLVS certainly is not...
+At this point, you are probably trying to apply labels to LLVS; trying to categorize it in terms of what you already know. Try to keep an open mind lest you miss important, atypical aspects of the framework. To help you in this direction, here is a list of things that LLVS is _not_:
 
 - An Object Relational Modeling (ORM) framework
 - A database
@@ -40,17 +41,56 @@ At this point, you are probably trying to apply labels to LLVS; trying to catego
 
 ### Where Does it Fit In?
 
-LLVS is an abstraction. It handles the history of a dataset, without needing to know what the data actually represents, how it it stored on disk, or even how it moves between devices. 
+LLVS is an abstraction. It handles the history of a dataset, without needing to know what the data actually represents, how it is stored on disk, or even how it moves between devices. 
 
-LLVS includes some classes to get you started. You can set up a basic store using the existing storage classes (eg file based), and distribute your data using an existing cloud service (eg CloudKit), but you could also choose to add support for your own store or cloud service. And you are free to use any data format you like, including serialized Swift Codable values, JSON, and end-to-end encrypted formats.
+LLVS includes some classes to get you started. You can set up a basic store using the existing storage classes (eg file based), and distribute your data using an existing cloud service (eg CloudKit), but you could also choose to add support for your own store (eg SQLite) or cloud service (eg Firebase). And you are free to use any data format you like, including serialized Swift Codable values, JSON, and end-to-end encrypted formats.
 
 ## Some Simple Examples
 
+This section shows simple code for getting started, and provides a means to better understand how the framework, and where it fits in to your toolkit.
+
 ### Creating a Store
 
+Creating a versioned store on a single device is as simple as passing in a directory URL.
+
+```swift
+let docDir = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.mycompany.myapp")!
+let rootDir = docDir.appendingPathComponent("MyStore")
+let store = Store(rootDirectoryURL: rootStoreDirectory)
+```
+
+This code uses an app group container, which is useful if you want to share data with app extensions. LLVS stores can be shared directly between multiple processes, such as the main app and a sharing extension.
+
 ### Storing Values
-- Initial
-- Subsequent
+
+When you first create a store, you will probably want to add some initial data.
+
+```swift
+let stringData = "My first data".data(using: .utf8)!
+let newValue = Value(identifier: "ABCDEF", version: nil, data: stringData)
+let insert: Value.Change = .insert(newValue)
+let firstVersion = try store.addVersion(basedOnPredecessor: nil, storing: [insert])
+```
+
+This code...
+
+1. Creates some data from the string "My first data".
+2. Attaches the data to a `Value`, with a given identifier of "ABCDEF". 
+3. The value is wrapped in a `Change` type, in this case indicating that the value is new, and being inserted into the store for the first time.
+4. The last line creates a new version in the store, and stores the insertion change. Because it is the first version, it has no "predecessor" versions.
+
+At this point, a new version is returned. You could typically store this version somewhere (eg a property, a file, user defaults), so that it can be used in fetching data. 
+
+Storing subsequent values is very similar. The only difference is that you need to pass in the version upon which the changes are based. 
+
+```swift
+let secondData = "My second data".data(using: .utf8)!
+let secondValue = Value(identifier: "CDEFGH", version: nil, data: secondData)
+let secondInsert: Value.Change = .insert(secondValue)
+let secondVersion = try store.addVersion(basedOnPredecessor: firstVersion.identifier, storing: [secondInsert])
+```
+
+The only difference here is that a non-nil predecessor is passed in when adding the version. The predecessor is just the identifier of the first version we created above.
 
 ### Setting Up an Exchange
 
@@ -59,6 +99,12 @@ LLVS includes some classes to get you started. You can set up a basic store usin
 ### Merging
 
 ## Installing
+
+## Learning More
+
+Samples
+In code documentation
+Blog
 
 ## Advantages of LLVS
 - Full history of changes. 
