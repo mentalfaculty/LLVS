@@ -22,6 +22,7 @@
                     <toolbar key="toolbar" opaque="NO" clearsContextBeforeDrawing="NO" contentMode="scaleToFill" insetsLayoutMarginsFromSafeArea="NO" id="ze6-wJ-iRL">
                         <rect key="frame" x="0.0" y="623" width="375" height="44"/>
                         <autoresizingMask key="autoresizingMask"/>
+                        <color key="tintColor" red="0.42407757039999999" green="0.86227744819999996" blue="0.56858557460000003" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
                     </toolbar>
                     <connections>
                         <segue destination="7bK-jq-Zjz" kind="relationship" relationship="rootViewController" id="tsl-Nk-0bq"/>
@@ -339,7 +340,7 @@
                         <barButtonItem style="plain" systemItem="flexibleSpace" id="cCH-bR-uuF"/>
                         <barButtonItem title="Developer" id="clb-bG-H25">
                             <connections>
-                                <segue destination="CXC-yW-cp3" kind="presentation" id="dWC-iD-jLN"/>
+                                <segue destination="CXC-yW-cp3" kind="presentation" identifier="toDeveloper" id="dWC-iD-jLN"/>
                             </connections>
                         </barButtonItem>
                         <barButtonItem style="plain" systemItem="flexibleSpace" id="fXG-wz-tAp"/>
@@ -358,6 +359,7 @@
                     <navigationBar key="navigationBar" contentMode="scaleToFill" insetsLayoutMarginsFromSafeArea="NO" id="Je4-IR-sPf">
                         <rect key="frame" x="0.0" y="20" width="375" height="44"/>
                         <autoresizingMask key="autoresizingMask"/>
+                        <color key="tintColor" red="0.42407757039999999" green="0.86227744819999996" blue="0.56858557460000003" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
                     </navigationBar>
                     <connections>
                         <segue destination="eP6-oQ-WyY" kind="relationship" relationship="rootViewController" id="L5Z-eG-x9i"/>
@@ -374,7 +376,32 @@
                     <view key="view" contentMode="scaleToFill" id="tB2-j1-YVV">
                         <rect key="frame" x="0.0" y="0.0" width="375" height="667"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" textAlignment="natural" translatesAutoresizingMaskIntoConstraints="NO" id="Vda-Lv-0mN">
+                                <rect key="frame" x="16" y="119" width="343" height="128"/>
+                                <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="128" id="fVB-lg-9ax"/>
+                                </constraints>
+                                <string key="text">Lorem ipsum dolor sit er elit lamet, consectetaur cillium adipisicing pecu, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Nam liber te conscient to factor tum poen legum odioque civiuda.</string>
+                                <fontDescription key="fontDescription" type="system" pointSize="18"/>
+                                <textInputTraits key="textInputTraits" autocapitalizationType="sentences"/>
+                            </textView>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Most Recent Sync Error" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="twh-Nm-VWI">
+                                <rect key="frame" x="22" y="87" width="221" height="24"/>
+                                <fontDescription key="fontDescription" type="boldSystem" pointSize="20"/>
+                                <nil key="textColor"/>
+                                <nil key="highlightedColor"/>
+                            </label>
+                        </subviews>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                        <constraints>
+                            <constraint firstItem="twh-Nm-VWI" firstAttribute="leading" secondItem="aBX-Ar-qhv" secondAttribute="leading" constant="22" id="1Mr-ue-pVr"/>
+                            <constraint firstItem="Vda-Lv-0mN" firstAttribute="top" secondItem="twh-Nm-VWI" secondAttribute="bottom" constant="8" id="EUB-ZP-nFq"/>
+                            <constraint firstItem="Vda-Lv-0mN" firstAttribute="trailing" secondItem="aBX-Ar-qhv" secondAttribute="trailing" constant="-16" id="G7V-3T-ouf"/>
+                            <constraint firstItem="Vda-Lv-0mN" firstAttribute="top" secondItem="aBX-Ar-qhv" secondAttribute="top" constant="55" id="OUG-ut-xTe"/>
+                            <constraint firstItem="Vda-Lv-0mN" firstAttribute="leading" secondItem="aBX-Ar-qhv" secondAttribute="leading" constant="16" id="ZMv-im-C2o"/>
+                        </constraints>
                         <viewLayoutGuide key="safeArea" id="aBX-Ar-qhv"/>
                     </view>
                     <navigationItem key="navigationItem" title="Developer" id="jg1-Fj-Kwj">
@@ -384,10 +411,13 @@
                             </connections>
                         </barButtonItem>
                     </navigationItem>
+                    <connections>
+                        <outlet property="errorTextView" destination="Vda-Lv-0mN" id="ncE-FN-lvg"/>
+                    </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="nbV-FO-8E3" userLabel="First Responder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="2401" y="-631"/>
+            <point key="canvasLocation" x="2400.8000000000002" y="-631.0344827586207"/>
         </scene>
         <!--Navigation Controller-->
         <scene sceneID="r7l-gg-dq7">

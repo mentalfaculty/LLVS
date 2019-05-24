@@ -61,6 +61,10 @@ class ContactsViewController: UITableViewController {
                 contactViewController.navigationItem.leftBarButtonItem = splitViewController?.displayModeButtonItem
                 contactViewController.navigationItem.leftItemsSupplementBackButton = true
             }
+        } else if segue.identifier == "toDeveloper" {
+            let navController = segue.destination as! UINavigationController
+            let developerViewController = navController.topViewController as! DeveloperViewController
+            developerViewController.contactBook = contactBook
         }
     }
 

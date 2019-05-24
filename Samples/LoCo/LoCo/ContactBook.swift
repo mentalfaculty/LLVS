@@ -26,6 +26,8 @@ final class ContactBook {
     let cloudKitExchange: CloudKitExchange
     private(set) var contacts: [Fault<Contact>] = []
     
+    private(set) var lastSyncError: String?
+    
     public var exchangeRestorationData: Data? {
         return cloudKitExchange.restorationState
     }
@@ -169,6 +171,7 @@ final class ContactBook {
             switch result {
             case let .failure(error):
                 returnError = error
+                self.lastSyncError = error.localizedDescription
                 log.error("Failed to sync: \(error)")
             case .success:
                 log.trace("Sync successful")
