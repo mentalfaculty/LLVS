@@ -159,11 +159,81 @@ Getting the most recent head is also easy.
 
 ```swift
 let version: Version? = store.mostRecentHead
-````
+```
 
 The most recent head is a convenient version to use when starting up an extension, or syncing for the first time on a new device. In effect, you are saying "take me to the newest data".
 
 ### Merging
+
+One of the strengths of LLVS is that it gives you a systematic way to resolve discrepancies between versions. If two devices each edit a particular value at about the same time, you can not only identify the _conflict_, but can merge the two disparate data values together into a new consistent version.
+
+There are two types of merges in LLVS: two-way and three-way. Most of the time you will deal with three-way merges. A three way merge involves two versions — usually heads — and one so-called _common ancestor_. A common ancestor is a version that exists in the ancestry of each of the two versions being merged; it is a point in the history where the two versions were in agreement, before they diverged.
+
+Merging in this way is much more powerful than the facilities you get from most data modelling frameworks, because you don't just know what the latest values are, you also know what they were in the past, so you can determine what has changed.
+
+Three-way merges are also what are used in Git. In fact, they are the only type of merge possible with Git, which assumes all data derives from a single initial commit. 
+
+LLVS supports a second type of merge: two-way. This happens when more than one data set is added to the store that does not have any predecessors. Effectively, you have two initial commits.
+
+Two-way merges are much more rare than three-way merges, and you can even choose to disallow them entirely if you wish, and adopt a Git-like approach where the app is required to choose one initial data set or the other, but cannot merge them together.
+
+You can get started with merging quite easily. 
+
+```swift
+let arbiter = MostRecentChangeFavoringArbiter()
+let newVersion = try! store.merge(version: currentVersionId, with: otherHead, resolvingWith: arbiter)
+```
+
+If it turns out that `otherHead` is a descendent of the current version, this will not actually add a new version, but will just return the new head. (In Git terminology, it will _fast forward_.)
+
+However, normally the two versions will be divergent, and will need a three-way merge. The merge method will search back through the history, and find a common ancestor. It will then determine the differences between the two new versions by comparing them to the common ancestor. These differences will be passed to the _arbiter_ object, whose task it is to resolve any conflicts.
+
+In this instance, we have used a built-in arbiter class called `MostRecentChangeFavoringArbiter`. As the name suggests, it will choose the most recently changed value whenever there is a conflict.
+
+In your app, you are more likely to create your own arbiter class, to merge your data in custom ways. You can also choose to handle certain specific cases, and pass more standard tasks off to one of the existing arbiter classes.
+
+You might be wondering what the internals of an arbiter class looks like. It's typically a loop over the differences, treating each type of conflict. One of the simplest is `MostRecentBranchFavoringArbiter`, which will simply favor the branch that has the most recent timestamp. Here is the whole class.
+
+```swift
+public class MostRecentBranchFavoringArbiter: MergeArbiter {
+    
+    public init() {}
+
+    public func changes(toResolve merge: Merge, in store: Store) throws -> [Value.Change] {
+        let v = merge.versions
+        let favoredBranch: Value.Fork.Branch = v.first.timestamp >= v.second.timestamp ? .first : .second
+        let favoredVersion = favoredBranch == .first ? v.first : v.second
+        var changes: [Value.Change] = []
+        for (valueId, fork) in merge.forksByValueIdentifier {
+            switch fork {
+            case let .removedAndUpdated(removeBranch):
+                if removeBranch == favoredBranch {
+                    changes.append(.preserveRemoval(valueId))
+                } else {
+                    let value = try store.value(valueId, prevailingAt: favoredVersion.identifier)!
+                    changes.append(.preserve(value.reference!))
+                }
+            case .twiceInserted, .twiceUpdated:
+                let value = try store.value(valueId, prevailingAt: favoredVersion.identifier)!
+                changes.append(.preserve(value.reference!))
+            case .inserted, .removed, .updated, .twiceRemoved:
+                break
+            }
+        }
+        return changes
+    }
+}
+```
+
+The engine of this class is the loop over _forks_. A fork summarizes the changes made in each branch for a single value identifier. Forks can be non-conflicting, like _.inserted_, _.removed_, _.updated_, and _.twiceRemoved_. These types involve either a change on a single branch, or a change on both branches that can be considered equivalent (_eg_ removing the value on both branches).
+
+Alternatively, a fork can be conflicting. At a minimum, the Arbiter is required to return new changes for any forks that are conflicting. This is how they _resolve_ the conflicts in the merge. They can return a completely new change to resolve a conflicting fork, or they can _preserve_ an existing change. 
+
+You can see that the code above that when data is inserted on each branch, or updated on each branch, the arbiter _preserves_ the value from the more recent branch. When a _.removedAndUpdated_ is encountered — one branch removing the value, and another applying an update — the Arbiter again preserves whichever change was made on the most recent branch.
+
+You need not worry much about Arbiters when getting started. You can just choose one of the existing classes, and start with that. Later, as you need more control, you can think about developing your own custom `MergeArbiter` class.
+
+### Diffing
 
 ### Setting Up an Exchange
 
