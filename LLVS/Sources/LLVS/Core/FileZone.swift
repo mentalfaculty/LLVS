@@ -9,11 +9,9 @@ import Foundation
 
 public class FileStorage: Storage {
     
-    public let fileExtension: String
+    private let fileExtension = "json"
     
-    public init(fileExtension: String) {
-        self.fileExtension = fileExtension
-    }
+    public init() {}
 
     public func makeMapZone(for type: MapType, in store: Store) -> Zone {
         switch type {

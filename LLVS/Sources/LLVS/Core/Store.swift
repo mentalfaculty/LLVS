@@ -47,7 +47,7 @@ public final class Store {
     fileprivate let encoder = JSONEncoder()
     fileprivate let decoder = JSONDecoder()
     
-    public init(rootDirectoryURL: URL, storage: Storage = FileStorage(fileExtension: "json")) throws {
+    public init(rootDirectoryURL: URL, storage: Storage = FileStorage()) throws {
         self.storage = storage
         
         self.rootDirectoryURL = rootDirectoryURL.resolvingSymlinksInPath()

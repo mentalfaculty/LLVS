@@ -45,6 +45,12 @@ LLVS is an abstraction. It handles the history of a dataset, without needing to 
 
 LLVS includes some classes to get you started. You can set up a basic store using the existing storage classes (eg file based), and distribute your data using an existing cloud service (eg CloudKit), but you could also choose to add support for your own store (eg SQLite) or cloud service (eg Firebase). And you are free to use any data format you like, including serialized Swift Codable values, JSON, and end-to-end encrypted formats.
 
+## Installing
+
+### Swift Package Manager
+
+### Using Xcode
+
 ## Some Simple Examples
 
 This section shows simple code for getting started, and provides a means to better understand the framework, and where it fits in to your toolkit.
@@ -229,17 +235,53 @@ The engine of this class is the loop over _forks_. A fork summarizes the changes
 
 Alternatively, a fork can be conflicting. At a minimum, the Arbiter is required to return new changes for any forks that are conflicting. This is how they _resolve_ the conflicts in the merge. They can return a completely new change to resolve a conflicting fork, or they can _preserve_ an existing change. 
 
-You can see that the code above that when data is inserted on each branch, or updated on each branch, the arbiter _preserves_ the value from the more recent branch. When a _.removedAndUpdated_ is encountered — one branch removing the value, and another applying an update — the Arbiter again preserves whichever change was made on the most recent branch.
+You can see in the code above that when data is inserted on each branch, or updated on each branch, the arbiter _preserves_ the value from the more recent branch. When a _.removedAndUpdated_ is encountered — one branch removing the value, and another applying an update — the Arbiter again preserves whichever change was made on the most recent branch.
 
 You need not worry much about Arbiters when getting started. You can just choose one of the existing classes, and start with that. Later, as you need more control, you can think about developing your own custom `MergeArbiter` class.
 
-### Diffing
 
 ### Setting Up an Exchange
 
-### Sending and Receiving
+LLVS is a decentralized storage framework, so you need a way to move versions between stores. For this purpose, we use an _Exchange_. An Exchange is a class that can send and receive data with the goal of moving it to/from other stores. 
 
-## Installing
+CloudKit is a good choice for transferring data on Apple platforms. The `CloudKitExchange` class can be used to move data between LLVS stores using CloudKit.
+
+To get started, we create the exchange.
+
+```swift
+let cloudDatabase = CKContainer.default().privateCloudDatabase
+self.cloudKitExchange = CloudKitExchange(with: store, zoneIdentifier: "MyZone", cloudDatabase: cloudDatabase)
+```
+
+To retrieve new versions from the cloud, we simply call the `retrieve` func, which is asynchronous, with a completion callback.
+
+```swift
+self.cloudKitExchange.retrieve { result in
+    switch result {
+    case let .failure(error):
+        // Handle failure
+    case let .success(versionIds):
+        // Handle success
+    }
+}
+```
+
+Sending new versions to the cloud is just as easy.
+
+```swift
+self.cloudKitExchange.send { result in
+    switch result {
+    case let .failure(error):
+        // Handle failure
+    case .success:
+        // Handle success
+    }
+}
+```
+
+LLVS has no limit on which exchanges you setup, or how many. You can setup several for a single store, effectively pushing and pulling data via different routes. 
+
+Exchanges are also not limited to cloud services. You can write your own pure peer-to-peer Exchange classes. LLVS even includes `FileSystemExchange`, which is an exchange that works via a directory in the file system. This is very useful for testing your app without having to use the cloud.
 
 ## Learning More
 

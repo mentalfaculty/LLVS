@@ -312,6 +312,12 @@ extension Map {
         }
     }
     
+    struct Diff {
+        var key: Key
+        var valueIdentifier: Value.Identifier
+        var valueFork: Value.Fork
+    }
+    
     struct KeyValuePair: Codable, Hashable {
         var key: Key
         var valueReference: Value.Reference
@@ -325,12 +331,6 @@ extension Map {
         init(key: Key) {
             self.key = key
         }
-    }
-    
-    struct Diff {
-        var key: Key
-        var valueIdentifier: Value.Identifier
-        var valueFork: Value.Fork
     }
     
     struct Node: Codable, Hashable {
