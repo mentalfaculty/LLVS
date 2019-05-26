@@ -49,7 +49,23 @@ LLVS includes some classes to get you started. You can set up a basic store usin
 
 ### Swift Package Manager
 
+Add this to your `Package.swift`.
+
+```
+dependencies: [
+    .package(url: "https://gitlab.com/llvs/llvs.git", from: "0.1.0")
+]
+```
+
 ### Using Xcode
+
+To add LLVS to your Xcode project, download the source code, and 
+
+### Trying it Out First
+
+If you don't want to go to the trouble of installing the framework, but do want to test it out in practice, you can try out the LoCo sample app via Test Flight. Use the link below to add the app to Test Flight on your iOS device.
+
+[https://testflight.apple.com/join/nMfzRxt4](https://testflight.apple.com/join/nMfzRxt4)
 
 ## Some Simple Examples
 
