@@ -45,6 +45,7 @@ LLVS is an abstraction. It handles the history of a dataset, without needing to 
 
 LLVS includes some classes to get you started. You can set up a basic store using the existing storage classes (eg file based), and distribute your data using an existing cloud service (eg CloudKit), but you could also choose to add support for your own store (eg SQLite) or cloud service (eg Firebase). And you are free to use any data format you like, including serialized Swift Codable values, JSON, and end-to-end encrypted formats.
 
+
 ## Installing
 
 ### Swift Package Manager
@@ -57,15 +58,34 @@ dependencies: [
 ]
 ```
 
-### Using Xcode
+### Carthage
+
+Add this to your `Cartfile`.
+
+```
+git "https://gitlab.com/llvs/llvs" "0.1.0"
+```
+
+### Cocoapods
+
+Add this to your `Podfile`.
+
+```
+pod 'LLVS', '~> 0.1.0'
+```
+
+### Manually with Xcode
 
 To add LLVS to your Xcode project, download the source code, and drag the `LLVS.xcodeproj` file into your own Xcode app project. Then select your app's target, and add the LLVS framework in the Embedded Frameworks section of the General tab.
+
+If you want to use CloudKit, embed the LLVSCloudKit framework too.
 
 ### Trying it Out First
 
 If you don't want to go to the trouble of installing the framework, but do want to test it out in practice, you can try out the LoCo sample app via Test Flight. Use the link below to add the app to Test Flight on your iOS device.
 
 [https://testflight.apple.com/join/nMfzRxt4](https://testflight.apple.com/join/nMfzRxt4)
+
 
 ## Some Simple Examples
 
@@ -81,7 +101,7 @@ let rootDir = groupDir.appendingPathComponent("MyStore")
 let store = Store(rootDirectoryURL: rootStoreDirectory)
 ```
 
-This code uses the app group container, which is useful if you want to share data with app extensions. LLVS stores can be shared directly between multiple processes, such as the main app and a sharing extension.
+This code uses the app group container, which is useful if you want to share data with app extensions. (LLVS stores can be shared directly between multiple processes, such as the main app and a sharing extension.)
 
 ### Storing Values
 
@@ -127,7 +147,7 @@ let value = try store.value(.init("CDEFGH"), prevailingAt: secondVersion.identif
 let fetchedString = String(data: value.data, encoding: .utf8)
 ```
 
-Here we have fetched the second value we added above, and converted back into a string. We passed in the second version identifier; if we had passed in the first version, which was created before the value was added, `nil` would have been returned.
+Here we have fetched the second value we added above, and converted it back into a string. We passed in the second version identifier; if we had passed in the first version, which was created before the value was added, `nil` would have been returned.
 
 What about the first value we added above? That was added before the second version, so it continues to exist in future versions. (We say it "prevails".) So we can fetch it in exactly the same way. 
 
@@ -136,7 +156,7 @@ let value = try store.value(.init("ABCDEF"), prevailingAt: secondVersion.identif
 let fetchedString = String(data: value.data, encoding: .utf8)
 ```
 
-Even though it was not directly added in the second version, it remains in existence in descendent versions until it is explicitly removed.
+Even though it was not added to the store in the second version, it remains in existence in descendent versions until it is explicitly removed.
 
 ### Updating and Removing Values
 
@@ -150,13 +170,13 @@ let removal: Value.Change = .remove(.init("CDEFGH"))
 let thirdVersion = try store.addVersion(basedOnPredecessor: secondVersion.identifier, storing: [update, removal])
 ```
 
-The third version is based on the second one. There are two changes: it updates the value for "ABCDEF" with new data, and removes the value "CDEFGH". 
+The third version is based on the second one. There are two changes: it updates the value for "ABCDEF" with new data, and removes the value for "CDEFGH". 
 
-If we now attempted to fetch the value with identiifier "CDEFGH" at the third version, we would get `nil`; however. the value would still exist if we fetched the second version.
+If we now attempted to fetch the value with identifier "CDEFGH" at the third version, we would get `nil`; however. the value would still exist if we fetched the second version.
 
 ### Branching
 
-If the history of changes is _serial_ — one set of changes always based on the preceeding — it is easy to work with your data. It gets more complex when _concurrent_ changes are made. If two versions are added at about the same time, you can end up with divergence of your data, and this will likely need to be merged at a later time.
+If the history of changes is _serial_ — one set of changes always based on the preceding — it is easy to work with your data. It gets more complex when _concurrent_ changes are made. If two versions are added at about the same time, you can end up with divergence of your data, and this will likely need to be merged at a later time.
 
 An example of this is when a user makes changes on two different devices, with no interceding sync. Later, when the data does get transferred, the versions branch off, rather than appearing in a continuous ancestral line. This can even happen if you are not using sync; for example, if you have a sharing extension, and it adds a version while your main app is also adding a version.
 
@@ -208,11 +228,13 @@ let newVersion = try! store.merge(version: currentVersionId, with: otherHead, re
 
 If it turns out that `otherHead` is a descendent of the current version, this will not actually add a new version, but will just return the new head. (In Git terminology, it will _fast forward_.)
 
-However, normally the two versions will be divergent, and will need a three-way merge. The merge method will search back through the history, and find a common ancestor. It will then determine the differences between the two new versions by comparing them to the common ancestor. These differences will be passed to the _arbiter_ object, whose task it is to resolve any conflicts.
+However, normally the two versions will be divergent, and will need a three-way merge. The merge method will search back through the history, and find a common ancestor. It will then determine the differences between the two new versions by comparing them to the common ancestor. These differences will be passed to a `MergeArbiter` object, whose task it is to resolve any conflicts.
 
 In this instance, we have used a built-in arbiter class called `MostRecentChangeFavoringArbiter`. As the name suggests, it will choose the most recently changed value whenever there is a conflict.
 
 In your app, you are more likely to create your own arbiter class, to merge your data in custom ways. You can also choose to handle certain specific cases, and pass more standard tasks off to one of the existing arbiter classes.
+
+### Inside a MergeArbiter
 
 You might be wondering what the internals of an arbiter class looks like. It's typically a loop over the differences, treating each type of conflict. One of the simplest is `MostRecentBranchFavoringArbiter`, which will simply favor the branch that has the most recent timestamp. Here is the whole class.
 
@@ -249,11 +271,11 @@ public class MostRecentBranchFavoringArbiter: MergeArbiter {
 
 The engine of this class is the loop over _forks_. A fork summarizes the changes made in each branch for a single value identifier. Forks can be non-conflicting, like _.inserted_, _.removed_, _.updated_, and _.twiceRemoved_. These types involve either a change on a single branch, or a change on both branches that can be considered equivalent (_eg_ removing the value on both branches).
 
-Alternatively, a fork can be conflicting. At a minimum, the Arbiter is required to return new changes for any forks that are conflicting. This is how they _resolve_ the conflicts in the merge. They can return a completely new change to resolve a conflicting fork, or they can _preserve_ an existing change. 
+Alternatively, a fork can be conflicting. At a minimum, the arbiter is required to return new changes for any forks that are conflicting. This is how they _resolve_ the conflicts in the merge. They can return a completely new change to resolve a conflicting fork, or they can _preserve_ an existing change. 
 
-You can see in the code above that when data is inserted on each branch, or updated on each branch, the arbiter _preserves_ the value from the more recent branch. When a _.removedAndUpdated_ is encountered — one branch removing the value, and another applying an update — the Arbiter again preserves whichever change was made on the most recent branch.
+You can see in the code above that when data is inserted on each branch, or updated on each branch, the arbiter _preserves_ the value from the more recent branch. When a _.removedAndUpdated_ is encountered — one branch removing the value, and another applying an update — the arbiter again preserves whichever change was made on the most recent branch.
 
-You need not worry much about Arbiters when getting started. You can just choose one of the existing classes, and start with that. Later, as you need more control, you can think about developing your own custom `MergeArbiter` class.
+You need not worry much about arbiters when getting started. You can just choose one of the existing classes, and start with that. Later, as you need more control, you can think about developing your own custom class that conforms to the `MergeArbiter` protocol.
 
 
 ### Setting Up an Exchange
@@ -295,74 +317,36 @@ self.cloudKitExchange.send { result in
 }
 ```
 
-LLVS has no limit on which exchanges you setup, or how many. You can setup several for a single store, effectively pushing and pulling data via different routes. 
+LLVS has no limit on how many exchanges you setup. You can setup several for a single store, effectively pushing and pulling data via different routes. 
 
-Exchanges are also not limited to cloud services. You can write your own pure peer-to-peer Exchange classes. LLVS even includes `FileSystemExchange`, which is an exchange that works via a directory in the file system. This is very useful for testing your app without having to use the cloud.
+Exchanges are also not limited to cloud services. You can write your own peer-to-peer class which conforms to the `Exchange` protocol. LLVS even includes `FileSystemExchange`, which is an exchange that works via a directory in the file system. This is very useful for testing your app without having to use the cloud.
+
 
 ## Learning More
 
-Samples
-In code documentation
-Blog
+You can begin to explore the code itself, which includes documentary comments. But perhaps the best way to see how it works is to look in the provided Samples. 
 
-## Advantages of LLVS
-- Full history of changes. 
-    - You can fork and merge as much as you like.
-    - You can diff two versions to get what changed
-    - Checkout old versions
-    - Playback changes
-    - Revert commits for undo purposes
-- No lock in
-- Easy to extend to any cloud storage
-- Can support pure peer-to-peer
-- Can work with fully encrypted data
-- Can add support for any on-disk storage you like. Sqlite, CouchDB, flat file, etc.
-- Systematic 3-way merging of data. Use the built in arbiter, or create your own. You have full conrol.
-- Extremely robust, because append only
-- Multithreading is no problem, unlike ORMs
-- Multiprocess is no problem. Great for extensions. No need to even send/receive (unless you prefer that)
-- No risk of data conflicts. You can keep using your version until you are ready to merge. If other versions are added, they don't invalidate your data.
+If you are looking into the sample code, bear in mind that LLVS places no restrictions on what data you put into it. It is entirely up to you how you structure your app data. LLVS gives you a means to store and move the data around, and to track how it is changing, but the data itself is opaque to the framework.
 
-## FAQ
 
-- Is there a version for Android?
-    - No, but would love one
-- Is there LLVS in the cloud?
-    - No, but that would be awesome.
+## Features of LLVS
 
-## Important Objectives
+Here are list of LLVS features, some of which may not be apparent from the description above.
 
-### Simple
-- Just a simple key-value store, with a versioned history like Git
-- No assumptions about what the values are. Could be anything from JSON to encrypted data and JPEG images.
+- No lock in! Use multiple services to exchange data, and switch at will
+- Includes a full history of changes
+- Branch and merge history
+- Determine what changed between two different versions
+- Work with old versions of data
+- Playback changes
+- Revert commits for undo purposes
+- Extend to any cloud storage
+- Support pure peer-to-peer exchange
+- Support end-to-end encryption
+- Add support for any on-disk storage (_eg_ Sqlite, CouchDB, flat file)
+- Systematic 3-way merging of data
+- Append only, so very robust. No mutable data
+- Fully thread safe. Work from any thread, and switch at any time
+- Multiprocess safe. Share the same store between processes (eg extensions)
+- Can safely be added to syncing folders like Dropbox (unlike SQLite, for example)
 
-### Very robust
-- A crash should not render a store unusable. At worst, the most recent changes may be lost.
-- LLVS should be resilient to all but deliberate tampering and disk level corruption.
-- Corrupted SQLite databases caused by an unlucky crash during saving should be a thing of the past.
-
-### Append Only
-- Files in LLVS are immutable. No file should ever be updated once created.
-- Merging two stores is equivalent to just taking the union of all files and directories.
-
-### Versioned
-- Works with versioned history.
-- Can check out any version. Each version is a complete snapshot of the store.
-- Can branch off into concurrent branches.
-- Can merge branches, using powerful three-way merging.
-- Can implement advanced features like undo, without losing changes introduced by sync.
-
-### Concurrent
-- Read/write from multiple threads/processes concurrently without corruption or locking
-
-### Global
-- Should be straightforward to sync a store with a server or via file system.
-- Should be possible to put a store in a shared file system like Dropbox and sync that way.
-
-### Programming Language, Operating System Agnostic
-- Can create a store using any language, on any device, and with any operating system
-- Can even author stores by hand if you really want to
-
-### FilterMaping
-- Support for basic mapes
-- FilterMapes are versioned along with the values
