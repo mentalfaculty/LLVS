@@ -343,7 +343,7 @@ Here are list of LLVS features, some of which may not be apparent from the descr
 - Extend to any cloud storage
 - Support pure peer-to-peer exchange
 - Support end-to-end encryption
-- Add support for any on-disk storage (_eg_ Sqlite, CouchDB, flat file)
+- Add support for any on-disk storage (_eg_ SQLite, CouchDB, flat file)
 - Systematic 3-way merging of data
 - Append only, so very robust. No mutable data
 - Fully thread safe. Work from any thread, and switch at any time
