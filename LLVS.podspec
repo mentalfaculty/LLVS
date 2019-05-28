@@ -38,13 +38,13 @@ Pod::Spec.new do |s|
   s.default_subspec = 'Core'
   
   s.subspec 'Core' do |ss|
-    ss.source_files = 'Source/LLVS/*/*.swift'
+    ss.source_files = 'Sources/LLVS/*/*.swift'
   end
   
   s.subspec 'CloudKit' do |ss|
     ss.dependency 'LLVS/Core'
     ss.framework = 'CloudKit'
-    ss.source_files = 'Source/LLVSCloudKit/*.swift'
+    ss.source_files = 'Sources/LLVSCloudKit/*.swift'
   end
 
 end
