@@ -16,7 +16,7 @@ public protocol ExchangeClient: class {
     func newVersionsAreAvailable(via exchange: Exchange)
 }
 
-public protocol Exchange {
+public protocol Exchange: class {
     var client: ExchangeClient? { get set }
     var store: Store { get }
     

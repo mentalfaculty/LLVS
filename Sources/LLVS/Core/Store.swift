@@ -174,6 +174,27 @@ extension Store {
 
 extension Store {
     
+    /// Merges heads into the version passed, which is usually a head itself. This is a convenience
+    /// to save looping through all heads.
+    /// If the version ends up being changed by the merging, the new version is returned, otherwise nil.
+    public func mergeHeads(into version: Version.Identifier, resolvingWith arbiter: MergeArbiter) -> Version.Identifier? {
+        var heads: Set<Version.Identifier> = []
+        queryHistory { history in
+            heads = history.headIdentifiers
+        }
+        heads.remove(version)
+        
+        guard !heads.isEmpty else { return nil }
+        
+        var versionIdentifier: Version.Identifier = version
+        for otherHead in heads {
+            let newVersion = try! merge(version: versionIdentifier, with: otherHead, resolvingWith: arbiter)
+            versionIdentifier = newVersion.identifier
+        }
+        
+        return versionIdentifier
+    }
+    
     /// Will choose between a three way merge, and a two way merge, based on whether a common ancestor is found.
     public func merge(version firstVersionIdentifier: Version.Identifier, with secondVersionIdentifier: Version.Identifier, resolvingWith arbiter: MergeArbiter, metadata: Data? = nil) throws -> Version {
         do {
