@@ -129,8 +129,23 @@ public class StoreCoordinator {
     
     /// You should use this to save instead of using the store directly, so that the
     /// coordinator can track versions.
-    public func save(changes: [Value.Change]) throws {
+    public func save(_ changes: [Value.Change]) throws {
         currentVersion = try store.addVersion(basedOnPredecessor: currentVersion, storing: changes).identifier
+    }
+    
+    
+    // MARK: Fetching
+    
+    public func valueReferences() throws -> [Value.Reference] {
+        var refs: [Value.Reference] = []
+        try store.enumerate(version: currentVersion) { ref in
+            refs.append(ref)
+        }
+        return refs
+    }
+    
+    public func values() throws -> [Value] {
+        return try valueReferences().map { try store.value(at: $0)! }
     }
     
     
@@ -145,7 +160,7 @@ public class StoreCoordinator {
     }()
     
     /// Completion is on the main thread.
-    func sync(executingUponCompletion completionHandler: ((Swift.Error?) -> Void)? = nil) {
+    public func sync(executingUponCompletion completionHandler: ((Swift.Error?) -> Void)? = nil) {
         syncQueue.addOperation {
             self.performSyncOnQueue(executingUponCompletion: completionHandler)
         }
