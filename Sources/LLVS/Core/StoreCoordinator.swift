@@ -11,7 +11,7 @@ import Combine
 
 /// A `StoreCoordinator` takes care of all aspects of setting up a syncing store.
 /// It's the simplest way to get started, though you may want more control for advanced use cases.
-@available (macOS 10.14, iOS 13, *)
+@available (macOS 10.15, iOS 13, *)
 public class StoreCoordinator {
     
     public enum Error: Swift.Error {
@@ -23,7 +23,11 @@ public class StoreCoordinator {
     }
     
     public let store: Store
-    public let exchange: Exchange?
+    public var exchange: Exchange? {
+        didSet {
+            exchange?.restorationState = cachedData?.exchangeRestorationData
+        }
+    }
     public var mergeArbiter: MergeArbiter = MostRecentChangeFavoringArbiter()
     
     public let storeDirectoryURL: URL
@@ -58,14 +62,14 @@ public class StoreCoordinator {
     }
     
     /// This will setup a store in the default location (Applicaton Support). If you need more than one store,
-    /// use `init(withStoreDirectoryAt:,cacheDirectoryAt:,exchange:)` instead.
-    public convenience init(with exchange: Exchange? = nil) throws {
-        try self.init(withStoreDirectoryAt: Self.defaultStoreDirectory, cacheDirectoryAt: Self.defaultStoreDirectory, exchange: exchange)
+    /// use `init(withStoreDirectoryAt:,cacheDirectoryAt:)` instead.
+    public convenience init() throws {
+        try self.init(withStoreDirectoryAt: Self.defaultStoreDirectory, cacheDirectoryAt: Self.defaultStoreDirectory)
     }
     
     /// Gives full control over where the store is (directory location), and where cached data should be kept (directory).
     /// The directories will be created if they do not exist.
-    public init(withStoreDirectoryAt storeURL: URL, cacheDirectoryAt coordinatorCacheURL: URL, exchange: Exchange? = nil) throws {
+    public init(withStoreDirectoryAt storeURL: URL, cacheDirectoryAt coordinatorCacheURL: URL) throws {
         self.storeDirectoryURL = storeURL
         self.cacheDirectoryURL = coordinatorCacheURL
         self.cachedCoordinatorFileURL = cacheDirectoryURL.appendingPathComponent("Coordinator.json")
@@ -74,16 +78,18 @@ public class StoreCoordinator {
         try FileManager.default.createDirectory(at: coordinatorCacheURL, withIntermediateDirectories: true, attributes: nil)
 
         self.store = try Store(rootDirectoryURL: storeURL)
-        self.exchange = exchange
-        
+        self.currentVersion = Version.Identifier() // Set a temporary version. Final is in cache
+        try loadCache()
+    }
+    
+    private func loadCache() throws {
         // Load state from cache
-        let fileManager = FileManager()
         let cachedData: CachedData
-        if fileManager.fileExists(atPath: self.cachedCoordinatorFileURL.path),
-            let data = try? Data(contentsOf: self.cachedCoordinatorFileURL),
-            let cached = try? JSONDecoder().decode(CachedData.self, from: data) {
+        var shouldPersist = false
+        if let cached = self.cachedData {
             cachedData = cached
         } else {
+            // Get most recent, or make first commit
             let version: Version.Identifier
             if let head = store.mostRecentHead {
                 version = head.identifier
@@ -91,12 +97,23 @@ public class StoreCoordinator {
                 version = try store.addVersion(basedOnPredecessor: nil, storing: []).identifier
             }
             cachedData = CachedData(currentVersionIdentifier: version)
+            shouldPersist = true
         }
         
         // Set properties from cache
         self.currentVersion = cachedData.currentVersionIdentifier
-        self.exchange?.restorationState = cachedData.exchangeRestorationData
-        persist()
+        if shouldPersist { persist() }
+    }
+    
+    private var cachedData: CachedData? {
+        let fileManager = FileManager()
+        if fileManager.fileExists(atPath: self.cachedCoordinatorFileURL.path),
+            let data = try? Data(contentsOf: self.cachedCoordinatorFileURL),
+            let cached = try? JSONDecoder().decode(CachedData.self, from: data) {
+            return cached
+        } else {
+            return nil
+        }
     }
     
     /// Store cached data
