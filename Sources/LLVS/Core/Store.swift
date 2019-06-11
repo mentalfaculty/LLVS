@@ -319,10 +319,18 @@ extension Store {
         return try ref.flatMap { try value(valueIdentifier, storedAt: $0.version) }
     }
     
-    internal func value(_ valueIdentifier: Value.Identifier, storedAt versionIdentifier: Version.Identifier) throws -> Value? {
+    public func value(_ valueIdentifier: Value.Identifier, storedAt versionIdentifier: Version.Identifier) throws -> Value? {
         guard let data = try valuesZone.data(for: .init(key: valueIdentifier.identifierString, version: versionIdentifier)) else { return nil }
         let value = Value(identifier: valueIdentifier, version: versionIdentifier, data: data)
         return value
+    }
+    
+    public func value(at valueReference: Value.Reference) throws -> Value? {
+        return try value(valueReference.identifier, storedAt: valueReference.version)
+    }
+    
+    public func enumerate(version versionId: Version.Identifier, executingForEach block: (Value.Reference) throws -> Void) throws {
+        try valuesMap.enumerateValueReferences(forVersionIdentifiedBy: versionId, executingForEach: block)
     }
     
 }
