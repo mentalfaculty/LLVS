@@ -332,6 +332,10 @@ extension Store {
 
 extension Store {
     
+    /// Returns the changes actually made in the version passed. This is important for an exchange, for example, that wishes to
+    /// store a set of changes. Note that it is not exactly equivalent to taking the diff between the  version and one of its predecessors,
+    /// because in that case, any changes made in the branch of the other predecessor will also be included as changes, when they don't
+    /// really belong (ie they were actually made in the past)
     public func valueChanges(madeInVersionIdentifiedBy versionId: Version.Identifier) throws -> [Value.Change] {
         guard let version = try version(identifiedBy: versionId) else { throw Error.missingVersion }
         
@@ -367,20 +371,30 @@ extension Store {
                 }
             }
         } else {
-            let diffs = try valuesMap.differences(between: versionId, and: p1, withCommonAncestor: p1)
-            for diff in diffs {
-                switch diff.valueFork {
-                case .inserted:
-                    let value = try self.value(diff.valueIdentifier, prevailingAt: versionId)!
-                    changes.append(.insert(value))
-                case .removed:
-                    changes.append(.remove(diff.valueIdentifier))
-                case .updated:
-                    let value = try self.value(diff.valueIdentifier, prevailingAt: versionId)!
-                    changes.append(.update(value))
-                case .removedAndUpdated, .twiceInserted, .twiceRemoved, .twiceUpdated:
-                    fatalError("Should not be possible with only a single branch")
-                }
+            changes = try valueChanges(madeBetween: p1, and: version.identifier)
+        }
+        
+        return changes
+    }
+    
+    /// Changes that can be applied to go from the first version to the second. Useful for "diffing", eg, updating UI by seeing what changed.
+    public func valueChanges(madeBetween versionId1: Version.Identifier, and versionId2: Version.Identifier) throws -> [Value.Change] {
+        guard let _ = try version(identifiedBy: versionId1), let _ = try version(identifiedBy: versionId2) else { throw Error.missingVersion }
+        
+        var changes: [Value.Change] = []
+        let diffs = try valuesMap.differences(between: versionId2, and: versionId1, withCommonAncestor: versionId1)
+        for diff in diffs {
+            switch diff.valueFork {
+            case .inserted:
+                let value = try self.value(diff.valueIdentifier, prevailingAt: versionId2)!
+                changes.append(.insert(value))
+            case .removed:
+                changes.append(.remove(diff.valueIdentifier))
+            case .updated:
+                let value = try self.value(diff.valueIdentifier, prevailingAt: versionId2)!
+                changes.append(.update(value))
+            case .removedAndUpdated, .twiceInserted, .twiceRemoved, .twiceUpdated:
+                fatalError("Should not be possible with only a single branch")
             }
         }
         
