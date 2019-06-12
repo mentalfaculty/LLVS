@@ -6,18 +6,15 @@
 //
 
 import Foundation
+import Combine
 
 enum ExchangeError: Swift.Error {
     case remoteVersionsWithUnknownPredecessors
     case missingVersion
 }
 
-public protocol ExchangeClient: class {
-    func newVersionsAreAvailable(via exchange: Exchange)
-}
-
 public protocol Exchange: class {
-    var client: ExchangeClient? { get set }
+    var newVersionsAvailable: AnyPublisher<Void, Never> { get }
     var store: Store { get }
     
     var restorationState: Data? { get set }

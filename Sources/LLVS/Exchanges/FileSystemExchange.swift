@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Combine
 
 public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
 
@@ -16,7 +17,10 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
     
     public let store: Store
     
-    public weak var client: ExchangeClient?
+    private let newVersionsSubject: PassthroughSubject<Void, Never> = .init()
+    public var newVersionsAvailable: AnyPublisher<Void, Never> {
+        newVersionsSubject.eraseToAnyPublisher()
+    }
     
     public let rootDirectoryURL: URL
     public var versionsDirectory: URL { return rootDirectoryURL.appendingPathComponent("versions") }
@@ -162,7 +166,7 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
     public func presentedItemDidChange() {
         notifyWorkItem?.cancel()
         notifyWorkItem = DispatchWorkItem {
-            self.client?.newVersionsAreAvailable(via: self)
+            self.newVersionsSubject.send(())
         }
         DispatchQueue.main.asyncAfter(deadline: .now()+minimumDelayBeforeNotifyingOfNewVersions, execute: notifyWorkItem!)
     }

@@ -155,22 +155,11 @@ class FileSystemExchangeTests: XCTestCase {
     func testNewVersionAvailableNotification() {
         exchange1 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store1, usesFileCoordination: true)
         exchange2 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store2, usesFileCoordination: true)
-        
-        class MockClient: ExchangeClient {
-            let block: () -> Void
-            init(_ block: @escaping () -> Void) {
-                self.block = block
-            }
-            func newVersionsAreAvailable(via exchange: Exchange) {
-                block()
-            }
-        }
-        
+    
         let expect = self.expectation(description: "Send")
-        let mockClient = MockClient {
+        _ = exchange2.newVersionsAvailable.sink {
             expect.fulfill()
         }
-        exchange2.client = mockClient
         
         let _ = try! store1.addVersion(basedOnPredecessor: nil, storing: [])
         

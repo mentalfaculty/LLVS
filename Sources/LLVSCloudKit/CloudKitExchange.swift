@@ -8,6 +8,7 @@
 import Foundation
 import CloudKit
 import LLVS
+import Combine
 
 @available(macOS 10.12, iOS 10.0, *)
 public class CloudKitExchange: Exchange {
@@ -57,7 +58,7 @@ public class CloudKitExchange: Exchange {
     public var store: Store
     
     /// Client to inform of updates
-    public weak var client: ExchangeClient?
+    public let newVersionsAvailable: AnyPublisher<Void, Never> = PassthroughSubject<Void, Never>().eraseToAnyPublisher()
 
     /// A store identifier identifies the store in the cloud. This allows multiple stores to use a shared zone like the public database.
     public let storeIdentifier: String
