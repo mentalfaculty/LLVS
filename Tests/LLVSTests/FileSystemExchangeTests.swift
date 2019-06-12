@@ -157,7 +157,7 @@ class FileSystemExchangeTests: XCTestCase {
         exchange2 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store2, usesFileCoordination: true)
     
         let expect = self.expectation(description: "Send")
-        _ = exchange2.newVersionsAvailable.sink {
+        _ = exchange2.newVersionsAvailable.first().sink {
             expect.fulfill()
         }
         

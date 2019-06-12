@@ -10,7 +10,6 @@ import CloudKit
 import LLVS
 import Combine
 
-@available(macOS 10.12, iOS 10.0, *)
 public class CloudKitExchange: Exchange {
     
     public enum CloudDatabaseDescription {
@@ -384,7 +383,6 @@ public extension CloudKitExchange {
 
 // MARK:- Subscriptions
 
-@available(macOS 10.12, *)
 public extension CloudKitExchange {
     
     func subscribeForPushNotifications() {
@@ -466,7 +464,6 @@ extension CloudKitExchange {
 
 // MARK:- CKRecord
 
-@available(macOS 10.12, *)
 fileprivate extension CKRecord {
     
     enum ExchangeSubscription: String {
@@ -492,7 +489,6 @@ fileprivate extension CKRecord {
 }
 
 
-@available(macOS 10.12, *)
 fileprivate extension CKRecord.ID {
     
     static func prefix(forStoreIdentifier storeIdentifier: String) -> String {
