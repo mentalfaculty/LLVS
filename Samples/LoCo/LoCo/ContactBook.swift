@@ -48,7 +48,7 @@ final class ContactBook {
     init(prevailingAt version: Version.Identifier, loadingFrom store: Store, exchangeRestorationData: Data?) throws {
         self.store = store
         self.currentVersion = version
-        self.cloudKitExchange = CloudKitExchange(with: store, zoneIdentifier: "ContactBook", cloudDatabase: CKContainer.default().privateCloudDatabase)
+        self.cloudKitExchange = CloudKitExchange(with: store, storeIdentifier: "ContactBook", cloudDatabasDescription: .privateDatabaseWithCustomZone(CKContainer.default(), zoneIdentifier: "ContactBook"))
         self.cloudKitExchange.restorationState = exchangeRestorationData
         try fetchContacts()
     }
@@ -59,7 +59,7 @@ final class ContactBook {
         let newValue = Value(identifier: ContactBook.sharedContactBookIdentifier, version: nil, data: emptyArrayData)
         let insert: Value.Change = .insert(newValue)
         self.currentVersion = try store.addVersion(basedOnPredecessor: nil, storing: [insert]).identifier
-        self.cloudKitExchange = CloudKitExchange(with: store, zoneIdentifier: "ContactBook", cloudDatabase: CKContainer.default().privateCloudDatabase)
+        self.cloudKitExchange = CloudKitExchange(with: store, storeIdentifier: "ContactBook", cloudDatabasDescription: .privateDatabaseWithCustomZone(CKContainer.default(), zoneIdentifier: "ContactBook"))
     }
     
     

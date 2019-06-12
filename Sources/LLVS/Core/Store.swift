@@ -174,6 +174,27 @@ extension Store {
 
 extension Store {
     
+    /// Merges heads into the version passed, which is usually a head itself. This is a convenience
+    /// to save looping through all heads.
+    /// If the version ends up being changed by the merging, the new version is returned, otherwise nil.
+    public func mergeHeads(into version: Version.Identifier, resolvingWith arbiter: MergeArbiter) -> Version.Identifier? {
+        var heads: Set<Version.Identifier> = []
+        queryHistory { history in
+            heads = history.headIdentifiers
+        }
+        heads.remove(version)
+        
+        guard !heads.isEmpty else { return nil }
+        
+        var versionIdentifier: Version.Identifier = version
+        for otherHead in heads {
+            let newVersion = try! merge(version: versionIdentifier, with: otherHead, resolvingWith: arbiter)
+            versionIdentifier = newVersion.identifier
+        }
+        
+        return versionIdentifier
+    }
+    
     /// Will choose between a three way merge, and a two way merge, based on whether a common ancestor is found.
     public func merge(version firstVersionIdentifier: Version.Identifier, with secondVersionIdentifier: Version.Identifier, resolvingWith arbiter: MergeArbiter, metadata: Data? = nil) throws -> Version {
         do {
@@ -298,10 +319,18 @@ extension Store {
         return try ref.flatMap { try value(valueIdentifier, storedAt: $0.version) }
     }
     
-    internal func value(_ valueIdentifier: Value.Identifier, storedAt versionIdentifier: Version.Identifier) throws -> Value? {
+    public func value(_ valueIdentifier: Value.Identifier, storedAt versionIdentifier: Version.Identifier) throws -> Value? {
         guard let data = try valuesZone.data(for: .init(key: valueIdentifier.identifierString, version: versionIdentifier)) else { return nil }
         let value = Value(identifier: valueIdentifier, version: versionIdentifier, data: data)
         return value
+    }
+    
+    public func value(at valueReference: Value.Reference) throws -> Value? {
+        return try value(valueReference.identifier, storedAt: valueReference.version)
+    }
+    
+    public func enumerate(version versionId: Version.Identifier, executingForEach block: (Value.Reference) throws -> Void) throws {
+        try valuesMap.enumerateValueReferences(forVersionIdentifiedBy: versionId, executingForEach: block)
     }
     
 }
@@ -311,6 +340,10 @@ extension Store {
 
 extension Store {
     
+    /// Returns the changes actually made in the version passed. This is important for an exchange, for example, that wishes to
+    /// store a set of changes. Note that it is not exactly equivalent to taking the diff between the  version and one of its predecessors,
+    /// because in that case, any changes made in the branch of the other predecessor will also be included as changes, when they don't
+    /// really belong (ie they were actually made in the past)
     public func valueChanges(madeInVersionIdentifiedBy versionId: Version.Identifier) throws -> [Value.Change] {
         guard let version = try version(identifiedBy: versionId) else { throw Error.missingVersion }
         
@@ -346,20 +379,30 @@ extension Store {
                 }
             }
         } else {
-            let diffs = try valuesMap.differences(between: versionId, and: p1, withCommonAncestor: p1)
-            for diff in diffs {
-                switch diff.valueFork {
-                case .inserted:
-                    let value = try self.value(diff.valueIdentifier, prevailingAt: versionId)!
-                    changes.append(.insert(value))
-                case .removed:
-                    changes.append(.remove(diff.valueIdentifier))
-                case .updated:
-                    let value = try self.value(diff.valueIdentifier, prevailingAt: versionId)!
-                    changes.append(.update(value))
-                case .removedAndUpdated, .twiceInserted, .twiceRemoved, .twiceUpdated:
-                    fatalError("Should not be possible with only a single branch")
-                }
+            changes = try valueChanges(madeBetween: p1, and: version.identifier)
+        }
+        
+        return changes
+    }
+    
+    /// Changes that can be applied to go from the first version to the second. Useful for "diffing", eg, updating UI by seeing what changed.
+    public func valueChanges(madeBetween versionId1: Version.Identifier, and versionId2: Version.Identifier) throws -> [Value.Change] {
+        guard let _ = try version(identifiedBy: versionId1), let _ = try version(identifiedBy: versionId2) else { throw Error.missingVersion }
+        
+        var changes: [Value.Change] = []
+        let diffs = try valuesMap.differences(between: versionId2, and: versionId1, withCommonAncestor: versionId1)
+        for diff in diffs {
+            switch diff.valueFork {
+            case .inserted:
+                let value = try self.value(diff.valueIdentifier, prevailingAt: versionId2)!
+                changes.append(.insert(value))
+            case .removed:
+                changes.append(.remove(diff.valueIdentifier))
+            case .updated:
+                let value = try self.value(diff.valueIdentifier, prevailingAt: versionId2)!
+                changes.append(.update(value))
+            case .removedAndUpdated, .twiceInserted, .twiceRemoved, .twiceUpdated:
+                fatalError("Should not be possible with only a single branch")
             }
         }
         
