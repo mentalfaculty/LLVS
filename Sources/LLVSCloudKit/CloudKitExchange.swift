@@ -176,10 +176,11 @@ fileprivate extension CloudKitExchange {
     
     func makeRecordsQuery() -> CKQuery {
         let predicate: NSPredicate
+        let prefix = CKRecord.ID.prefix(forStoreIdentifier: storeIdentifier)
         if let lastQueryDate = restoration.lastQueryDate {
-            predicate = NSPredicate(format: "(recordName BEGINSWITH %@) AND (modifedAt >= %@)", storeIdentifier, lastQueryDate as NSDate)
+            predicate = NSPredicate(format: "(recordName BEGINSWITH %@) AND (modifedAt >= %@)", prefix, lastQueryDate as NSDate)
         } else {
-            predicate = NSPredicate(format: "recordName BEGINSWITH %@", storeIdentifier)
+            predicate = NSPredicate(format: "recordName BEGINSWITH %@", prefix)
         }
         return CKQuery(recordType: CKRecord.ExchangeType.Version.rawValue, predicate: predicate)
     }
@@ -468,7 +469,7 @@ fileprivate extension CKRecord {
     }
     
     enum ExchangeType: String {
-        case Version
+        case Version = "LLVS_Version"
     }
     
     enum ExchangeKey: String {
@@ -489,13 +490,19 @@ fileprivate extension CKRecord {
 @available(macOS 10.12, *)
 fileprivate extension CKRecord.ID {
     
+    static func prefix(forStoreIdentifier storeIdentifier: String) -> String {
+        "LLVS_\(storeIdentifier)_"
+    }
+    
     convenience init(versionIdentifier: Version.Identifier, storeIdentifier: String, zoneID: CKRecordZone.ID) {
-        self.init(recordName: "\(storeIdentifier)_\(versionIdentifier.identifierString)", zoneID: zoneID)
+        let prefix = Self.prefix(forStoreIdentifier: storeIdentifier)
+        self.init(recordName: prefix + versionIdentifier.identifierString, zoneID: zoneID)
     }
     
     func versionIdentifier(forStore storeIdentifier: String) -> Version.Identifier? {
-        guard recordName.hasPrefix("\(storeIdentifier)_") else { return nil }
-        return Version.Identifier(String(recordName.dropFirst(storeIdentifier.count+1)))
+        let prefix = Self.prefix(forStoreIdentifier: storeIdentifier)
+        guard recordName.hasPrefix(prefix) else { return nil }
+        return Version.Identifier(String(recordName.dropFirst(prefix.count)))
     }
     
 }
