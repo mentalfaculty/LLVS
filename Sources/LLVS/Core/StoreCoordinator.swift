@@ -14,9 +14,6 @@ import Combine
 @available (macOS 10.15, iOS 13, *)
 public class StoreCoordinator {
     
-    public enum Error: Swift.Error {
-    }
-    
     private struct CachedData: Codable {
         var exchangeRestorationData: Data?
         var currentVersionIdentifier: Version.Identifier

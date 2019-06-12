@@ -9,7 +9,7 @@ import Foundation
 import CloudKit
 import LLVS
 
-@available(macOS 10.12, *)
+@available(macOS 10.12, iOS 8.0, watchOS 3.0, *)
 public class CloudKitExchange: Exchange {
     
     public enum Error: Swift.Error {
@@ -24,60 +24,57 @@ public class CloudKitExchange: Exchange {
         return result
     }()
     
+    /// The store the exchange is updating.
     public var store: Store
     
+    /// Client to inform of updates
     public weak var client: ExchangeClient?
 
-    public let zoneIdentifier: String
+    /// A store identifier identifies the store in the cloud. This allows multiple stores to use a shared zone like the public database.
+    public let storeIdentifier: String
+    
+    /// Used only for the private database, when syncing via a custom zone.
+    public let zoneIdentifier: String?
+    
+    /// Can be private, shared or public database. For private, it is best to provide a zone identifier.
     public let database: CKDatabase
-    public let zone: CKRecordZone
     
-    private let createZoneOperation: CKModifyRecordZonesOperation
+    /// The custom zone being used in the private database, if there is one.
+    public let zone: CKRecordZone?
     
-    private var zoneID: CKRecordZone.ID {
+    /// Use to make dependencies when working with a custom zone
+    private let createZoneOperation: CKModifyRecordZonesOperation?
+    
+    /// Zone identifier if we are using a custom zone
+    private var zoneID: CKRecordZone.ID? {
+        guard let zoneIdentifier = zoneIdentifier else { return nil }
         return CKRecordZone.ID(zoneName: zoneIdentifier, ownerName: CKCurrentUserDefaultName)
     }
+
+    /// Restoration state
+    private var restoration: Restoration = .init()
     
-    private var versionsInCloud: Set<Version.Identifier> = []
-    private var fetchRecordChangesToken: CKServerChangeToken?
-    
-    private enum RestorationKey: String {
-        case versionsInCloudData, fetchRecordChangesTokenData
-    }
-    
-    public var restorationState: Data? {
-        get {
-            let encoder = JSONEncoder()
-            var dict: [String:Data] = [RestorationKey.versionsInCloudData.rawValue : try! encoder.encode(versionsInCloud)]
-            if let token = fetchRecordChangesToken {
-                dict[RestorationKey.fetchRecordChangesTokenData.rawValue] = NSKeyedArchiver.archivedData(withRootObject: token)
-            }
-            return try? encoder.encode(dict)
-        }
-        set {
-            let decoder = JSONDecoder()
-            if let data = newValue, let dict = try? decoder.decode([String:Data].self, from: data) {
-                if let data = dict[RestorationKey.versionsInCloudData.rawValue] {
-                    versionsInCloud = (try? decoder.decode( Set<Version.Identifier>.self, from: data)) ?? []
-                }
-                if let tokenData = dict[RestorationKey.fetchRecordChangesTokenData.rawValue] {
-                    fetchRecordChangesToken = NSKeyedUnarchiver.unarchiveObject(with: tokenData) as? CKServerChangeToken
-                }
-            }
-        }
-    }
-    
-    public init(with store: Store, zoneIdentifier identifier: String, cloudDatabase: CKDatabase) {
+    /// For single user syncing, it is best to use a zone. In that case, pass in the private database and a zone identifier.
+    /// Otherwise, you will be using the default  zone in whichever database you pass.
+    public init(with store: Store, storeIdentifier: String, cloudDatabase: CKDatabase, zoneIdentifier identifier: String? = nil) {
         self.store = store
+        self.storeIdentifier = storeIdentifier
         self.zoneIdentifier = identifier
         self.database = cloudDatabase
-        self.zone = CKRecordZone(zoneName: zoneIdentifier)
-        self.createZoneOperation = CKModifyRecordZonesOperation(recordZonesToSave: [zone], recordZoneIDsToDelete: nil)
-        self.database.add(self.createZoneOperation)
+        self.zone = zoneIdentifier.flatMap { CKRecordZone(zoneName: $0) }
+        if cloudDatabase.databaseScope == .private, let zone = self.zone {
+            self.createZoneOperation = CKModifyRecordZonesOperation(recordZonesToSave: [zone], recordZoneIDsToDelete: nil)
+            self.database.add(self.createZoneOperation!)
+        }
     }
 
+    /// Remove a zone, if there is one. Otherwise will give error.
     public func removeZone(completionHandler completion: @escaping CompletionHandler<Void>) {
         log.trace("Removing zone")
+        guard let zone = zone else {
+            completion(.failure(Error.noZoneFound))
+            return
+        }
         database.delete(withRecordZoneID: zone.zoneID) { zoneID, error in
             if let error = error {
                 log.error("Removing zone failed: \(error)")
@@ -89,29 +86,31 @@ public class CloudKitExchange: Exchange {
         }
     }
     
-    fileprivate func fetchCloudChanges(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
+    /// Uses the zone changes API.
+    fileprivate func fetchCloudZoneChanges(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         log.trace("Fetching cloud changes")
 
         let options = CKFetchRecordZoneChangesOperation.ZoneOptions()
-        options.previousServerChangeToken = fetchRecordChangesToken
+        options.desiredKeys = []
+        options.previousServerChangeToken = restoration.fetchRecordChangesToken
         
-        let operation = CKFetchRecordZoneChangesOperation(recordZoneIDs: [zoneID], optionsByRecordZoneID: [zoneID : options])
-        operation.addDependency(createZoneOperation)
+        let operation = CKFetchRecordZoneChangesOperation(recordZoneIDs: [zoneID!], optionsByRecordZoneID: [zoneID! : options])
+        operation.addDependency(createZoneOperation!)
         operation.fetchAllChanges = true
         operation.recordChangedBlock = { record in
-            let versionString = record.recordID.recordName
-            self.versionsInCloud.insert(.init(versionString))
+            let versionString = record.recordID.versionIdentifier(forStore: self.storeIdentifier)
+            self.restoration.versionsInCloud.insert(.init(versionString))
             log.verbose("Found record for version: \(versionString)")
         }
         operation.recordZoneFetchCompletionBlock = { zoneID, token, clientData, moreComing, error in
-            self.fetchRecordChangesToken = token
+            self.restoration.fetchRecordChangesToken = token
             log.verbose("Stored iCloud token: \(String(describing: token))")
         }
         operation.fetchRecordZoneChangesCompletionBlock = { error in
             if let error = error as? CKError, error.code == .changeTokenExpired || error.code == .partialFailure {
-                self.fetchRecordChangesToken = nil
-                self.versionsInCloud = []
-                self.fetchCloudChanges(executingUponCompletion: completionHandler)
+                self.restoration.fetchRecordChangesToken = nil
+                self.restoration.versionsInCloud = []
+                self.fetchCloudZoneChanges(executingUponCompletion: completionHandler)
                 log.error("iCloud token expired. Cleared cached data")
             } else if let error = error {
                 completionHandler(.failure(error))
@@ -123,6 +122,103 @@ public class CloudKitExchange: Exchange {
         
         database.add(operation)
     }
+    
+    /// Used when no zone is available. Eg. the public database.
+    fileprivate func queryDatabaseChanges(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
+        log.trace("Querying cloud changes")
+        
+        let predicate: NSPredicate
+        if let lastQueryDate = restoration.lastQueryDate {
+            predicate = NSPredicate(format: "(recordName BEGINSWITH %@) AND (modifedAt >= %@)", storeIdentifier, lastQueryDate as NSDate)
+        } else {
+            predicate = NSPredicate(format: "recordName BEGINSWITH %@", storeIdentifier)
+        }
+        let operation = CKQuery(recordType: CKRecord.ExchangeType.Version.rawValue, predicate: predicate)
+        
+//        let options = CKFetchRecordZoneChangesOperation.ZoneOptions()
+//        options.previousServerChangeToken = fetchRecordChangesToken
+//
+//        let operation = CKFetchRecordZoneChangesOperation(recordZoneIDs: [zoneID!], optionsByRecordZoneID: [zoneID! : options])
+//        operation.addDependency(createZoneOperation!)
+//        operation.fetchAllChanges = true
+//        operation.recordChangedBlock = { record in
+//            let versionString = record.recordID.recordName
+//            self.versionsInCloud.insert(.init(versionString))
+//            log.verbose("Found record for version: \(versionString)")
+//        }
+//        operation.recordZoneFetchCompletionBlock = { zoneID, token, clientData, moreComing, error in
+//            self.fetchRecordChangesToken = token
+//            log.verbose("Stored iCloud token: \(String(describing: token))")
+//        }
+//        operation.fetchRecordZoneChangesCompletionBlock = { error in
+//            if let error = error as? CKError, error.code == .changeTokenExpired || error.code == .partialFailure {
+//                self.fetchRecordChangesToken = nil
+//                self.versionsInCloud = []
+//                self.fetchCloudZoneChanges(executingUponCompletion: completionHandler)
+//                log.error("iCloud token expired. Cleared cached data")
+//            } else if let error = error {
+//                completionHandler(.failure(error))
+//            } else {
+//                log.trace("Fetched changes")
+//                completionHandler(.success(()))
+//            }
+//        }
+        
+        database.add(operation)
+    }
+}
+
+
+// MARK:- Restoration
+
+extension CloudKitExchange {
+    
+    public var restorationState: Data? {
+        get {
+            try? JSONEncoder().encode(restoration)
+        }
+        set {
+            if let newValue = newValue, let state = try? JSONDecoder().decode(Restoration.self, from: newValue) {
+                restoration = state
+            }
+        }
+    }
+    
+    fileprivate struct Restoration: Codable {
+        
+        enum CodingKeys: String, CodingKey {
+            case versionsInCloud, fetchRecordChangesToken, lastQueryDate
+        }
+        
+        /// Set of all version ids in cloud
+        var versionsInCloud: Set<Version.Identifier> = []
+        
+        /// Used for private database with custom zone
+        var fetchRecordChangesToken: CKServerChangeToken?
+        
+        /// Used when there is no custom zone
+        var lastQueryDate: Date?
+        
+        init() {}
+        
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            versionsInCloud = try container.decode(type(of: versionsInCloud), forKey: .versionsInCloud)
+            if let tokenData = try container.decodeIfPresent(Data.self, forKey: .fetchRecordChangesToken) {
+                fetchRecordChangesToken = NSKeyedUnarchiver.unarchiveObject(with: tokenData) as? CKServerChangeToken
+            }
+            lastQueryDate = try container.decodeIfPresent(Date.self, forKey: .lastQueryDate)
+        }
+        
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(versionsInCloud, forKey: .versionsInCloud)
+            let tokenData = fetchRecordChangesToken.flatMap { NSKeyedArchiver.archivedData(withRootObject: $0) }
+            try container.encodeIfPresent(tokenData, forKey: .fetchRecordChangesToken)
+            try container.encodeIfPresent(lastQueryDate, forKey: .lastQueryDate)
+        }
+    }
+    
 }
 
 
@@ -131,12 +227,16 @@ public extension CloudKitExchange {
     
     func prepareToRetrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         log.trace("Preparing to retrieve")
-        fetchCloudChanges(executingUponCompletion: completionHandler)
+        if zone != nil {
+            fetchCloudZoneChanges(executingUponCompletion: completionHandler)
+        } else {
+            queryDatabaseChanges(executingUponCompletion: completionHandler)
+        }
     }
     
     func retrieveVersions(identifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
         log.trace("Retrieving versions")
-        let recordIDs = versionIdentifiers.map { CKRecord.ID(recordName: $0.identifierString, zoneID: zoneID) }
+        let recordIDs = versionIdentifiers.map { CKRecord.ID(versionIdentifier: $0, storeIdentifier: storeIdentifier, zoneID: zoneID ?? .default) }
         let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
         fetchOperation.desiredKeys = [CKRecord.ExchangeKey.version.rawValue]
         fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
@@ -164,13 +264,13 @@ public extension CloudKitExchange {
     }
     
     func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>) {
-        log.verbose("Retrieved all versions: \(versionsInCloud.map({ $0.identifierString }))")
-        completionHandler(.success(Array(versionsInCloud)))
+        log.verbose("Retrieved all versions: \(restoration.versionsInCloud.map({ $0.identifierString }))")
+        completionHandler(.success(Array(restoration.versionsInCloud)))
     }
     
     func retrieveValueChanges(forVersionsIdentifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier:[Value.Change]]>) {
         log.trace("Retrieving value changes for versions: \(versionIdentifiers)")
-        let recordIDs = versionIdentifiers.map { CKRecord.ID(recordName: $0.identifierString, zoneID: zoneID) }
+        let recordIDs = versionIdentifiers.map { CKRecord.ID(versionIdentifier: $0, storeIdentifier: storeIdentifier, zoneID: zoneID ?? .default) }
         let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
         fetchOperation.desiredKeys = [CKRecord.ExchangeKey.valueChanges.rawValue, CKRecord.ExchangeKey.valueChangesAsset.rawValue]
         fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
@@ -193,7 +293,7 @@ public extension CloudKitExchange {
                     }
                     let valueChanges: [Value.Change] = try JSONDecoder().decode([Value.Change].self, from: data)
                     log.verbose("Retrieved value changes for \(recordID.recordName): \(valueChanges)")
-                    return (Version.Identifier(recordID.recordName), valueChanges)
+                    return (recordID.versionIdentifier(forStore: self.storeIdentifier), valueChanges)
                 }
                 
                 completionHandler(.success(.init(uniqueKeysWithValues: changesByVersion)))
@@ -211,7 +311,11 @@ public extension CloudKitExchange {
 public extension CloudKitExchange {
     
     func prepareToSend(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        fetchCloudChanges(executingUponCompletion: completionHandler)
+        if zone != nil {
+            fetchCloudZoneChanges(executingUponCompletion: completionHandler)
+        } else {
+            queryDatabaseChanges(executingUponCompletion: completionHandler)
+        }
     }
     
     func send(_ version: Version, with valueChanges: [Value.Change], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
@@ -220,7 +324,7 @@ public extension CloudKitExchange {
     
         do {
             var tempFileURL: URL?
-            let recordID = CKRecord.ID(recordName: version.identifier.identifierString, zoneID: zoneID)
+            let recordID = CKRecord.ID(versionIdentifier: version.identifier, storeIdentifier: storeIdentifier, zoneID: zoneID ?? .default)
             let record = CKRecord(recordType: .init(CKRecord.ExchangeType.Version.rawValue), recordID: recordID)
             let versionData = try JSONEncoder().encode([version]) // Use an array, because JSON needs root dict or array
             let changesData = try JSONEncoder().encode(valueChanges)
@@ -305,6 +409,20 @@ fileprivate extension CKRecord {
     
     func setExchangeValue(_ value: Any, forKey key: ExchangeKey) {
         setValue(value, forKey: key.rawValue)
+    }
+    
+}
+
+
+@available(macOS 10.12, *)
+fileprivate extension CKRecord.ID {
+    
+    convenience init(versionIdentifier: Version.Identifier, storeIdentifier: String, zoneID: CKRecordZone.ID) {
+        self.init(recordName: "\(storeIdentifier)_\(versionIdentifier.identifierString)", zoneID: zoneID)
+    }
+    
+    func versionIdentifier(forStore storeIdentifier: String) -> Version.Identifier {
+        return Version.Identifier(String(recordName.dropFirst(storeIdentifier.count+1)))
     }
     
 }
