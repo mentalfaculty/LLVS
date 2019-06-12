@@ -127,11 +127,13 @@ fileprivate extension CloudKitExchange {
     func fetchCloudZoneChanges(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         log.trace("Fetching cloud changes")
 
-        let options = CKFetchRecordZoneChangesOperation.ZoneOptions()
-        options.desiredKeys = []
-        options.previousServerChangeToken = restoration.fetchRecordChangesToken
+        let config = CKFetchRecordZoneChangesOperation.ZoneConfiguration()
+        config.desiredKeys = []
+        config.previousServerChangeToken = restoration.fetchRecordChangesToken
         
-        let operation = CKFetchRecordZoneChangesOperation(recordZoneIDs: [zoneID!], optionsByRecordZoneID: [zoneID! : options])
+        let operation = CKFetchRecordZoneChangesOperation()
+        operation.recordZoneIDs = [zoneID!]
+        operation.configurationsByRecordZoneID = [zoneID! : config]
         operation.addDependency(createZoneOperation!)
         operation.fetchAllChanges = true
         operation.recordChangedBlock = { record in
@@ -442,7 +444,7 @@ extension CloudKitExchange {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             versionsInCloud = try container.decode(type(of: versionsInCloud), forKey: .versionsInCloud)
             if let tokenData = try container.decodeIfPresent(Data.self, forKey: .fetchRecordChangesToken) {
-                fetchRecordChangesToken = NSKeyedUnarchiver.unarchiveObject(with: tokenData) as? CKServerChangeToken
+                fetchRecordChangesToken = try NSKeyedUnarchiver.unarchivedObject(ofClass: CKServerChangeToken.self, from: tokenData)
             }
             lastQueryDate = try container.decodeIfPresent(Date.self, forKey: .lastQueryDate)
         }
@@ -450,7 +452,9 @@ extension CloudKitExchange {
         func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(versionsInCloud, forKey: .versionsInCloud)
-            let tokenData = fetchRecordChangesToken.flatMap { NSKeyedArchiver.archivedData(withRootObject: $0) }
+            let tokenData = try fetchRecordChangesToken.flatMap {
+                try NSKeyedArchiver.archivedData(withRootObject: $0, requiringSecureCoding: false)
+            }
             try container.encodeIfPresent(tokenData, forKey: .fetchRecordChangesToken)
             try container.encodeIfPresent(lastQueryDate, forKey: .lastQueryDate)
         }

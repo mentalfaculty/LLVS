@@ -1,4 +1,4 @@
-// swift-tools-version:5.0
+// swift-tools-version:5.1
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "LLVS",
     platforms: [
-        .macOS(.v10_10), .iOS(.v10),
+        .macOS(.v10_15), .iOS(.v13),
     ],
     products: [
         .library(
