@@ -9,8 +9,37 @@ import Foundation
 import CloudKit
 import LLVS
 
-@available(macOS 10.12, iOS 8.0, watchOS 3.0, *)
+@available(macOS 10.12, iOS 10.0, *)
 public class CloudKitExchange: Exchange {
+    
+    public enum CloudDatabaseDescription {
+        case privateDatabaseWithCustomZone(CKContainer, zoneIdentifier: String)
+        case privateDatabaseWithDefaultZone(CKContainer)
+        case publicDatabase(CKContainer)
+        case sharedDatabase(CKContainer, zoneIdentifier: String)
+        
+        var database: CKDatabase {
+            switch self {
+            case let .privateDatabaseWithCustomZone(container, _):
+                return container.privateCloudDatabase
+            case let .privateDatabaseWithDefaultZone(container):
+                return container.privateCloudDatabase
+            case let .publicDatabase(container):
+                return container.publicCloudDatabase
+            case let .sharedDatabase(container, _):
+                return container.sharedCloudDatabase
+            }
+        }
+        
+        var zoneIdentifier: String? {
+            switch self {
+            case let .privateDatabaseWithCustomZone(_, zoneIdentifier), let .sharedDatabase(_, zoneIdentifier):
+                return zoneIdentifier
+            default:
+                return nil
+            }
+        }
+    }
     
     public enum Error: Swift.Error {
         case couldNotGetVersionFromRecord
@@ -56,13 +85,13 @@ public class CloudKitExchange: Exchange {
     
     /// For single user syncing, it is best to use a zone. In that case, pass in the private database and a zone identifier.
     /// Otherwise, you will be using the default  zone in whichever database you pass.
-    public init(with store: Store, storeIdentifier: String, cloudDatabase: CKDatabase, zoneIdentifier identifier: String? = nil) {
+    public init(with store: Store, storeIdentifier: String, cloudDatabasDescription: CloudDatabaseDescription) {
         self.store = store
         self.storeIdentifier = storeIdentifier
-        self.zoneIdentifier = identifier
-        self.database = cloudDatabase
+        self.zoneIdentifier = cloudDatabasDescription.zoneIdentifier
+        self.database = cloudDatabasDescription.database
         self.zone = zoneIdentifier.flatMap { CKRecordZone(zoneName: $0) }
-        if cloudDatabase.databaseScope == .private, let zone = self.zone {
+        if database.databaseScope == .private, let zone = self.zone {
             self.createZoneOperation = CKModifyRecordZonesOperation(recordZonesToSave: [zone], recordZoneIDsToDelete: nil)
             self.database.add(self.createZoneOperation!)
         } else {

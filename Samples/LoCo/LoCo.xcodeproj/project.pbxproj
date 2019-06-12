@@ -3,11 +3,17 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 50;
+	objectVersion = 52;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		071697F32295CCEE006B3BF3 /* DeveloperViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 071697F22295CCEE006B3BF3 /* DeveloperViewController.swift */; };
+		0717C7F122B11B4300D4FC60 /* LLVS in Resources */ = {isa = PBXBuildFile; fileRef = 0717C7F022B11B4200D4FC60 /* LLVS */; };
+		0717C7F222B11B4300D4FC60 /* LLVS in Resources */ = {isa = PBXBuildFile; fileRef = 0717C7F022B11B4200D4FC60 /* LLVS */; };
+		0717C7F422B11B5000D4FC60 /* LLVS in Frameworks */ = {isa = PBXBuildFile; productRef = 0717C7F322B11B5000D4FC60 /* LLVS */; };
+		0717C7F622B11B5000D4FC60 /* LLVSCloudKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0717C7F522B11B5000D4FC60 /* LLVSCloudKit */; };
+		0717C7F822B11B5B00D4FC60 /* LLVS in Frameworks */ = {isa = PBXBuildFile; productRef = 0717C7F722B11B5B00D4FC60 /* LLVS */; };
+		0717C7FA22B11B5B00D4FC60 /* LLVSCloudKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0717C7F922B11B5B00D4FC60 /* LLVSCloudKit */; };
 		071E25F4228A0598007BCFB3 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 071E25F3228A0598007BCFB3 /* ShareViewController.swift */; };
 		071E25F7228A0598007BCFB3 /* MainInterface.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 071E25F5228A0598007BCFB3 /* MainInterface.storyboard */; };
 		071E25FB228A0598007BCFB3 /* AvatarSharingExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 071E25F1228A0598007BCFB3 /* AvatarSharingExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -17,10 +23,6 @@
 		07354032228C7E3F0055EA28 /* Contact.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EDE21F10CC300BB9EFA /* Contact.swift */; };
 		07354033228C7E3F0055EA28 /* Fault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 079D143F21F6482B0091BCA9 /* Fault.swift */; };
 		07354034228C7E580055EA28 /* PropertiesContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EE221F11EC200BB9EFA /* PropertiesContainer.swift */; };
-		07396F96229B1A11006F2D79 /* LLVS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 07396F91229B19F7006F2D79 /* LLVS.framework */; };
-		07396F97229B1A11006F2D79 /* LLVS.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 07396F91229B19F7006F2D79 /* LLVS.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		07396F9A229B1A11006F2D79 /* LLVSCloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 07396F93229B19F7006F2D79 /* LLVSCloudKit.framework */; };
-		07396F9B229B1A11006F2D79 /* LLVSCloudKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 07396F93229B19F7006F2D79 /* LLVSCloudKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		0754AA2E228DDB1400DCF659 /* Defines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0754AA2D228DDB1400DCF659 /* Defines.swift */; };
 		0754AA2F228DDB1400DCF659 /* Defines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0754AA2D228DDB1400DCF659 /* Defines.swift */; };
 		07734EA821F109D100BB9EFA /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EA721F109D100BB9EFA /* AppDelegate.swift */; };
@@ -43,41 +45,6 @@
 			remoteGlobalIDString = 071E25F0228A0598007BCFB3;
 			remoteInfo = AvatarSharingExtension;
 		};
-		07396F90229B19F7006F2D79 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 07396F8A229B19F7006F2D79 /* LLVS.xcodeproj */;
-			proxyType = 2;
-			remoteGlobalIDString = "LLVS::LLVS::Product";
-			remoteInfo = LLVS;
-		};
-		07396F92229B19F7006F2D79 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 07396F8A229B19F7006F2D79 /* LLVS.xcodeproj */;
-			proxyType = 2;
-			remoteGlobalIDString = 0735400E228A16770055EA28;
-			remoteInfo = "LLVS-CloudKit";
-		};
-		07396F94229B19F7006F2D79 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 07396F8A229B19F7006F2D79 /* LLVS.xcodeproj */;
-			proxyType = 2;
-			remoteGlobalIDString = "LLVS::LLVSTests::Product";
-			remoteInfo = LLVSTests;
-		};
-		07396F98229B1A11006F2D79 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 07396F8A229B19F7006F2D79 /* LLVS.xcodeproj */;
-			proxyType = 1;
-			remoteGlobalIDString = "LLVS::LLVS";
-			remoteInfo = LLVS;
-		};
-		07396F9C229B1A11006F2D79 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 07396F8A229B19F7006F2D79 /* LLVS.xcodeproj */;
-			proxyType = 1;
-			remoteGlobalIDString = 0735400D228A16770055EA28;
-			remoteInfo = "LLVS-CloudKit";
-		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -98,8 +65,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				07396F9B229B1A11006F2D79 /* LLVSCloudKit.framework in Embed Frameworks */,
-				07396F97229B1A11006F2D79 /* LLVS.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -108,12 +73,12 @@
 
 /* Begin PBXFileReference section */
 		071697F22295CCEE006B3BF3 /* DeveloperViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperViewController.swift; sourceTree = "<group>"; };
+		0717C7F022B11B4200D4FC60 /* LLVS */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LLVS; path = ../..; sourceTree = "<group>"; };
 		071E25F1228A0598007BCFB3 /* AvatarSharingExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AvatarSharingExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		071E25F3228A0598007BCFB3 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		071E25F6228A0598007BCFB3 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/MainInterface.storyboard; sourceTree = "<group>"; };
 		071E25F8228A0598007BCFB3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		071E2604228A0747007BCFB3 /* AvatarSharingExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AvatarSharingExtension.entitlements; sourceTree = "<group>"; };
-		07396F8A229B19F7006F2D79 /* LLVS.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = LLVS.xcodeproj; path = ../../LLVS.xcodeproj; sourceTree = "<group>"; };
 		0754AA2D228DDB1400DCF659 /* Defines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Defines.swift; sourceTree = "<group>"; };
 		07734EA421F109D100BB9EFA /* LoCo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LoCo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		07734EA721F109D100BB9EFA /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -137,6 +102,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				0722CE93228C8DB80087BDC8 /* CloudKit.framework in Frameworks */,
+				0717C7F822B11B5B00D4FC60 /* LLVS in Frameworks */,
+				0717C7FA22B11B5B00D4FC60 /* LLVSCloudKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -145,8 +112,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				0722CE94228C8E320087BDC8 /* CloudKit.framework in Frameworks */,
-				07396F9A229B1A11006F2D79 /* LLVSCloudKit.framework in Frameworks */,
-				07396F96229B1A11006F2D79 /* LLVS.framework in Frameworks */,
+				0717C7F422B11B5000D4FC60 /* LLVS in Frameworks */,
+				0717C7F622B11B5000D4FC60 /* LLVSCloudKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -164,20 +131,10 @@
 			path = AvatarSharingExtension;
 			sourceTree = "<group>";
 		};
-		07396F8B229B19F7006F2D79 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				07396F91229B19F7006F2D79 /* LLVS.framework */,
-				07396F93229B19F7006F2D79 /* LLVSCloudKit.framework */,
-				07396F95229B19F7006F2D79 /* LLVSTests.xctest */,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
 		07734E9B21F109D100BB9EFA = {
 			isa = PBXGroup;
 			children = (
-				07396F8A229B19F7006F2D79 /* LLVS.xcodeproj */,
+				0717C7F022B11B4200D4FC60 /* LLVS */,
 				07734EA621F109D100BB9EFA /* LoCo */,
 				071E25F2228A0598007BCFB3 /* AvatarSharingExtension */,
 				07734EA521F109D100BB9EFA /* Products */,
@@ -239,6 +196,10 @@
 			dependencies = (
 			);
 			name = AvatarSharingExtension;
+			packageProductDependencies = (
+				0717C7F722B11B5B00D4FC60 /* LLVS */,
+				0717C7F922B11B5B00D4FC60 /* LLVSCloudKit */,
+			);
 			productName = AvatarSharingExtension;
 			productReference = 071E25F1228A0598007BCFB3 /* AvatarSharingExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -257,10 +218,12 @@
 			);
 			dependencies = (
 				071E25FA228A0598007BCFB3 /* PBXTargetDependency */,
-				07396F99229B1A11006F2D79 /* PBXTargetDependency */,
-				07396F9D229B1A11006F2D79 /* PBXTargetDependency */,
 			);
 			name = LoCo;
+			packageProductDependencies = (
+				0717C7F322B11B5000D4FC60 /* LLVS */,
+				0717C7F522B11B5000D4FC60 /* LLVSCloudKit */,
+			);
 			productName = LoCo;
 			productReference = 07734EA421F109D100BB9EFA /* LoCo.app */;
 			productType = "com.apple.product-type.application";
@@ -319,12 +282,6 @@
 			mainGroup = 07734E9B21F109D100BB9EFA;
 			productRefGroup = 07734EA521F109D100BB9EFA /* Products */;
 			projectDirPath = "";
-			projectReferences = (
-				{
-					ProductGroup = 07396F8B229B19F7006F2D79 /* Products */;
-					ProjectRef = 07396F8A229B19F7006F2D79 /* LLVS.xcodeproj */;
-				},
-			);
 			projectRoot = "";
 			targets = (
 				07734EA321F109D100BB9EFA /* LoCo */,
@@ -333,36 +290,13 @@
 		};
 /* End PBXProject section */
 
-/* Begin PBXReferenceProxy section */
-		07396F91229B19F7006F2D79 /* LLVS.framework */ = {
-			isa = PBXReferenceProxy;
-			fileType = wrapper.framework;
-			path = LLVS.framework;
-			remoteRef = 07396F90229B19F7006F2D79 /* PBXContainerItemProxy */;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		07396F93229B19F7006F2D79 /* LLVSCloudKit.framework */ = {
-			isa = PBXReferenceProxy;
-			fileType = wrapper.framework;
-			path = LLVSCloudKit.framework;
-			remoteRef = 07396F92229B19F7006F2D79 /* PBXContainerItemProxy */;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		07396F95229B19F7006F2D79 /* LLVSTests.xctest */ = {
-			isa = PBXReferenceProxy;
-			fileType = wrapper.cfbundle;
-			path = LLVSTests.xctest;
-			remoteRef = 07396F94229B19F7006F2D79 /* PBXContainerItemProxy */;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-/* End PBXReferenceProxy section */
-
 /* Begin PBXResourcesBuildPhase section */
 		071E25EF228A0598007BCFB3 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				071E25F7228A0598007BCFB3 /* MainInterface.storyboard in Resources */,
+				0717C7F222B11B4300D4FC60 /* LLVS in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -371,6 +305,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				07734EB421F109D300BB9EFA /* LaunchScreen.storyboard in Resources */,
+				0717C7F122B11B4300D4FC60 /* LLVS in Resources */,
 				07734EB121F109D300BB9EFA /* Assets.xcassets in Resources */,
 				07734EAF21F109D100BB9EFA /* Main.storyboard in Resources */,
 			);
@@ -415,16 +350,6 @@
 			isa = PBXTargetDependency;
 			target = 071E25F0228A0598007BCFB3 /* AvatarSharingExtension */;
 			targetProxy = 071E25F9228A0598007BCFB3 /* PBXContainerItemProxy */;
-		};
-		07396F99229B1A11006F2D79 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = LLVS;
-			targetProxy = 07396F98229B1A11006F2D79 /* PBXContainerItemProxy */;
-		};
-		07396F9D229B1A11006F2D79 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = "LLVS-CloudKit";
-			targetProxy = 07396F9C229B1A11006F2D79 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -691,6 +616,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0717C7F322B11B5000D4FC60 /* LLVS */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LLVS;
+		};
+		0717C7F522B11B5000D4FC60 /* LLVSCloudKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LLVSCloudKit;
+		};
+		0717C7F722B11B5B00D4FC60 /* LLVS */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LLVS;
+		};
+		0717C7F922B11B5B00D4FC60 /* LLVSCloudKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LLVSCloudKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 07734E9C21F109D100BB9EFA /* Project object */;
 }
