@@ -127,6 +127,7 @@ public class StoreCoordinator {
     /// You should use this to save instead of using the store directly, so that the
     /// coordinator can track versions.
     public func save(_ changes: [Value.Change]) throws {
+        guard !changes.isEmpty else { return }
         currentVersion = try store.addVersion(basedOnPredecessor: currentVersion, storing: changes).identifier
     }
     
@@ -148,32 +149,29 @@ public class StoreCoordinator {
     
     // MARK: Sync
     
-    public var isSyncing = false
+    public var isExchanging = false
     
-    private lazy var syncQueue: OperationQueue = {
+    private lazy var exchangeQueue: OperationQueue = {
         let queue = OperationQueue()
         queue.maxConcurrentOperationCount = 1
         return queue
     }()
     
-    /// Completion is on the main thread.
-    public func sync(executingUponCompletion completionHandler: ((Swift.Error?) -> Void)? = nil) {
-        syncQueue.addOperation {
-            self.performSyncOnQueue(executingUponCompletion: completionHandler)
+    /// This transfers data between cloud and local store, but does not alter the current branch or do any merging.
+    /// It's a bit like a two-way version of Git's fetch. Completion is on the main thread.
+    public func exchange(executingUponCompletion completionHandler: ((Swift.Error?) -> Void)? = nil) {
+        exchangeQueue.addOperation {
+            self.performExchangeOnQueue(executingUponCompletion: completionHandler)
         }
     }
     
-    private func performSyncOnQueue(executingUponCompletion completionHandler: ((Swift.Error?) -> Void)? = nil) {
-        isSyncing = true
+    private func performExchangeOnQueue(executingUponCompletion completionHandler: ((Swift.Error?) -> Void)? = nil) {
+        isExchanging = true
 
         guard let exchange = exchange else {
             OperationQueue.main.addOperation {
-                let newVersion = self.store.mergeHeads(into: self.currentVersion, resolvingWith: self.mergeArbiter)
-                if let newVersion = newVersion {
-                    self.currentVersion = newVersion
-                }
                 completionHandler?(nil)
-                self.isSyncing = false
+                self.isExchanging = false
             }
             return
         }
@@ -209,15 +207,22 @@ public class StoreCoordinator {
             case .success:
                 log.trace("Sync successful")
             }
-            let newVersion = self.store.mergeHeads(into: self.currentVersion, resolvingWith: self.mergeArbiter)
-            DispatchQueue.main.async {
-                if let newVersion = newVersion {
-                    self.currentVersion = newVersion
-                }
+            OperationQueue.main.addOperation {
                 completionHandler?(returnError)
-                self.isSyncing = false
+                self.isExchanging = false
             }
         }
     }
     
+    /// Merging any extra heads, or fast forward to latest. It's a good idea to save data just before calling this, so that
+    /// in view edits are committed. Returns true if the merge changed the current version; false otherwise.
+    @discardableResult public func merge() -> Bool {
+        let newVersion = self.store.mergeHeads(into: self.currentVersion, resolvingWith: self.mergeArbiter)
+        if let newVersion = newVersion {
+            self.currentVersion = newVersion
+            return true
+        } else {
+            return false
+        }
+    }
 }

@@ -174,6 +174,15 @@ extension Store {
 
 extension Store {
     
+    /// Whether there is more than one head
+    public var hasMultipleHeads: Bool {
+        var result: Bool = false
+        queryHistory { history in
+            result = history.headIdentifiers.count > 1
+        }
+        return result
+    }
+    
     /// Merges heads into the version passed, which is usually a head itself. This is a convenience
     /// to save looping through all heads.
     /// If the version ends up being changed by the merging, the new version is returned, otherwise nil.
