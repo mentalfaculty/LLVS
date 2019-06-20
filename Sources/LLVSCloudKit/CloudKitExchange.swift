@@ -137,7 +137,7 @@ fileprivate extension CloudKitExchange {
         operation.addDependency(createZoneOperation!)
         operation.fetchAllChanges = true
         operation.recordChangedBlock = { record in
-            guard let versionIdentifier = record.recordID.versionIdentifier(forStore: self.storeIdentifier) else { return }
+            let versionIdentifier = Version.Identifier(record.recordID.recordName)
             self.restoration.versionsInCloud.insert(versionIdentifier)
             log.verbose("Found record for version: \(versionIdentifier)")
         }
@@ -178,11 +178,10 @@ fileprivate extension CloudKitExchange {
     
     func makeRecordsQuery() -> CKQuery {
         let predicate: NSPredicate
-        let prefix = CKRecord.ID.prefix(forStoreIdentifier: storeIdentifier)
         if let lastQueryDate = restoration.lastQueryDate {
-            predicate = NSPredicate(format: "(recordName BEGINSWITH %@) AND (modifedAt >= %@)", prefix, lastQueryDate as NSDate)
+            predicate = NSPredicate(format: "storeIdentifier = %@ AND (modificationDate >= %@)", storeIdentifier, lastQueryDate as NSDate)
         } else {
-            predicate = NSPredicate(format: "recordName BEGINSWITH %@", prefix)
+            predicate = NSPredicate(format: "storeIdentifier = %@", storeIdentifier)
         }
         return CKQuery(recordType: CKRecord.ExchangeType.Version.rawValue, predicate: predicate)
     }
@@ -193,14 +192,18 @@ fileprivate extension CloudKitExchange {
         let query = makeRecordsQuery()
         queryDatabase(with: .query(query)) { result in
             switch result {
-            case .failure(let error):
-                completionHandler(.failure(error))
+            case .failure(let error as CKError) where error.code == .unknownItem:
+                // Probably don't have data in cloud yet. Ignore error
+                self.restoration.lastQueryDate = Date.distantPast
+                completionHandler(.success(()))
             case .success(let records):
-                let versionIdentifiers = records.map { $0.recordID.versionIdentifier(forStore: self.storeIdentifier)! }
+                let versionIdentifiers = records.map { Version.Identifier($0.recordID.recordName) }
                 self.restoration.versionsInCloud.formUnion(versionIdentifiers)
                 let modificationDates = records.map { $0.modificationDate! }
                 self.restoration.lastQueryDate = max(self.restoration.lastQueryDate ?? Date.distantPast, modificationDates.max() ?? Date.distantPast )
                 completionHandler(.success(()))
+            case .failure(let error):
+                completionHandler(.failure(error))
             }
         }
     }
@@ -252,7 +255,7 @@ public extension CloudKitExchange {
     
     func retrieveVersions(identifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
         log.trace("Retrieving versions")
-        let recordIDs = versionIdentifiers.map { CKRecord.ID(versionIdentifier: $0, storeIdentifier: storeIdentifier, zoneID: zoneID ?? .default) }
+        let recordIDs = versionIdentifiers.map { CKRecord.ID(recordName: $0.identifierString, zoneID: zoneID ?? .default) }
         let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
         fetchOperation.desiredKeys = [CKRecord.ExchangeKey.version.rawValue]
         fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
@@ -286,7 +289,7 @@ public extension CloudKitExchange {
     
     func retrieveValueChanges(forVersionsIdentifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier:[Value.Change]]>) {
         log.trace("Retrieving value changes for versions: \(versionIdentifiers)")
-        let recordIDs = versionIdentifiers.map { CKRecord.ID(versionIdentifier: $0, storeIdentifier: storeIdentifier, zoneID: zoneID ?? .default) }
+        let recordIDs = versionIdentifiers.map { CKRecord.ID(recordName: $0.identifierString, zoneID: zoneID ?? .default) }
         let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
         fetchOperation.desiredKeys = [CKRecord.ExchangeKey.valueChanges.rawValue, CKRecord.ExchangeKey.valueChangesAsset.rawValue]
         fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
@@ -309,7 +312,7 @@ public extension CloudKitExchange {
                     }
                     let valueChanges: [Value.Change] = try JSONDecoder().decode([Value.Change].self, from: data)
                     log.verbose("Retrieved value changes for \(recordID.recordName): \(valueChanges)")
-                    return (recordID.versionIdentifier(forStore: self.storeIdentifier)!, valueChanges)
+                    return (Version.Identifier(recordID.recordName), valueChanges)
                 }
                 
                 completionHandler(.success(.init(uniqueKeysWithValues: changesByVersion)))
@@ -342,12 +345,13 @@ public extension CloudKitExchange {
     
         do {
             var tempFileURL: URL?
-            let recordID = CKRecord.ID(versionIdentifier: version.identifier, storeIdentifier: storeIdentifier, zoneID: zoneID ?? .default)
+            let recordID = CKRecord.ID(recordName: version.identifier.identifierString, zoneID: zoneID ?? .default)
             let record = CKRecord(recordType: .init(CKRecord.ExchangeType.Version.rawValue), recordID: recordID)
             let versionData = try JSONEncoder().encode([version]) // Use an array, because JSON needs root dict or array
             let changesData = try JSONEncoder().encode(valueChanges)
             record.setExchangeValue(versionData, forKey: .version)
-            
+            record.setExchangeValue(storeIdentifier, forKey: .storeIdentifier)
+
             // Use an asset for bigger values (>10Kb)
             if changesData.count <= 10000 {
                 record.setExchangeValue(changesData, forKey: .valueChanges)
@@ -475,7 +479,7 @@ fileprivate extension CKRecord {
     }
     
     enum ExchangeKey: String {
-        case version, valueChanges, valueChangesAsset
+        case version, storeIdentifier, valueChanges, valueChangesAsset
     }
     
     func exchangeValue(forKey key: ExchangeKey) -> Any? {
@@ -484,26 +488,6 @@ fileprivate extension CKRecord {
     
     func setExchangeValue(_ value: Any, forKey key: ExchangeKey) {
         setValue(value, forKey: key.rawValue)
-    }
-    
-}
-
-
-fileprivate extension CKRecord.ID {
-    
-    static func prefix(forStoreIdentifier storeIdentifier: String) -> String {
-        "LLVS_\(storeIdentifier)_"
-    }
-    
-    convenience init(versionIdentifier: Version.Identifier, storeIdentifier: String, zoneID: CKRecordZone.ID) {
-        let prefix = Self.prefix(forStoreIdentifier: storeIdentifier)
-        self.init(recordName: prefix + versionIdentifier.identifierString, zoneID: zoneID)
-    }
-    
-    func versionIdentifier(forStore storeIdentifier: String) -> Version.Identifier? {
-        let prefix = Self.prefix(forStoreIdentifier: storeIdentifier)
-        guard recordName.hasPrefix(prefix) else { return nil }
-        return Version.Identifier(String(recordName.dropFirst(prefix.count)))
     }
     
 }
