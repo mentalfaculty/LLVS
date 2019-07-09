@@ -16,22 +16,18 @@ import CloudKit
 final class ContactsDataSource: BindableObject  {
     let didChange = PassthroughSubject<ContactsDataSource, Never>()
     
-    private var versionAtFetchSubscriber: AnyCancellable?
-    private var contactsSubscriber: AnyCancellable?
-    
     let storeCoordinator: StoreCoordinator
     private(set) var versionAtFetch: Version.Identifier = .init()
+    
+    private var versionAtFetchSubscriber: AnyCancellable?
+    private var contactsSubscriber: AnyCancellable?
 
     init(storeCoordinator: StoreCoordinator) {
         self.storeCoordinator = storeCoordinator
-        versionAtFetchSubscriber = storeCoordinator.currentVersionSubject.assign(to: \.versionAtFetch, on: self)
-        contactsSubscriber = storeCoordinator.currentVersionSubject.map({ self.fetchedContacts(at: $0) }).assign(to: \.contacts, on: self)
-//        versionSubscriber = storeCoordinator.currentVersionSubject.sink { [unowned self] _ in
-//            self.versionAtFetch = self.storeCoordinator.currentVersion
-//            self.contacts = self.fetchedContacts()
-//        }
+        let subject = storeCoordinator.currentVersionSubject.receive(on: DispatchQueue.main)
+        versionAtFetchSubscriber = subject.assign(to: \.versionAtFetch, on: self)
+        contactsSubscriber = subject.map({ self.fetchedContacts(at: $0) }).assign(to: \.contacts, on: self)
     }
-
     
     // MARK: Saving
     
@@ -40,7 +36,6 @@ final class ContactsDataSource: BindableObject  {
         let change: Value.Change = isNew ? .insert(value) : .update(value)
         try! storeCoordinator.save([change])
     }
-    
     
     // MARK: Contacts
     
@@ -55,7 +50,6 @@ final class ContactsDataSource: BindableObject  {
             ($0.person.secondName, $0.id.uuidString) < ($1.person.secondName, $1.id.uuidString)
         }
     }
-    
     
     // MARK: Contact Selection
     
@@ -73,8 +67,7 @@ final class ContactsDataSource: BindableObject  {
         contacts.first(where: { $0.id == selectedContactID })
     }
     
-    
-    // MARK:- Loading and Saving
+    // MARK: Saving
     
     func save() throws {
         // Use diff to determine what has changed since last fetch
@@ -119,6 +112,8 @@ final class ContactsDataSource: BindableObject  {
         // Store a new version
         try storeCoordinator.save(changes)
     }
+    
+    // MARK: Syncing
     
     func sync(executingUponCompletion completionHandler: ((Swift.Error?) -> Void)? = nil) {
         storeCoordinator.exchange { _ in
