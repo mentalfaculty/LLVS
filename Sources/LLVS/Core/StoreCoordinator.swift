@@ -36,13 +36,13 @@ public class StoreCoordinator {
         return exchange?.restorationState
     }
     
-    public var currentVersionPublisher = PassthroughSubject<Version.Identifier, Never>()
+    public let currentVersionSubject: CurrentValueSubject<Version.Identifier, Never>
     
     public private(set) var currentVersion: Version.Identifier {
         didSet {
             guard self.currentVersion != oldValue else { return }
             persist()
-            currentVersionPublisher.send(self.currentVersion)
+            currentVersionSubject.value = self.currentVersion
         }
     }
     
@@ -76,6 +76,7 @@ public class StoreCoordinator {
 
         self.store = try Store(rootDirectoryURL: storeURL)
         self.currentVersion = Version.Identifier() // Set a temporary version. Final is in cache
+        self.currentVersionSubject = .init(self.currentVersion)
         try loadCache()
     }
     
@@ -134,16 +135,17 @@ public class StoreCoordinator {
     
     // MARK: Fetching
     
-    public func valueReferences() throws -> [Value.Reference] {
+    /// Pass a specific version, or nil for the current version
+    public func valueReferences(at version: Version.Identifier? = nil) throws -> [Value.Reference] {
         var refs: [Value.Reference] = []
-        try store.enumerate(version: currentVersion) { ref in
+        try store.enumerate(version: version ?? currentVersion) { ref in
             refs.append(ref)
         }
         return refs
     }
     
-    public func values() throws -> [Value] {
-        return try valueReferences().map { try store.value(at: $0)! }
+    public func values(at version: Version.Identifier? = nil) throws -> [Value] {
+        return try valueReferences(at: version).map { try store.value(at: $0)! }
     }
     
     
