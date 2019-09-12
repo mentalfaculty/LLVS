@@ -164,7 +164,7 @@ class FileSystemExchangeTests: XCTestCase {
         let _ = try! store1.addVersion(basedOnPredecessor: nil, storing: [])
         
         exchange1.send { _ in }
-        wait(for: [expect], timeout: 2.0)
+        wait(for: [expect], timeout: 3.0)
     }
 
     static var allTests = [

@@ -105,6 +105,30 @@ class MapTests: XCTestCase {
         XCTAssert(valueRefs.contains(.init(identifier: .init("CDEF"), version: .init("2345"))))
     }
     
+    func testSimilarKeys() {
+        var delta1: Map.Delta = .init(key: .init("Amsterdam"))
+        let valueRef1 = Value.Reference(identifier: .init("ABCD"), version: .init("1234"))
+        delta1.addedValueReferences = [valueRef1]
+        try! map.addVersion(valueRef1.version, basedOn: nil, applying: [delta1])
+        
+        var delta2: Map.Delta = .init(key: .init("Amsterdam1"))
+        let valueRef2 = Value.Reference(identifier: .init("CDEF"), version: .init("2345"))
+        delta2.addedValueReferences = [valueRef2]
+        try! map.addVersion(valueRef2.version, basedOn: .init("1234"), applying: [delta2])
+        
+        do {
+            let valueRefs = try! map.valueReferences(matching: .init("Amsterdam"), at: .init("2345"))
+            XCTAssertEqual(valueRefs.count, 1)
+            XCTAssert(valueRefs.contains(.init(identifier: .init("ABCD"), version: .init("1234"))))
+        }
+        
+        do {
+            let valueRefs = try! map.valueReferences(matching: .init("Amsterdam1"), at: .init("2345"))
+            XCTAssertEqual(valueRefs.count, 1)
+            XCTAssert(valueRefs.contains(.init(identifier: .init("CDEF"), version: .init("2345"))))
+        }
+    }
+    
     static var allTests = [
         ("testFirstCommit", testFirstCommit),
         ("testFetchingValueFromEarlierCommit", testFetchingValueFromEarlierCommit),

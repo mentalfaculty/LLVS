@@ -17,9 +17,11 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
     
     public let store: Store
     
+    private let minimumDelayBeforeNotifyingOfNewVersions = 1.0
+
     private let newVersionsSubject: PassthroughSubject<Void, Never> = .init()
     public var newVersionsAvailable: AnyPublisher<Void, Never> {
-        newVersionsSubject.eraseToAnyPublisher()
+        newVersionsSubject.debounce(for: .seconds(minimumDelayBeforeNotifyingOfNewVersions), scheduler: RunLoop.main).eraseToAnyPublisher()
     }
     
     public let rootDirectoryURL: URL
@@ -159,15 +161,8 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
     public var presentedItemOperationQueue: OperationQueue {
         return queue
     }
-    
-    private var notifyWorkItem: DispatchWorkItem?
-    private let minimumDelayBeforeNotifyingOfNewVersions = 1.0
-    
+        
     public func presentedItemDidChange() {
-        notifyWorkItem?.cancel()
-        notifyWorkItem = DispatchWorkItem {
-            self.newVersionsSubject.send(())
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now()+minimumDelayBeforeNotifyingOfNewVersions, execute: notifyWorkItem!)
+        self.newVersionsSubject.send(())
     }
 }
