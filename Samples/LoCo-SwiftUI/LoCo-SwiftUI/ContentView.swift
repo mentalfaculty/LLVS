@@ -21,22 +21,20 @@ struct ContentView : View {
                     VStack(alignment: .leading) {
                         Text("Main Title Here")
                             .font(.headline)
-                            .color(.primary)
+                            .foregroundColor(.primary)
                         Text("Subtitle")
                             .font(.subheadline)
-                            .color(.secondary)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
-                .navigationBarTitle(Text("Contacts"))
+            .navigationBarTitle(Text("Contacts"))
         }
     }
 }
 
-#if DEBUG
-struct ContentView_Previews : PreviewProvider {
+struct ContentViewPreview : PreviewProvider {
     static var previews: some View {
         ContentView()
     }
 }
-#endif

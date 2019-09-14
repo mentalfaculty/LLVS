@@ -13,8 +13,7 @@ import LLVS
 import LLVSCloudKit
 import CloudKit
 
-final class ContactsDataSource: BindableObject  {
-    let didChange = PassthroughSubject<ContactsDataSource, Never>()
+final class ContactsDataSource: ObservableObject  {
     
     let storeCoordinator: StoreCoordinator
     private(set) var versionAtFetch: Version.Identifier = .init()
@@ -29,35 +28,19 @@ final class ContactsDataSource: BindableObject  {
         contactsSubscriber = subject.map({ self.fetchedContacts(at: $0) }).assign(to: \.contacts, on: self)
     }
     
-    // MARK: Saving
-    
-    func save<T:Model>(_ modelValue: T, isNew: Bool) {
-        let value = try! modelValue.encodeValue()
-        let change: Value.Change = isNew ? .insert(value) : .update(value)
-        try! storeCoordinator.save([change])
-    }
-    
     // MARK: Contacts
     
-    var contacts: [Contact] = [] {
-        didSet {
-            didChange.send(self)
-        }
-    }
+    @Published var contacts: [Contact] = []
     
     func fetchedContacts(at version: Version.Identifier) -> [Contact] {
         return try! Contact.all(in: storeCoordinator, at: version).sorted {
-            ($0.person.secondName, $0.id.uuidString) < ($1.person.secondName, $1.id.uuidString)
+            ($0.person.secondName, $0.person.firstName, $0.id.uuidString) < ($1.person.secondName, $0.person.firstName, $1.id.uuidString)
         }
     }
     
     // MARK: Contact Selection
     
-    var selectedContactID: Contact.ID? {
-        didSet {
-            didChange.send(self)
-        }
-    }
+    @Published var selectedContactID: Contact.ID?
     
     var selectedContactIndex: Int {
         contacts.firstIndex(where: { $0.id == selectedContactID }) ?? 0
@@ -68,6 +51,12 @@ final class ContactsDataSource: BindableObject  {
     }
     
     // MARK: Saving
+    
+//    func save<T:Model>(_ modelValue: T, isNew: Bool) {
+//        let value = try! modelValue.encodeValue()
+//        let change: Value.Change = isNew ? .insert(value) : .update(value)
+//        try! storeCoordinator.save([change])
+//    }
     
     func save() throws {
         // Use diff to determine what has changed since last fetch

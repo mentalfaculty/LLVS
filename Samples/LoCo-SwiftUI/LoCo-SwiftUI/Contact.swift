@@ -11,7 +11,7 @@ import SwiftUI
 import LLVS
 
 struct Contact: Model {
-    static var storeIdentifierTypeTag: String { "Contact" }
+    static let storeIdentifierTypeTag = "Contact"
     var id: UUID = .init()
     var person: Person = .init()
     var address: Address = .init()
