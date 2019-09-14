@@ -236,7 +236,7 @@ In your app, you are more likely to create your own arbiter class, to merge your
 
 ### Inside a MergeArbiter
 
-You might be wondering what the internals of an arbiter class looks like. It's typically a loop over the differences, treating each type of conflict. One of the simplest is `MostRecentBranchFavoringArbiter`, which will simply favor the branch that has the most recent timestamp. Here is the whole class.
+You might be wondering what the internals of an arbiter class look like. It's typically a loop over the differences, treating each type of conflict. One of the simplest is `MostRecentBranchFavoringArbiter`, which will simply favor the branch that has the most recent timestamp. Here is the whole class.
 
 ```swift
 public class MostRecentBranchFavoringArbiter: MergeArbiter {
