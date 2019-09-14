@@ -100,18 +100,19 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
         completionHandler(.success(()))
     }
     
-    public func send(_ version: Version, with valueChanges: [Value.Change], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
+    public func send(versionChanges: [VersionChanges], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         coordinateFileAccess(.write, completionHandler: completionHandler) {
-            let changesURL = self.changesDirectory.appendingPathComponent(version.identifier.identifierString)
-            let changesData = try JSONEncoder().encode(valueChanges)
-            try changesData.write(to: changesURL)
-            
-            let versionURL = self.versionsDirectory.appendingPathComponent(version.identifier.identifierString)
-            let versionData = try JSONEncoder().encode(["version":version])
-            try versionData.write(to: versionURL)
-            
+             for (version, valueChanges) in versionChanges {
+                 let changesURL = self.changesDirectory.appendingPathComponent(version.identifier.identifierString)
+                 let changesData = try JSONEncoder().encode(valueChanges)
+                 try changesData.write(to: changesURL)
+                 
+                 let versionURL = self.versionsDirectory.appendingPathComponent(version.identifier.identifierString)
+                 let versionData = try JSONEncoder().encode(["version":version])
+                 try versionData.write(to: versionURL)
+             }
             completionHandler(.success(()))
-        }
+         }
     }
     
     private enum FileAccess {

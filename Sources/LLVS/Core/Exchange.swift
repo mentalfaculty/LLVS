@@ -11,9 +11,13 @@ import Combine
 enum ExchangeError: Swift.Error {
     case remoteVersionsWithUnknownPredecessors
     case missingVersion
+    case unknown(error: Swift.Error)
 }
 
+public typealias VersionChanges = (version: Version, valueChanges: [Value.Change])
+
 public protocol Exchange: class {
+
     var newVersionsAvailable: AnyPublisher<Void, Never> { get }
     var store: Store { get }
     
@@ -27,7 +31,7 @@ public protocol Exchange: class {
 
     func send(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>)
     func prepareToSend(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>)
-    func send(_ version: Version, with valueChanges: [Value.Change], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>)
+    func send(versionChanges: [VersionChanges], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>)
 }
 
 // MARK:- Retrieving
@@ -168,24 +172,20 @@ public extension Exchange {
         var toSendIds: [Version.Identifier]!
         let sendVersions = AsynchronousTask { finish in
             toSendIds = self.versionIdentifiersMissingRemotely(forRemoteIdentifiers: remoteIds)
-            let sendTasks = toSendIds!.map { versionId in
-                AsynchronousTask { finish in
-                    do {
-                        let version = try self.store.version(identifiedBy: versionId)
-                        guard let sendVersion = version else {
-                            finish(.failure(ExchangeError.missingVersion)); return
-                        }
-                        let changes = try self.store.valueChanges(madeInVersionIdentifiedBy: versionId)
-                        self.send(sendVersion, with: changes) { result in
-                            finish(result.taskResult)
-                        }
-                    } catch {
-                        finish(.failure(error))
+            do {
+                let versionChanges: [VersionChanges] = try toSendIds!.map { versionId in
+                    guard let version = try self.store.version(identifiedBy: versionId) else {
+                        throw ExchangeError.missingVersion
                     }
+                    let changes = try self.store.valueChanges(madeInVersionIdentifiedBy: versionId)
+                    return (version, changes)
                 }
-            }
-            sendTasks.executeInOrder { result in
-                finish(result)
+                
+                self.send(versionChanges: versionChanges) { result in
+                    finish(result.taskResult)
+                }
+            } catch {
+                finish(.failure(error))
             }
         }
 

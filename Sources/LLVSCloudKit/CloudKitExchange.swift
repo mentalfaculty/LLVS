@@ -339,34 +339,41 @@ public extension CloudKitExchange {
         }
     }
     
-    func send(_ version: Version, with valueChanges: [Value.Change], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        log.trace("Sending version: \(version.identifier)")
-        log.verbose("Value changes: \(valueChanges)")
+    func send(versionChanges: [VersionChanges], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
+        log.trace("Sending versions: \(versionChanges.map({ $0.0.identifier }))")
+        log.verbose("Value changes: \(versionChanges)")
     
         do {
-            var tempFileURL: URL?
-            let recordID = CKRecord.ID(recordName: version.identifier.identifierString, zoneID: zoneID ?? .default)
-            let record = CKRecord(recordType: .init(CKRecord.ExchangeType.Version.rawValue), recordID: recordID)
-            let versionData = try JSONEncoder().encode([version]) // Use an array, because JSON needs root dict or array
-            let changesData = try JSONEncoder().encode(valueChanges)
-            record.setExchangeValue(versionData, forKey: .version)
-            record.setExchangeValue(storeIdentifier, forKey: .storeIdentifier)
+            var tempFileURLs: [URL] = []
+            let records: [CKRecord] = try versionChanges.map { t in
+                let version = t.version
+                let valueChanges = t.valueChanges
+                let recordID = CKRecord.ID(recordName: version.identifier.identifierString, zoneID: zoneID ?? .default)
+                let record = CKRecord(recordType: .init(CKRecord.ExchangeType.Version.rawValue), recordID: recordID)
+                let versionData = try JSONEncoder().encode([version]) // Use an array, because JSON needs root dict or array
+                let changesData = try JSONEncoder().encode(valueChanges)
+                record.setExchangeValue(versionData, forKey: .version)
+                record.setExchangeValue(storeIdentifier, forKey: .storeIdentifier)
 
-            // Use an asset for bigger values (>10Kb)
-            if changesData.count <= 10000 {
-                record.setExchangeValue(changesData, forKey: .valueChanges)
-            } else {
-                tempFileURL = temporaryDirectory.appendingPathComponent(UUID().uuidString)
-                try changesData.write(to: tempFileURL!)
-                let asset = CKAsset(fileURL: tempFileURL!)
-                record.setExchangeValue(asset, forKey: .valueChangesAsset)
+                // Use an asset for bigger values (>10Kb)
+                if changesData.count <= 10000 {
+                    record.setExchangeValue(changesData, forKey: .valueChanges)
+                } else {
+                    let tempFileURL = temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                    try changesData.write(to: tempFileURL)
+                    let asset = CKAsset(fileURL: tempFileURL)
+                    record.setExchangeValue(asset, forKey: .valueChangesAsset)
+                    tempFileURLs.append(tempFileURL)
+                }
+                
+                return record
             }
             
-            let modifyOperation = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
+            let modifyOperation = CKModifyRecordsOperation(recordsToSave: records, recordIDsToDelete: nil)
             modifyOperation.isAtomic = true
             modifyOperation.savePolicy = .allKeys
             modifyOperation.modifyRecordsCompletionBlock = { _, _, error in
-                tempFileURL.flatMap { try? FileManager.default.removeItem(at: $0) }
+                tempFileURLs.forEach { try? FileManager.default.removeItem(at: $0) }
                 if let error = error {
                     log.error("Failed to send: \(error)")
                     completionHandler(.failure(error))
