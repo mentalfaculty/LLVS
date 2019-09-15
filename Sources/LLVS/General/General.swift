@@ -23,4 +23,11 @@ public enum Result<ValueType> {
 
 public typealias CompletionHandler<T> = (Result<T>)->Void
 
-
+public extension ClosedRange where Bound == Int {
+    func split(intoRangesOfLength size: Bound) -> [ClosedRange] {
+        let end = upperBound+1
+        return stride(from: lowerBound, to: end, by: size).map {
+            ClosedRange(uncheckedBounds: (lower: $0, upper: Swift.min($0+size-1, upperBound)))
+        }
+    }
+}
