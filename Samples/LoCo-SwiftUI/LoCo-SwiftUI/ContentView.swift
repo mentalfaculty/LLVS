@@ -1,5 +1,5 @@
 //
-//  ContentView.swift
+//  ContactsView.swift
 //  LoCo-SwiftUI
 //
 //  Created by Drew McCormack on 05/06/2019.
@@ -7,34 +7,41 @@
 //
 
 import SwiftUI
+import UIKit
 
-struct ContentView : View {
+struct ContactsView : View {
+    
+    @EnvironmentObject var dataSource: ContactsDataSource
+    
     var body: some View {
         NavigationView {
-            List(0..<5) { item in
-                HStack {
-                    Image("Placeholder")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .cornerRadius(6.0)
-                        .frame(width: 50, height: 50, alignment: .center)
-                    VStack(alignment: .leading) {
-                        Text("Main Title Here")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                        Text("Subtitle")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+            List(dataSource.contacts) { contact in
+                NavigationLink(destination: ContactView().environmentObject(self.dataSource)) {
+                    HStack {
+                        Image(uiImage: contact.avatarJPEGData.flatMap({ UIImage(data:$0) }) ?? UIImage(named: "Placeholder")!)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .cornerRadius(6.0)
+                            .frame(width: 50, height: 50, alignment: .center)
+                        VStack(alignment: .leading) {
+                            Text(contact.person.fullName)
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            Text("Subtitle")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
             }
             .navigationBarTitle(Text("Contacts"))
         }
     }
+    
 }
 
-struct ContentViewPreview : PreviewProvider {
+struct ContactsViewPreview : PreviewProvider {
     static var previews: some View {
-        ContentView()
+        ContactsView()
     }
 }

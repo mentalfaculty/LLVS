@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		07089E00232E17F2009A6AD9 /* ContactView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07089DFF232E17F2009A6AD9 /* ContactView.swift */; };
 		0737B9A822D5141C0093CA5A /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0737B9A722D5141C0093CA5A /* CloudKit.framework */; };
 		0737B9AA22D514490093CA5A /* Contact.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0737B9A922D514490093CA5A /* Contact.swift */; };
 		0737B9AC22D5155A0093CA5A /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0737B9AB22D5155A0093CA5A /* Model.swift */; };
@@ -23,6 +24,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		07089DFF232E17F2009A6AD9 /* ContactView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactView.swift; sourceTree = "<group>"; };
 		0737B9A722D5141C0093CA5A /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
 		0737B9A922D514490093CA5A /* Contact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contact.swift; sourceTree = "<group>"; };
 		0737B9AB22D5155A0093CA5A /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
@@ -35,6 +37,7 @@
 		076B1D6E22A838800061911B /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		076B1D7122A838800061911B /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		076B1D7322A838800061911B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		07710252232D6382002A1585 /* LoCo-SwiftUI.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "LoCo-SwiftUI.entitlements"; sourceTree = "<group>"; };
 		0795DD7922D5134800EB2DD6 /* LLVS */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LLVS; path = ../..; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -73,9 +76,11 @@
 		076B1D6422A8387E0061911B /* LoCo-SwiftUI */ = {
 			isa = PBXGroup;
 			children = (
+				07710252232D6382002A1585 /* LoCo-SwiftUI.entitlements */,
 				076B1D6522A8387E0061911B /* AppDelegate.swift */,
 				076B1D6722A8387E0061911B /* SceneDelegate.swift */,
 				076B1D6922A8387E0061911B /* ContentView.swift */,
+				07089DFF232E17F2009A6AD9 /* ContactView.swift */,
 				0737B9AB22D5155A0093CA5A /* Model.swift */,
 				0737B9A922D514490093CA5A /* Contact.swift */,
 				0737B9AD22D5174A0093CA5A /* ContactsDataSource.swift */,
@@ -183,6 +188,7 @@
 				0737B9AA22D514490093CA5A /* Contact.swift in Sources */,
 				076B1D6622A8387E0061911B /* AppDelegate.swift in Sources */,
 				076B1D6822A8387E0061911B /* SceneDelegate.swift in Sources */,
+				07089E00232E17F2009A6AD9 /* ContactView.swift in Sources */,
 				076B1D6A22A8387E0061911B /* ContentView.swift in Sources */,
 				0737B9AE22D5174A0093CA5A /* ContactsDataSource.swift in Sources */,
 			);
@@ -320,6 +326,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "LoCo-SwiftUI/LoCo-SwiftUI.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_ASSET_PATHS = "LoCo-SwiftUI/Preview\\ Content";
 				DEVELOPMENT_TEAM = P7BXV6PHLD;
@@ -329,10 +336,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.mentalfaculty.LoCo-SwiftUI";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.mentalfaculty.loco-swiftui";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -340,6 +347,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "LoCo-SwiftUI/LoCo-SwiftUI.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_ASSET_PATHS = "LoCo-SwiftUI/Preview\\ Content";
 				DEVELOPMENT_TEAM = P7BXV6PHLD;
@@ -349,10 +357,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.mentalfaculty.LoCo-SwiftUI";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.mentalfaculty.loco-swiftui";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};

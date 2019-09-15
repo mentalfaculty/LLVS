@@ -85,11 +85,11 @@ public class CloudKitExchange: Exchange {
     
     /// For single user syncing, it is best to use a zone. In that case, pass in the private database and a zone identifier.
     /// Otherwise, you will be using the default  zone in whichever database you pass.
-    public init(with store: Store, storeIdentifier: String, cloudDatabasDescription: CloudDatabaseDescription) {
+    public init(with store: Store, storeIdentifier: String, cloudDatabaseDescription: CloudDatabaseDescription) {
         self.store = store
         self.storeIdentifier = storeIdentifier
-        self.zoneIdentifier = cloudDatabasDescription.zoneIdentifier
-        self.database = cloudDatabasDescription.database
+        self.zoneIdentifier = cloudDatabaseDescription.zoneIdentifier
+        self.database = cloudDatabaseDescription.database
         self.zone = zoneIdentifier.flatMap { CKRecordZone(zoneName: $0) }
         if database.databaseScope == .private, let zone = self.zone {
             self.createZoneOperation = CKModifyRecordZonesOperation(recordZonesToSave: [zone], recordZoneIDsToDelete: nil)

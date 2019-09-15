@@ -16,7 +16,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         if let scene = scene as? UIWindowScene {
             let window = UIWindow(windowScene: scene)
-            window.rootViewController = UIHostingController(rootView: ContentView())
+            let appDelegate = UIApplication.shared.delegate as! AppDelegate
+            let contactsView = ContactsView().environmentObject(appDelegate.dataSource)
+            window.rootViewController = UIHostingController(rootView: contactsView)
             self.window = window
             window.makeKeyAndVisible()
         }

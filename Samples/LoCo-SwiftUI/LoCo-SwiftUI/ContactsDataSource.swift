@@ -32,7 +32,7 @@ final class ContactsDataSource: ObservableObject  {
     
     @Published var contacts: [Contact] = []
     
-    func fetchedContacts(at version: Version.Identifier) -> [Contact] {
+    private func fetchedContacts(at version: Version.Identifier) -> [Contact] {
         return try! Contact.all(in: storeCoordinator, at: version).sorted {
             ($0.person.secondName, $0.person.firstName, $0.id.uuidString) < ($1.person.secondName, $0.person.firstName, $1.id.uuidString)
         }

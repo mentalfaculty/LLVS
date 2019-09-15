@@ -7,9 +7,25 @@
 //
 
 import UIKit
+import LLVS
+import LLVSCloudKit
+import CloudKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
+    
+    lazy var storeCoordinator: StoreCoordinator = {
+        LLVS.log.level = .verbose
+        let coordinator = try! StoreCoordinator()
+        let container = CKContainer(identifier: "iCloud.com.mentalfaculty.loco-swiftui")
+        let exchange = CloudKitExchange(with: coordinator.store, storeIdentifier: "MainStore", cloudDatabaseDescription: .privateDatabaseWithCustomZone(container, zoneIdentifier: "MainZone"))
+        coordinator.exchange = exchange
+        return coordinator
+    }()
+    
+    lazy var dataSource: ContactsDataSource = {
+        ContactsDataSource(storeCoordinator: storeCoordinator)
+    }()
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         return true
