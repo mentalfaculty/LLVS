@@ -14,7 +14,7 @@
 		0737B9AE22D5174A0093CA5A /* ContactsDataSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0737B9AD22D5174A0093CA5A /* ContactsDataSource.swift */; };
 		076B1D6622A8387E0061911B /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 076B1D6522A8387E0061911B /* AppDelegate.swift */; };
 		076B1D6822A8387E0061911B /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 076B1D6722A8387E0061911B /* SceneDelegate.swift */; };
-		076B1D6A22A8387E0061911B /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 076B1D6922A8387E0061911B /* ContentView.swift */; };
+		076B1D6A22A8387E0061911B /* ContactsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 076B1D6922A8387E0061911B /* ContactsView.swift */; };
 		076B1D6C22A838800061911B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 076B1D6B22A838800061911B /* Assets.xcassets */; };
 		076B1D6F22A838800061911B /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 076B1D6E22A838800061911B /* Preview Assets.xcassets */; };
 		076B1D7222A838800061911B /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 076B1D7022A838800061911B /* LaunchScreen.storyboard */; };
@@ -32,7 +32,7 @@
 		076B1D6222A8387E0061911B /* LoCo-SwiftUI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "LoCo-SwiftUI.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		076B1D6522A8387E0061911B /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		076B1D6722A8387E0061911B /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
-		076B1D6922A8387E0061911B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		076B1D6922A8387E0061911B /* ContactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsView.swift; sourceTree = "<group>"; };
 		076B1D6B22A838800061911B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		076B1D6E22A838800061911B /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		076B1D7122A838800061911B /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -79,7 +79,7 @@
 				07710252232D6382002A1585 /* LoCo-SwiftUI.entitlements */,
 				076B1D6522A8387E0061911B /* AppDelegate.swift */,
 				076B1D6722A8387E0061911B /* SceneDelegate.swift */,
-				076B1D6922A8387E0061911B /* ContentView.swift */,
+				076B1D6922A8387E0061911B /* ContactsView.swift */,
 				07089DFF232E17F2009A6AD9 /* ContactView.swift */,
 				0737B9AB22D5155A0093CA5A /* Model.swift */,
 				0737B9A922D514490093CA5A /* Contact.swift */,
@@ -189,7 +189,7 @@
 				076B1D6622A8387E0061911B /* AppDelegate.swift in Sources */,
 				076B1D6822A8387E0061911B /* SceneDelegate.swift in Sources */,
 				07089E00232E17F2009A6AD9 /* ContactView.swift in Sources */,
-				076B1D6A22A8387E0061911B /* ContentView.swift in Sources */,
+				076B1D6A22A8387E0061911B /* ContactsView.swift in Sources */,
 				0737B9AE22D5174A0093CA5A /* ContactsDataSource.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
