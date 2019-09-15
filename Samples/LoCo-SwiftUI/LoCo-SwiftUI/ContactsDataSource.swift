@@ -16,16 +16,15 @@ import CloudKit
 final class ContactsDataSource: ObservableObject  {
     
     let storeCoordinator: StoreCoordinator
-    private(set) var versionAtFetch: Version.Identifier = .init()
     
-    private var versionAtFetchSubscriber: AnyCancellable?
     private var contactsSubscriber: AnyCancellable?
 
     init(storeCoordinator: StoreCoordinator) {
         self.storeCoordinator = storeCoordinator
-        let subject = storeCoordinator.currentVersionSubject.receive(on: DispatchQueue.main)
-        versionAtFetchSubscriber = subject.assign(to: \.versionAtFetch, on: self)
-        contactsSubscriber = subject.map({ self.fetchedContacts(at: $0) }).assign(to: \.contacts, on: self)
+        contactsSubscriber = storeCoordinator.currentVersionSubject
+            .receive(on: DispatchQueue.main)
+            .map({ self.fetchedContacts(at: $0) })
+            .assign(to: \.contacts, on: self)
     }
     
     // MARK: Contacts
@@ -42,33 +41,21 @@ final class ContactsDataSource: ObservableObject  {
         }
     }
     
-    func binding(forContactWithID id: Contact.ID) -> Binding<Contact> {
-        return Binding<Contact>(
-            get: { () -> Contact in
-                return self.contacts.first(where: { $0.id == id }) ?? Contact()
-            },
-            set: { newContact in
-                self.identifiersOfUpdatedContacts.insert(newContact.id)
-                self.contacts = self.contacts.map { oldContact in
-                    if oldContact.id == newContact.id {
-                        return newContact
-                    }
-                    return oldContact
-                }
-            }
-        )
-    }
-    
-//    // MARK: Contact Selection
-//
-//    @Published var selectedContactID: Contact.ID?
-//
-//    var selectedContactIndex: Int {
-//        contacts.firstIndex(where: { $0.id == selectedContactID }) ?? 0
-//    }
-//
-//    var selectedContact: Contact? {
-//        contacts.first(where: { $0.id == selectedContactID })
+//    func binding(forContactWithID id: Contact.ID) -> Binding<Contact> {
+//        return Binding<Contact>(
+//            get: { () -> Contact in
+//                return self.contacts.first(where: { $0.id == id }) ?? Contact()
+//            },
+//            set: { newContact in
+//                self.identifiersOfUpdatedContacts.insert(newContact.id)
+//                self.contacts = self.contacts.map { oldContact in
+//                    if oldContact.id == newContact.id {
+//                        return newContact
+//                    }
+//                    return oldContact
+//                }
+//            }
+//        )
 //    }
     
     // MARK: Saving
@@ -96,56 +83,6 @@ final class ContactsDataSource: ObservableObject  {
 
         try storeCoordinator.save(changes)
     }
-    
-//    func save<T:Model>(_ modelValue: T, isNew: Bool) {
-//        let value = try! modelValue.encodeValue()
-//        let change: Value.Change = isNew ? .insert(value) : .update(value)
-//        try! storeCoordinator.save([change])
-//    }
-    
-//    func save() throws {
-//        // Use diff to determine what has changed since last fetch
-//        let storedContacts = fetchedContacts(at: versionAtFetch)
-//        let diff = contacts.difference(from: storedContacts)
-//
-//        var inserted: Set<Contact.ID> = []
-//        var removed: Set<Contact.ID> = []
-//        var contactsByID: [Contact.ID:Contact] = [:]
-//        for diff in diff {
-//            switch diff {
-//            case let .insert(_, contact, _):
-//                inserted.insert(contact.id)
-//                contactsByID[contact.id] = contact
-//            case let .remove(_, contact, _):
-//                removed.insert(contact.id)
-//            }
-//        }
-//
-//        // An update will appear as a remove and insert of contacts with the same id.
-//        let updated = inserted.intersection(removed)
-//        inserted.subtract(updated)
-//        removed.subtract(updated)
-//
-//        // Convert to value changes for LLVS
-//        let updateChanges: [Value.Change] = try updated.map {
-//            let contact = contactsByID[$0]!
-//            let value = try contact.encodeValue()
-//            return .update(value)
-//        }
-//        let insertChanges: [Value.Change] = try inserted.map {
-//            let contact = contactsByID[$0]!
-//            let value = try contact.encodeValue()
-//            return .insert(value)
-//        }
-//        let deleteChanges: [Value.Change] = removed.map {
-//            return .remove(Contact.storeValueId(for: $0))
-//        }
-//        let changes = updateChanges + insertChanges + deleteChanges
-//        guard !changes.isEmpty else { return }
-//
-//        // Store a new version
-//        try storeCoordinator.save(changes)
-//    }
     
     // MARK: Syncing
     

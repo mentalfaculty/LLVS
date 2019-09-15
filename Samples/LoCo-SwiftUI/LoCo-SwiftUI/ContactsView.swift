@@ -16,7 +16,10 @@ struct ContactsView : View {
     var body: some View {
         NavigationView {
             List(dataSource.contacts) { contact in
-                NavigationLink(destination: ContactView(contact: self.dataSource.binding(forContactWithID: contact.id))) {
+                NavigationLink(
+                    destination:
+                        ContactView(contact: self.$dataSource.contacts[self.dataSource.contacts.firstIndex(of: contact) ?? 0])
+                ) {
                     HStack {
                         Image(uiImage: contact.avatarJPEGData.flatMap({ UIImage(data:$0) }) ?? UIImage(named: "Placeholder")!)
                             .resizable()
