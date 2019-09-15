@@ -10,22 +10,9 @@ import Dispatch
 /// An asynchronous task. Chaining this can avoid deep nesting.
 public class AsynchronousTask {
     
-    public enum Result {
-        case success
-        case failure(Error)
-        
-        public var success: Bool {
-            if case .success = self {
-                return true
-            } else {
-                return false
-            }
-        }
-    }
+    public typealias Callback = (Result<Void, Error>)->Void
     
-    public typealias Callback = (Result)->Void
-    
-    public private(set) var result: Result? {
+    public private(set) var result: Result<Void, Error>? {
         didSet {
             guard let result = result else { fatalError("Result shoudl never be set back to nil") }
             
@@ -45,7 +32,7 @@ public class AsynchronousTask {
     }
     
     public let executionBlock: (_ finish: @escaping Callback)->Void
-    public var completionBlock: ((Result)->Void)?
+    public var completionBlock: ((Result<Void, Error>)->Void)?
     public var next: AsynchronousTask?
     
     public init(_ block: @escaping (_ finish: @escaping Callback)->Void) {
@@ -71,21 +58,9 @@ public extension Array where Element == AsynchronousTask {
             last.completionBlock = completionHandler
             first.execute()
         } else {
-            completionHandler(.success)
+            completionHandler(.success(()))
         }
     }
     
 }
 
-public extension Result {
-    
-    var taskResult: AsynchronousTask.Result {
-        switch self {
-        case .failure(let error):
-            return .failure(error)
-        case .success:
-            return .success
-        }
-    }
-    
-}

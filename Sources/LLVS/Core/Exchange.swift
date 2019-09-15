@@ -43,7 +43,7 @@ public extension Exchange {
         
         let prepare = AsynchronousTask { finish in
             self.prepareToRetrieve { result in
-                finish(result.taskResult)
+                finish(result)
             }
         }
         
@@ -51,7 +51,7 @@ public extension Exchange {
         let retrieveIds = AsynchronousTask { finish in
             self.retrieveAllVersionIdentifiers { result in
                 remoteIds = result.value
-                finish(result.taskResult)
+                finish(result.voidResult)
             }
         }
         
@@ -61,14 +61,14 @@ public extension Exchange {
             log.verbose("Version identifiers to retrieve: \(toRetrieveIds.identifierStrings)")
             self.retrieveVersions(identifiedBy: toRetrieveIds) { result in
                 remoteVersions = result.value
-                finish(result.taskResult)
+                finish(result.voidResult)
             }
         }
         
         let addToHistory = AsynchronousTask { finish in
             log.verbose("Adding to history versions: \(remoteVersions.identifierStrings)")
             self.addToHistory(remoteVersions) { result in
-                finish(result.taskResult)
+                finish(result.voidResult)
             }
         }
                     
@@ -157,7 +157,7 @@ public extension Exchange {
     func send(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>) {
         let prepare = AsynchronousTask { finish in
             self.prepareToSend { result in
-                finish(result.taskResult)
+                finish(result)
             }
         }
         
@@ -165,7 +165,7 @@ public extension Exchange {
         let retrieveIds = AsynchronousTask { finish in
             self.retrieveAllVersionIdentifiers { result in
                 remoteIds = result.value
-                finish(result.taskResult)
+                finish(result.voidResult)
             }
         }
         
@@ -182,7 +182,7 @@ public extension Exchange {
                 }
                 
                 self.send(versionChanges: versionChanges) { result in
-                    finish(result.taskResult)
+                    finish(result)
                 }
             } catch {
                 finish(.failure(error))

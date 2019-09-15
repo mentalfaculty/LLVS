@@ -184,7 +184,7 @@ public class StoreCoordinator {
                 case let .failure(error):
                     finish(.failure(error))
                 case .success:
-                    finish(.success)
+                    finish(.success(()))
                 }
             }
         }
@@ -195,7 +195,7 @@ public class StoreCoordinator {
                 case let .failure(error):
                     finish(.failure(error))
                 case .success:
-                    finish(.success)
+                    finish(.success(()))
                 }
             }
         }

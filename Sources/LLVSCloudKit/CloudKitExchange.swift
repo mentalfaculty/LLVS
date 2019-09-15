@@ -343,6 +343,20 @@ public extension CloudKitExchange {
         log.trace("Sending versions: \(versionChanges.map({ $0.0.identifier }))")
         log.verbose("Value changes: \(versionChanges)")
     
+        // Use batches of length 200, because CloudKit will give limit error at 400 records
+        let batchRanges = (0...versionChanges.count-1).split(intoRangesOfLength: 200)
+        let tasks = batchRanges.map { range in
+            AsynchronousTask { finish in
+                let batchChanges = versionChanges[range]
+                self.send(batchOfVersionChanges: batchChanges) { result in
+                    finish(result)
+                }
+            }
+        }
+        tasks.executeInOrder(completingWith: completionHandler)
+    }
+    
+    private func send(batchOfVersionChanges versionChanges: ArraySlice<VersionChanges>, executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         do {
             var tempFileURLs: [URL] = []
             let records: [CKRecord] = try versionChanges.map { t in

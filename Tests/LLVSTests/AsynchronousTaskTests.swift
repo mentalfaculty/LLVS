@@ -16,10 +16,10 @@ class AsynchronousTaskTests: XCTestCase {
     override func setUp() {
         super.setUp()
         task1 = AsynchronousTask { finish in
-            finish(.success)
+            finish(.success(()))
         }
         task2 = AsynchronousTask { finish in
-            finish(.success)
+            finish(.success(()))
         }
     }
     
@@ -27,7 +27,7 @@ class AsynchronousTaskTests: XCTestCase {
         let expect = XCTestExpectation(description: "Completed basic")
         task1.next = task2
         task2.completionBlock = { result in
-            XCTAssert(result.success)
+            XCTAssert(result.isSuccess)
             expect.fulfill()
         }
         task1.execute()
@@ -38,7 +38,7 @@ class AsynchronousTaskTests: XCTestCase {
         let expect = XCTestExpectation(description: "Completed basic")
         [task1, task2].chain()
         task2.completionBlock = { result in
-            XCTAssert(result.success)
+            XCTAssert(result.isSuccess)
             expect.fulfill()
         }
         task1.execute()
@@ -48,13 +48,13 @@ class AsynchronousTaskTests: XCTestCase {
     func testExecuteInOrder() {
         let expect = XCTestExpectation(description: "Completed Execute in Order")
         let task3 = AsynchronousTask { finish in
-            finish(.success)
+            finish(.success(()))
         }
         let task4 = AsynchronousTask { finish in
-            finish(.success)
+            finish(.success(()))
         }
         [task1, task2, task3, task4].executeInOrder { result in
-            XCTAssert(result.success)
+            XCTAssert(result.isSuccess)
             expect.fulfill()
         }
         task1.execute()
@@ -65,11 +65,11 @@ class AsynchronousTaskTests: XCTestCase {
         let expect = XCTestExpectation(description: "Completed with Async Delay")
         let task3 = AsynchronousTask { finish in
             DispatchQueue.main.async {
-                finish(.success)
+                finish(.success(()))
             }
         }
         [task1, task2, task3].executeInOrder { result in
-            XCTAssert(result.success)
+            XCTAssert(result.isSuccess)
             expect.fulfill()
         }
         task1.execute()
@@ -88,11 +88,11 @@ class AsynchronousTaskTests: XCTestCase {
         var task4Executed = false
         let task4 = AsynchronousTask { finish in
             task4Executed = true
-            finish(.success)
+            finish(.success(()))
         }
         [task1, task2, task3, task4].executeInOrder { result in
             XCTAssertFalse(task4Executed)
-            XCTAssertFalse(result.success)
+            XCTAssertFalse(result.isSuccess)
             expect.fulfill()
         }
         task1.execute()
