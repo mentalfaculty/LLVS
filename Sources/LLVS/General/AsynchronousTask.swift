@@ -19,7 +19,7 @@ public class AsynchronousTask {
             // This block is used to capture self (and next).
             // Othersize pre-mature release happens on failure.
             // It is asynchronous to prevent deadlocks.
-            DispatchQueue.global(qos: .utility).async {
+            DispatchQueue.global(qos: .default).async {
                 self.completionBlock?(result)
                 switch result {
                 case .failure:
@@ -55,7 +55,11 @@ public extension Array where Element == AsynchronousTask {
     func executeInOrder(completingWith completionHandler: @escaping AsynchronousTask.Callback) {
         chain()
         if let first = first, let last = last {
-            last.completionBlock = completionHandler
+            let existingLastCompletion = last.completionBlock
+            last.completionBlock = { result in
+                existingLastCompletion?(result)
+                completionHandler(result)
+            }
             first.execute()
         } else {
             completionHandler(.success(()))
