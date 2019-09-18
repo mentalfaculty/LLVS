@@ -66,7 +66,7 @@ final class ContactBook {
     // MARK: Work with Contacts
     
     func add(_ contact: Contact) throws {
-        var valueIdentifiers = contacts.map { $0.valueIdentifier }
+        var valueIdentifiers = contacts.map(\.valueIdentifier)
         valueIdentifiers.append(contact.valueIdentifier)
         
         let insertChanges = try contact.changesSinceLoad(from: store)
@@ -82,7 +82,7 @@ final class ContactBook {
     }
     
     func delete(_ contact: Contact) throws {
-        var valueIdentifiers = contacts.map { $0.valueIdentifier }
+        var valueIdentifiers = contacts.map(\.valueIdentifier)
         let index = valueIdentifiers.firstIndex(of: contact.valueIdentifier)!
         valueIdentifiers.remove(at: index)
         
