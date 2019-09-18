@@ -20,17 +20,6 @@ struct ContactView: View {
                 }
             }
             .navigationBarTitle(Text("Contact"))
-//            .navigationBarItems(
-//                trailing: {
-//                    HStack {
-////                        Button(
-////                            action: {},
-////                            label: {
-////                                Text("Save")
-////                        })
-//                    }
-//                }
-//            )
         }
     }
 }

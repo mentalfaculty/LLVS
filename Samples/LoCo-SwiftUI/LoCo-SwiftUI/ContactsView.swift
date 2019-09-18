@@ -13,31 +13,40 @@ struct ContactsView : View {
     
     @EnvironmentObject var dataSource: ContactsDataSource
     
+    private func thumbnail(for contact: Contact) -> Image {
+        if let data = contact.avatarJPEGData {
+            return Image(uiImage: UIImage(data:data)!)
+        } else {
+            return Image(systemName: "person.crop.rectangle.fill")
+        }
+    }
+    
     var body: some View {
         NavigationView {
-            List(dataSource.contacts) { contact in
-                NavigationLink(
-                    destination:
-                        ContactView(contact: self.$dataSource.contacts[self.dataSource.contacts.firstIndex(of: contact) ?? 0])
-                ) {
-                    HStack {
-                        Image(uiImage: contact.avatarJPEGData.flatMap({ UIImage(data:$0) }) ?? UIImage(named: "Placeholder")!)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .cornerRadius(6.0)
-                            .frame(width: 50, height: 50, alignment: .center)
-                        VStack(alignment: .leading) {
-                            Text(contact.person.fullName)
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                        }
+            List {
+                ForEach(dataSource.contacts) { contact in
+                    ContactCell(contact: self.$dataSource.contacts[self.dataSource.contactIndex(forID: contact.id)])
+                }.onDelete { indices in
+                    indices.forEach {
+                        self.dataSource.deleteContact(withID: self.dataSource.contacts[$0].id)
                     }
                 }
             }
             .navigationBarTitle(Text("Contacts"))
+            .navigationBarItems(
+                leading: EditButton(),
+                trailing: Button(
+                    action: {
+                        withAnimation {
+                            _ = self.dataSource.addNewContact()
+                        }
+                    }
+                ) {
+                    Image(systemName: "plus.circle.fill")
+                }
+            )
         }
     }
-    
 }
 
 struct ContactsViewPreview : PreviewProvider {

@@ -25,7 +25,20 @@ struct Person: Codable, Equatable {
     var secondName: String = ""
     
     var fullName: String {
-        return "\(firstName) \(secondName)"
+        switch (firstName.isEmpty, secondName.isEmpty) {
+        case (true, true):
+            return ""
+        case (true, false):
+            return secondName
+        case (false, true):
+            return firstName
+        case (false, false):
+            return "\(firstName) \(secondName)"
+        }
+    }
+    
+    var fullNameOrPlaceholder: String {
+        fullName.isEmpty ? "New Contact" : fullName
     }
     
     init(firstName: String = "", secondName: String = "") {

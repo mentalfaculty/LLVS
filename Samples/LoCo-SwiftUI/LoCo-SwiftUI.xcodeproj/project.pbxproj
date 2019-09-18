@@ -21,6 +21,7 @@
 		0795DD7A22D5134800EB2DD6 /* LLVS in Resources */ = {isa = PBXBuildFile; fileRef = 0795DD7922D5134800EB2DD6 /* LLVS */; };
 		0795DD7C22D5135300EB2DD6 /* LLVS in Frameworks */ = {isa = PBXBuildFile; productRef = 0795DD7B22D5135300EB2DD6 /* LLVS */; };
 		0795DD7E22D5135300EB2DD6 /* LLVSCloudKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0795DD7D22D5135300EB2DD6 /* LLVSCloudKit */; };
+		07BFE5592332B62100CF6EB9 /* ContactCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BFE5582332B62100CF6EB9 /* ContactCell.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -39,6 +40,7 @@
 		076B1D7322A838800061911B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		07710252232D6382002A1585 /* LoCo-SwiftUI.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "LoCo-SwiftUI.entitlements"; sourceTree = "<group>"; };
 		0795DD7922D5134800EB2DD6 /* LLVS */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LLVS; path = ../..; sourceTree = "<group>"; };
+		07BFE5582332B62100CF6EB9 /* ContactCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactCell.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -79,11 +81,12 @@
 				07710252232D6382002A1585 /* LoCo-SwiftUI.entitlements */,
 				076B1D6522A8387E0061911B /* AppDelegate.swift */,
 				076B1D6722A8387E0061911B /* SceneDelegate.swift */,
-				076B1D6922A8387E0061911B /* ContactsView.swift */,
-				07089DFF232E17F2009A6AD9 /* ContactView.swift */,
+				0737B9AD22D5174A0093CA5A /* ContactsDataSource.swift */,
 				0737B9AB22D5155A0093CA5A /* Model.swift */,
 				0737B9A922D514490093CA5A /* Contact.swift */,
-				0737B9AD22D5174A0093CA5A /* ContactsDataSource.swift */,
+				076B1D6922A8387E0061911B /* ContactsView.swift */,
+				07BFE5582332B62100CF6EB9 /* ContactCell.swift */,
+				07089DFF232E17F2009A6AD9 /* ContactView.swift */,
 				076B1D6B22A838800061911B /* Assets.xcassets */,
 				076B1D7022A838800061911B /* LaunchScreen.storyboard */,
 				076B1D7322A838800061911B /* Info.plist */,
@@ -184,6 +187,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				07BFE5592332B62100CF6EB9 /* ContactCell.swift in Sources */,
 				0737B9AC22D5155A0093CA5A /* Model.swift in Sources */,
 				0737B9AA22D514490093CA5A /* Contact.swift in Sources */,
 				076B1D6622A8387E0061911B /* AppDelegate.swift in Sources */,

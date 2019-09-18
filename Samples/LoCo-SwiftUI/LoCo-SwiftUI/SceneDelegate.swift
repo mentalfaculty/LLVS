@@ -17,7 +17,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         if let scene = scene as? UIWindowScene {
             let window = UIWindow(windowScene: scene)
             let appDelegate = UIApplication.shared.delegate as! AppDelegate
-            let contactsView = ContactsView().environmentObject(appDelegate.dataSource)
+            let contactsView = ContactsView()
+                .environmentObject(appDelegate.dataSource)
+                .accentColor(.green)
             window.rootViewController = UIHostingController(rootView: contactsView)
             self.window = window
             window.makeKeyAndVisible()

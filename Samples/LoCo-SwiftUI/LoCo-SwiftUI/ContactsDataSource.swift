@@ -41,22 +41,21 @@ final class ContactsDataSource: ObservableObject  {
         }
     }
     
-//    func binding(forContactWithID id: Contact.ID) -> Binding<Contact> {
-//        return Binding<Contact>(
-//            get: { () -> Contact in
-//                return self.contacts.first(where: { $0.id == id }) ?? Contact()
-//            },
-//            set: { newContact in
-//                self.identifiersOfUpdatedContacts.insert(newContact.id)
-//                self.contacts = self.contacts.map { oldContact in
-//                    if oldContact.id == newContact.id {
-//                        return newContact
-//                    }
-//                    return oldContact
-//                }
-//            }
-//        )
-//    }
+    func addNewContact() -> Contact {
+        let newContact = Contact()
+        contacts.append(newContact)
+        identifiersOfNewContacts.insert(newContact.id)
+        return newContact
+    }
+    
+    func deleteContact(withID id: Contact.ID) {
+        contacts = contacts.filter { $0.id != id }
+        identifiersOfDeletedContacts.insert(id)
+    }
+    
+    func contactIndex(forID id: Contact.ID) -> Int {
+        return contacts.firstIndex(where: { $0.id == id }) ?? 0
+    }
     
     // MARK: Saving
     
