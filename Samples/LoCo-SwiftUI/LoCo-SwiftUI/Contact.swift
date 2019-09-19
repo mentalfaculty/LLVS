@@ -15,8 +15,6 @@ struct Contact: Model {
     var id: UUID = .init()
     var person: Person = .init()
     var address: Address = .init()
-    var email: String = ""
-    var phoneNumber: String = ""
     var avatarJPEGData: Data?
 }
 

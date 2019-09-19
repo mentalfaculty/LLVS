@@ -25,7 +25,7 @@ struct ContactsView : View {
         NavigationView {
             List {
                 ForEach(dataSource.contacts) { contact in
-                    ContactCell(contact: self.$dataSource.contacts[self.dataSource.contactIndex(forID: contact.id)])
+                    ContactCell(contact: self.dataSource.contactBinding(for: contact.id))
                 }.onDelete { indices in
                     indices.forEach {
                         self.dataSource.deleteContact(withID: self.dataSource.contacts[$0].id)

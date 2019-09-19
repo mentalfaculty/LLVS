@@ -34,10 +34,24 @@ final class ContactsDataSource: ObservableObject  {
     private var identifiersOfNewContacts: Set<Contact.ID> = []
     private var identifiersOfUpdatedContacts: Set<Contact.ID> = []
     private var identifiersOfDeletedContacts: Set<Contact.ID> = []
+    
+    func contactBinding(for id: Contact.ID) -> Binding<Contact> {
+        Binding<Contact>(
+            get: { () -> Contact in
+                self.contacts.first(where: { id == $0.id })!
+            },
+            set: { newContact in
+                if let index = self.contacts.firstIndex(where: { newContact.id == $0.id }) {
+                    self.identifiersOfUpdatedContacts.insert(newContact.id)
+                    self.contacts[index] = newContact
+                }
+            }
+        )
+    }
 
     private func fetchedContacts(at version: Version.Identifier) -> [Contact] {
         return try! Contact.all(in: storeCoordinator, at: version).sorted {
-            ($0.person.secondName, $0.person.firstName, $0.id.uuidString) < ($1.person.secondName, $0.person.firstName, $1.id.uuidString)
+            ($0.person.secondName, $0.person.firstName, $0.id.uuidString) < ($1.person.secondName, $1.person.firstName, $1.id.uuidString)
         }
     }
     
