@@ -21,7 +21,9 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
 
     private let newVersionsSubject: PassthroughSubject<Void, Never> = .init()
     public var newVersionsAvailable: AnyPublisher<Void, Never> {
-        newVersionsSubject.debounce(for: .seconds(minimumDelayBeforeNotifyingOfNewVersions), scheduler: RunLoop.main).eraseToAnyPublisher()
+        newVersionsSubject
+            .debounce(for: .seconds(minimumDelayBeforeNotifyingOfNewVersions), scheduler: RunLoop.main)
+            .eraseToAnyPublisher()
     }
     
     public let rootDirectoryURL: URL
