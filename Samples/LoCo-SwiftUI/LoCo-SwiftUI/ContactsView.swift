@@ -9,6 +9,7 @@
 import SwiftUI
 import UIKit
 
+/// A list of contacts.
 struct ContactsView : View {
     @EnvironmentObject var dataSource: ContactsDataSource
     

@@ -10,6 +10,7 @@ import Foundation
 import SwiftUI
 import LLVS
 
+/// The main model type. It conforms to Model, which includes Codable.
 struct Contact: Model {
     static let storeIdentifierTypeTag = "Contact"
     var id: UUID = .init()
@@ -18,6 +19,7 @@ struct Contact: Model {
     var avatarJPEGData: Data?
 }
 
+/// Person is embedded in Contact, and so not a Model type. It is just Codable.
 struct Person: Codable, Equatable {
     var firstName: String = ""
     var secondName: String = ""
@@ -45,6 +47,7 @@ struct Person: Codable, Equatable {
     }
 }
 
+/// Address is also embedded, so only Codable.
 struct Address: Codable, Equatable {
     var streetAddress: String = ""
     var postCode: String = ""

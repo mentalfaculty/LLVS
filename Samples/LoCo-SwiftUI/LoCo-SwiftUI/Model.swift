@@ -13,6 +13,11 @@ import LLVS
 private let encoder = JSONEncoder()
 private let decoder = JSONDecoder()
 
+/// Model types conform to this type to make it more convenient to store them.
+/// The protocol takes care of converting ids into a form convenient for the LLVS
+/// store, by appending the type string. This is used to identify data types when fetching.
+/// Note that only structs that form the top of a encoded data blob should conform to
+/// this. If a struct is just embedded in another struct, it can just conform to Codable.
 protocol Model: Codable, Identifiable, Equatable {
     
     var storeValueId: Value.Identifier { get }
@@ -26,19 +31,23 @@ protocol Model: Codable, Identifiable, Equatable {
 
 extension Model {
     
+    /// Encode the model type as a Value for the LLVS store.
     func encodeValue() throws -> Value {
         let data = try encoder.encode(self)
         return Value(identifier: type(of: self).storeValueId(for: id), version: nil, data: data)
     }
     
+    /// Decode data from LLVS to form our model type.
     static func decode(from value: Value) throws -> Self {
         return try decoder.decode(Self.self, from: value.data)
     }
     
+    /// The id used in the LLVS store. This is based on the model id, but also includes the type string.
     var storeValueId: Value.Identifier {
         type(of: self).storeValueId(for: id)
     }
     
+    /// Tests if the store id is valid for the model type.
     static func isValid(storeValueId: String) -> Bool {
         return storeValueId.hasSuffix(".\(storeIdentifierTypeTag)")
     }
@@ -55,6 +64,8 @@ extension Model where ID == UUID {
 
 extension Model {
     
+    /// Handy method for fetching all model values of a given type, at a given version (or the current version if nil is passed).
+    /// This simply filters the values found based on the type string in the LLVS store identifier.
     static func all(in storeCoordinator: StoreCoordinator, at verison: Version.Identifier? = nil) throws -> [Self] {
         return try storeCoordinator.valueReferences(at: verison)
             .filter { Self.isValid(storeValueId: $0.identifier.identifierString) }

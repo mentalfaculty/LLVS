@@ -13,6 +13,7 @@ import LLVS
 import LLVSCloudKit
 import CloudKit
 
+/// The data controller. Mediates between UI and data store.
 final class ContactsDataSource: ObservableObject  {
     
     let storeCoordinator: StoreCoordinator

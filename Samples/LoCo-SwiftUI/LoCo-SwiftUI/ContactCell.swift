@@ -8,7 +8,7 @@
 
 import SwiftUI
 
-/// Cell used in the main Contacts list. When tapped, it pushes
+/// Cell used in the main contacts list. When tapped, it pushes
 /// the ContactView to edit the Contact
 struct ContactCell: View {
     @EnvironmentObject var dataSource: ContactsDataSource
