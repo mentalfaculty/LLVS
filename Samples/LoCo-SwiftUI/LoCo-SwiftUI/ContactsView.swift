@@ -10,7 +10,6 @@ import SwiftUI
 import UIKit
 
 struct ContactsView : View {
-    
     @EnvironmentObject var dataSource: ContactsDataSource
     
     private func thumbnail(for contact: Contact) -> Image {
@@ -25,7 +24,8 @@ struct ContactsView : View {
         NavigationView {
             List {
                 ForEach(dataSource.contacts) { contact in
-                    ContactCell(contact: self.dataSource.contactBinding(for: contact.id))
+                    ContactCell(contactID: contact.id)
+                        .environmentObject(self.dataSource)
                 }.onDelete { indices in
                     indices.forEach {
                         self.dataSource.deleteContact(withID: self.dataSource.contacts[$0].id)
@@ -38,7 +38,7 @@ struct ContactsView : View {
                 trailing: Button(
                     action: {
                         withAnimation {
-                            _ = self.dataSource.addNewContact()
+                            self.dataSource.addNewContact()
                         }
                     }
                 ) {

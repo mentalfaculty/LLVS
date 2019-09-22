@@ -30,17 +30,6 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let appDelegate = UIApplication.shared.delegate as! AppDelegate
         appDelegate.dataSource.sync()
     }
-
-    func sceneDidEnterBackground(_ scene: UIScene) {
-        let appDelegate = UIApplication.shared.delegate as! AppDelegate
-        let task = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
-        DispatchQueue.global(qos: .default).async {
-            DispatchQueue.main.async {
-                try! appDelegate.dataSource.save()
-                UIApplication.shared.endBackgroundTask(task)
-            }
-        }
-    }
     
 }
 

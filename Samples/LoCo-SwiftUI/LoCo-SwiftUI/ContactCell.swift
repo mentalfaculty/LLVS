@@ -8,10 +8,19 @@
 
 import SwiftUI
 
+/// Cell used in the main Contacts list. When tapped, it pushes
+/// the ContactView to edit the Contact
 struct ContactCell: View {
-    @Binding var contact: Contact
+    @EnvironmentObject var dataSource: ContactsDataSource
+    var contactID: Contact.ID
+    var contact: Contact { dataSource.contact(withID: contactID) }
+
     var body: some View {
-        NavigationLink(destination: ContactView(contact: $contact)) {
+        NavigationLink(
+            destination:
+                ContactView(contactID: contactID)
+                    .environmentObject(dataSource)
+        ) {
             HStack {
                 Thumbnail(contact: contact)
                 VStack(alignment: .leading) {
@@ -39,11 +48,5 @@ struct Thumbnail: View {
             .cornerRadius(4.0)
             .frame(width: 40, height: 40, alignment: .center)
             .foregroundColor(.green)
-    }
-}
-
-struct ContactCellPreview: PreviewProvider {
-    static var previews: some View {
-        ContactCell(contact: .constant(Contact()))
     }
 }
