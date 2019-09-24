@@ -342,6 +342,11 @@ public extension CloudKitExchange {
     func send(versionChanges: [VersionChanges], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         log.trace("Sending versions: \(versionChanges.map({ $0.0.identifier }))")
         log.verbose("Value changes: \(versionChanges)")
+        
+        guard !versionChanges.isEmpty else {
+            completionHandler(.success(()))
+            return
+        }
     
         // Use batches of length 200, because CloudKit will give limit error at 400 records
         let batchRanges = (0...versionChanges.count-1).split(intoRangesOfLength: 200)

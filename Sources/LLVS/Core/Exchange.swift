@@ -181,6 +181,11 @@ public extension Exchange {
                     return (version, changes)
                 }
                 
+                guard !versionChanges.isEmpty else {
+                    finish(.success(()))
+                    return
+                }
+                
                 self.send(versionChanges: versionChanges) { result in
                     finish(result)
                 }
