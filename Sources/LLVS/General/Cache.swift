@@ -12,6 +12,8 @@ import Foundation
 /// Creating generations is based on the number of values in the latest generation, not on time or data size.
 public final class Cache<ValueType> {
     
+    private let queue: DispatchQueue = .init(label: "llvs.cache")
+    
     private class Generation {
         private var valuesByIdentifier: [AnyHashable:ValueType] = [:]
         
@@ -39,28 +41,36 @@ public final class Cache<ValueType> {
     }
     
     public func setValue(_ value: ValueType, for identifier: AnyHashable) {
-        regenerateIfNeeded()
-        generations.first![identifier] = value
+        queue.sync {
+            regenerateIfNeeded()
+            generations.first![identifier] = value
+        }
     }
     
     public func removeValue(for identifier: AnyHashable) {
-        generations.forEach { generation in
-            generation[identifier] = nil
+        queue.sync {
+            generations.forEach { generation in
+                generation[identifier] = nil
+            }
         }
     }
     
     public func value(for identifier: AnyHashable) -> ValueType? {
-        if let generation = generations.first(where: { $0[identifier] != nil }) {
-            let value = generation[identifier]
-            generations.first![identifier] = value // Keep current by adding to most recent generation
-            return value
-        } else {
-            return nil
+        queue.sync {
+            if let generation = generations.first(where: { $0[identifier] != nil }) {
+                let value = generation[identifier]
+                generations.first![identifier] = value // Keep current by adding to most recent generation
+                return value
+            } else {
+                return nil
+            }
         }
     }
     
     public func purgeAllValues() {
-        generations = .init(repeating: Generation(), count: self.numberOfGenerations)
+        queue.sync {
+            generations = .init(repeating: Generation(), count: self.numberOfGenerations)
+        }
     }
     
     private func regenerateIfNeeded() {
