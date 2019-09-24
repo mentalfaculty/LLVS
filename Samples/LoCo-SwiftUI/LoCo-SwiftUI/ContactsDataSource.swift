@@ -42,16 +42,19 @@ final class ContactsDataSource: ObservableObject  {
         let newContact = Contact()
         let change: Value.Change = .insert(try! newContact.encodeValue())
         try! storeCoordinator.save([change])
+        sync()
     }
     
     func update(_ contact: Contact) {
         let change: Value.Change = .update(try! contact.encodeValue())
         try! storeCoordinator.save([change])
+        sync()
     }
     
     func deleteContact(withID id: Contact.ID) {
         let change: Value.Change = .remove(Contact.storeValueId(for: id))
         try! storeCoordinator.save([change])
+        sync()
 
     }
     

@@ -20,6 +20,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         let container = CKContainer(identifier: "iCloud.com.mentalfaculty.loco-swiftui")
         let exchange = CloudKitExchange(with: coordinator.store, storeIdentifier: "MainStore", cloudDatabaseDescription: .privateDatabaseWithCustomZone(container, zoneIdentifier: "MainZone"))
         coordinator.exchange = exchange
+        exchange.subscribeForPushNotifications()
         return coordinator
     }()
     
@@ -28,11 +29,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }()
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        UIApplication.shared.registerForRemoteNotifications()
         return true
     }
 
     func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
         return UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+    }
+    
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        dataSource.sync { _ in
+            completionHandler(.newData)
+        }
     }
 
 }
