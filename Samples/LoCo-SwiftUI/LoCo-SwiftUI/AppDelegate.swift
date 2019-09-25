@@ -38,10 +38,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
     
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        let preSyncVersion = storeCoordinator.currentVersion
         dataSource.sync { _ in
-            completionHandler(.newData)
+            let result: UIBackgroundFetchResult = self.storeCoordinator.currentVersion == preSyncVersion ? .noData : .newData
+            completionHandler(result)
         }
     }
+
 
 }
 
