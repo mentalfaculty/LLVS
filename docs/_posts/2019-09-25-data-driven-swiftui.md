@@ -1,8 +1,5 @@
 ---
 title: You're up and running!
-layout: post
-date:   2019-09-26 20:23:12 +0200
-categories: swiftui llvs
 ---
 
 Next you can update your site name, avatar and other options using the _config.yml file in the root of your repository (shown below).
