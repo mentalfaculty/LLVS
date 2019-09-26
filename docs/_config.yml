@@ -2,7 +2,7 @@ description: >-
   Discussion of the Low-Level Versioned Store (LLVS) and
   other aspects of distributed data storage.
 baseurl: "/LLVS"
-url: "https://mentalfaculty.github.io/LLVS"
+url: "https://mentalfaculty.github.io"
 
 theme: jekyll-theme-minimal
 plugins:
