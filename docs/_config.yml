@@ -2,3 +2,7 @@ theme: jekyll-theme-minimal
 plugins:
   - jekyll-sitemap
   - jekyll-feed
+
+title: LLVS Blog
+twitter_username: drewmccormack
+github_username:  mentalfaculty
