@@ -4,7 +4,7 @@ description: >-
 baseurl: "/LLVS" 
 url: "https://mentalfaculty.github.io"
 
-theme: jekyll-theme-minimal
+theme: minima
 plugins:
   - jekyll-sitemap
   - jekyll-feed
