@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Data Driven SwiftUI"
+author: Drew McCormack
 categories: [swiftui, llvs]
 ---
 
