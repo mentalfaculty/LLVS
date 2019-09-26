@@ -2,7 +2,7 @@
 layout: post
 title: "Data Driven SwiftUI"
 author: Drew McCormack
-categories: [swiftui, llvs]
+tags: [swiftui]
 ---
 
 SwiftUI has set us all thinking about the future of development on Apple's platforms. It's a disruptive technology which will supersede a development stack dating back more than 20 years to the pre-Mac OS X era. It's disruptive to be sure, but is it disruptive enough? While we're at it, should we be pulling the plug on a few more of our mainstays?
