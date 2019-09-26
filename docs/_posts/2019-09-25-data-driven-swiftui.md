@@ -26,4 +26,4 @@ for i in [.hi] {
 }
 ```
 
-![Image](/images/DataFlow.png)
+![Image]({{site.baseurl}}/images/DataFlow.png)
