@@ -54,7 +54,7 @@ Add this to your `Package.swift`.
 
 ```
 dependencies: [
-    .package(url: "https://gitlab.com/llvs/llvs.git", from: "0.1.0")
+    .package(url: "https://gitlab.com/llvs/llvs.git", from: "0.2.0")
 ]
 ```
 
@@ -63,7 +63,7 @@ dependencies: [
 Add this to your `Cartfile`.
 
 ```
-git "https://gitlab.com/llvs/llvs" "0.1.0"
+git "https://gitlab.com/llvs/llvs" "0.2.0"
 ```
 
 ### Cocoapods
@@ -71,7 +71,7 @@ git "https://gitlab.com/llvs/llvs" "0.1.0"
 Add this to your `Podfile`.
 
 ```
-pod 'LLVS', '~> 0.1.0'
+pod 'LLVS', '~> 0.2.0'
 ```
 
 ### Manually with Xcode
