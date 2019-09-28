@@ -174,7 +174,7 @@ Stop to think about that for a minute: we didn't actually mutate any of the data
 
 If we don't update the array of contacts in the data source class, how do edits end up on screen? Well, we saved the new value to the LLVS store, which causes the current version to change, and this induces the chain of observation we started with, updating the whole UI. The cycle is complete.
 
-![Image]({{site.baseurl}}/images/data-drive-swiftui/DataFlow.png)
+![The Data Cycle](/images/data-drive-swiftui/DataFlow.png)
 
 
 ## A Merge at Every Coal Face
