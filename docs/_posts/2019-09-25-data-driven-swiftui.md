@@ -30,7 +30,7 @@ This feels upside down to me. If I were to choose to use value types in either m
 
 Of course, one choice need not exclude the other. Maybe the best solution is to use value types in both the view _and_ the model. It's this option I want to explore here by developing a basic contacts app with SwiftUI. But we'll take it a step further, not only using value types, but also adopting immutable data throughout, right down to the on disk storage.
 
-![The LoCo App]({{site.baseurl}}/images/data-drive-swiftui/LoCo.png)
+![The LoCo App]({{site.baseurl}}/images/data-driven-swiftui/LoCo.png)
 
 
 ## LLVS
@@ -135,7 +135,7 @@ struct ContactView: View {
 
 This is what it looks like to the user.
 
-![Contact Detail View]({{site.baseurl}}/images/data-drive-swiftui/ContactDetails.png)
+![Contact Detail View]({{site.baseurl}}/images/data-driven-swiftui/ContactDetails.png)
 
 
 ## Change Without Mutation
@@ -174,7 +174,7 @@ Stop to think about that for a minute: we didn't actually mutate any of the data
 
 If we don't update the array of contacts in the data source class, how do edits end up on screen? Well, we saved the new value to the LLVS store, which causes the current version to change, and this induces the chain of observation we started with, updating the whole UI. The cycle is complete.
 
-![The Data Cycle](/images/data-drive-swiftui/DataFlow.png)
+![The Data Cycle]({{site.baseurl}}/images/data-driven-swiftui/DataFlow.png)
 
 
 ## A Merge at Every Coal Face
