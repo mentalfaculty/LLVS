@@ -16,7 +16,9 @@ Here I'm going to show you how to build an app that...
 
 ## SwiftUI
 
-Even with SwiftUI in constant flux, there is already plenty of great content around for learning  the new framework. I've spent several weeks working on side projects in an effort to 'kick the tires'; the tutorials and API descriptions others have compiled have been indispensable. And yet, I can't help feeling most of the code is clothed above the waist, and pantsless below. The king is only half dressed. There is an enormous, data-sized elephant in the SwiftUI room.
+Even with SwiftUI in constant flux, there is already plenty of great content around for learning  the new framework. I've spent several weeks working on side projects in an effort to 'kick the tires'; the tutorials and API descriptions others have compiled have been indispensable. 
+
+And yet, I can't help feeling most of the code is clothed above the waist, and pantsless below. The king is only half dressed. There is an enormous, data-sized elephant in the SwiftUI room.
 
 To be more concrete, SwiftUI examples typically rely heavily on the `@State` property wrapper. This is a convenient way to include some mutable state without having to think much about the controllers and data models which make up a real app. This is fully understandable, because the framework is new, and we are still fixated on how to handle animation, layout, and a multitude of other UI concerns. But recently, I've started to focus on the next step: How do you go from the tutorials and demos to real world, scalable apps? How do you build a SwiftUI app from the ground up?
 
@@ -29,6 +31,8 @@ This feels upside down to me. If I were to choose to use value types in either m
 ## Values All the Way Down
 
 Of course, one choice need not exclude the other. Maybe the best solution is to use value types in both the view _and_ the model. It's this option I want to explore here by developing a basic contacts app with SwiftUI. But we'll take it a step further, not only using value types, but also adopting immutable data throughout, right down to the on disk storage.
+
+If you want to try out this app without going to the trouble of building it, you can [add it to Test Flight](https://testflight.apple.com/join/CInn5xrF). 
 
 ![The LoCo App]({{site.baseurl}}/images/data-driven-swiftui/LoCo.png)
 
@@ -44,7 +48,7 @@ The easiest way to think about LLVS is as Git for your app. The concepts are com
 - Data can be stored to create a new version based on any earlier version
 - History can be branched, and merged
 
-LLVS has the added advantage that it abstracts away all sync and networking code, so building a syncing app is as easy as pulling from GitHub.
+LLVS has the added advantage that it abstracts away all sync and networking code, so building a syncing app is as easy as pushing and pulling with Git.
 
 ## Data Driven
 
@@ -179,9 +183,11 @@ If we don't update the array of contacts in the data source class, how do edits 
 
 ## A Merge at Every Coal Face
 
-Who cares? Why is this useful? Here is something you realize when implementing sync in a non-trivial app: whenever you have a mutable copy of the data, you have a merge problem. For example, imagine you fetch data from disk, and store it in a controller. What happens when new changes arrive from a different device? You have to merge those changes into the controller's data. And what happens when the user makes changes in the view? You have to merge those changes into the controller's copy of the data.
+Who cares? Why is this useful? Here is something you realize when implementing sync in a non-trivial app: whenever you have a mutable copy of the data, you have a merge problem. 
 
-And the same applies to every level of the app. If you are working on a view class, you have to be careful to pull updates in from the controller, and merge them with any changes the user has just made. In short, there is a merge problem at every coal face. Any mutable copy of your data is another merge problem to solve.
+For example, imagine you fetch data from disk, and store it in a controller. What happens when new changes arrive from a different device? You have to merge those changes into the controller's data. And what happens when the user makes changes in the view? You have to merge those changes into the controller's copy of the data.
+
+And the same applies at every level of the app. If you are working on a view class, you have to be careful to pull updates in from the controller, and merge them with any changes the user has just made. In short, there is a merge problem at every coal face. Any mutable copy of your data is another merge problem to solve.
 
 The reason the solution above works so well is that there is no mutable copy of the data. The only mutation occurs in the data store when changing the current version. All merging occurs in this step, via the mechanisms provided by LLVS. In this particular example, we have opted for a simple "most recent value wins" merge policy, but we could make merging as sophisticated as needed. We do this in one place, rather than throughout the app for every mutable copy of the data.
 

@@ -18,7 +18,6 @@
 		076B1D6C22A838800061911B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 076B1D6B22A838800061911B /* Assets.xcassets */; };
 		076B1D6F22A838800061911B /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 076B1D6E22A838800061911B /* Preview Assets.xcassets */; };
 		076B1D7222A838800061911B /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 076B1D7022A838800061911B /* LaunchScreen.storyboard */; };
-		0795DD7A22D5134800EB2DD6 /* LLVS in Resources */ = {isa = PBXBuildFile; fileRef = 0795DD7922D5134800EB2DD6 /* LLVS */; };
 		0795DD7C22D5135300EB2DD6 /* LLVS in Frameworks */ = {isa = PBXBuildFile; productRef = 0795DD7B22D5135300EB2DD6 /* LLVS */; };
 		0795DD7E22D5135300EB2DD6 /* LLVSCloudKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0795DD7D22D5135300EB2DD6 /* LLVSCloudKit */; };
 		07BFE5592332B62100CF6EB9 /* ContactCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BFE5582332B62100CF6EB9 /* ContactCell.swift */; };
@@ -30,7 +29,7 @@
 		0737B9A922D514490093CA5A /* Contact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contact.swift; sourceTree = "<group>"; };
 		0737B9AB22D5155A0093CA5A /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
 		0737B9AD22D5174A0093CA5A /* ContactsDataSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsDataSource.swift; sourceTree = "<group>"; };
-		076B1D6222A8387E0061911B /* LoCo-SwiftUI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "LoCo-SwiftUI.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		076B1D6222A8387E0061911B /* LoCo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LoCo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		076B1D6522A8387E0061911B /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		076B1D6722A8387E0061911B /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		076B1D6922A8387E0061911B /* ContactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsView.swift; sourceTree = "<group>"; };
@@ -70,7 +69,7 @@
 		076B1D6322A8387E0061911B /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				076B1D6222A8387E0061911B /* LoCo-SwiftUI.app */,
+				076B1D6222A8387E0061911B /* LoCo.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -132,7 +131,7 @@
 				0795DD7D22D5135300EB2DD6 /* LLVSCloudKit */,
 			);
 			productName = "LoCo-SwiftUI";
-			productReference = 076B1D6222A8387E0061911B /* LoCo-SwiftUI.app */;
+			productReference = 076B1D6222A8387E0061911B /* LoCo.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -174,7 +173,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				076B1D7222A838800061911B /* LaunchScreen.storyboard in Resources */,
-				0795DD7A22D5134800EB2DD6 /* LLVS in Resources */,
 				076B1D6F22A838800061911B /* Preview Assets.xcassets in Resources */,
 				076B1D6C22A838800061911B /* Assets.xcassets in Resources */,
 			);
@@ -332,6 +330,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "LoCo-SwiftUI/LoCo-SwiftUI.entitlements";
 				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_ASSET_PATHS = "LoCo-SwiftUI/Preview\\ Content";
 				DEVELOPMENT_TEAM = P7BXV6PHLD;
 				ENABLE_PREVIEWS = YES;
@@ -341,7 +340,7 @@
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.mentalfaculty.loco-swiftui";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = LoCo;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -353,6 +352,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "LoCo-SwiftUI/LoCo-SwiftUI.entitlements";
 				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_ASSET_PATHS = "LoCo-SwiftUI/Preview\\ Content";
 				DEVELOPMENT_TEAM = P7BXV6PHLD;
 				ENABLE_PREVIEWS = YES;
@@ -362,7 +362,7 @@
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.mentalfaculty.loco-swiftui";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = LoCo;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
