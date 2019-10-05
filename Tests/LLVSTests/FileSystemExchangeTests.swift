@@ -9,6 +9,7 @@ import XCTest
 import Foundation
 @testable import LLVS
 
+@available(macOS 10.14, iOS 12, watchOS 5, *)
 class FileSystemExchangeTests: XCTestCase {
 
     let fm = FileManager.default
@@ -152,6 +153,7 @@ class FileSystemExchangeTests: XCTestCase {
         wait(for: [expectMerge], timeout: 1.0)
     }
     
+    @available(macOS 10.15, iOS 13, watchOS 6, *)
     func testNewVersionAvailableNotification() {
         exchange1 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store1, usesFileCoordination: true)
         exchange2 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store2, usesFileCoordination: true)
@@ -167,10 +169,15 @@ class FileSystemExchangeTests: XCTestCase {
         wait(for: [expect], timeout: 3.0)
     }
 
-    static var allTests = [
-        ("testSendFiles", testSendFiles),
-        ("testReceiveFiles", testReceiveFiles),
-        ("testConcurrentChanges", testConcurrentChanges),
-        ("testNewVersionAvailableNotification", testNewVersionAvailableNotification),
-    ]
+    static var allTests: [(String, (FileSystemExchangeTests) -> () -> ())] {
+        var result = [
+            ("testSendFiles", testSendFiles),
+            ("testReceiveFiles", testReceiveFiles),
+            ("testConcurrentChanges", testConcurrentChanges)
+        ]
+        if #available(macOS 10.15, iOS 13, watchOS 6, *) {
+            result.append(("testNewVersionAvailableNotification", testNewVersionAvailableNotification))
+        }
+        return result
+    }
 }

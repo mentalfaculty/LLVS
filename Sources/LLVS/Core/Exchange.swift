@@ -18,6 +18,7 @@ public typealias VersionChanges = (version: Version, valueChanges: [Value.Change
 
 public protocol Exchange: class {
 
+    @available(macOS 10.15, iOS 13, watchOS 6, *)
     var newVersionsAvailable: AnyPublisher<Void, Never> { get }
     var store: Store { get }
     
