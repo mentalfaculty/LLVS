@@ -62,9 +62,7 @@ If you have a standard Xcode project, see the next section.
 
 ### Swift Package Manager in Xcode 11 or later
 
-Xcode 11 includes direct support for SPM. (Note: this seems buggy in early releases, and sometimes gives errors unnecessarily.)
-
-To add LLVS, choose _File > Swift Packages > Add Package Dependency..._. Put the minimum version you require (eg 0.3), and add the package. You will then need to add the LLVS module to your embedded frameworks list for your target.
+Xcode 11 includes direct support for SPM. To add LLVS, choose _File > Swift Packages > Add Package Dependency..._. Put the minimum version you require (eg 0.3), and add the package. You can choose which frameworks to include in your target.
 
 ### Carthage
 
@@ -76,7 +74,7 @@ github "mentalfaculty/LLVS" "0.3.0"
 
 ### Manually with Xcode
 
-To add LLVS to your Xcode project, download the source code, and drag the `LLVS` root folder into your own Xcode app project. Then select your app's target, and add the LLVS framework in the _Frameworks, Libraries, and Embedded Content_ section of the _General_ tab.
+To add LLVS to your Xcode project, download the source code or add the project as a submodule with Git, and then drag the `LLVS` root folder into your own Xcode app project. Then select your app's target, and add the LLVS framework in the _Frameworks, Libraries, and Embedded Content_ section of the _General_ tab.
 
 If you want to use CloudKit, embed the LLVSCloudKit framework too.
 
