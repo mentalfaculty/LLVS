@@ -54,7 +54,7 @@ Add this to your `Package.swift`.
 
 ```
 dependencies: [
-    .package(url: "https://github.com/mentalfaculty/LLVS.git, from: "0.2.0")
+    .package(url: "https://github.com/mentalfaculty/LLVS.git, from: "0.3.0")
 ]
 ```
 
@@ -63,7 +63,7 @@ dependencies: [
 Add this to your `Cartfile`.
 
 ```
-github "mentalfaculty/LLVS" "0.2.0"
+github "mentalfaculty/LLVS" "0.3.0"
 ```
 
 ### Cocoapods
@@ -71,7 +71,7 @@ github "mentalfaculty/LLVS" "0.2.0"
 Add this to your `Podfile`.
 
 ```
-pod 'LLVS', '~> 0.2.0'
+pod 'LLVS', '~> 0.3.0'
 ```
 
 ### Manually with Xcode
