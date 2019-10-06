@@ -66,14 +66,6 @@ Add this to your `Cartfile`.
 github "mentalfaculty/LLVS" "0.3.0"
 ```
 
-### Cocoapods
-
-Add this to your `Podfile`.
-
-```
-pod 'LLVS', '~> 0.3.0'
-```
-
 ### Manually with Xcode
 
 To add LLVS to your Xcode project, download the source code, and drag the `LLVS.xcodeproj` file into your own Xcode app project. Then select your app's target, and add the LLVS framework in the Embedded Frameworks section of the General tab.
