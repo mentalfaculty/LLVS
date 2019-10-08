@@ -15,6 +15,9 @@ let package = Package(
         .library(
             name: "LLVSCloudKit",
             targets: ["LLVSCloudKit"]),
+        .library(
+            name: "LLVSWatchKit",
+            targets: ["LLVSWatchKit"]),
     ],
     dependencies: [
     ],
@@ -27,6 +30,9 @@ let package = Package(
             dependencies: ["LLVS"]),
         .target(
             name: "LLVSCloudKit",
+            dependencies: ["LLVS"]),
+        .target(
+            name: "LLVSWatchKit",
             dependencies: ["LLVS"])
     ]
 )
