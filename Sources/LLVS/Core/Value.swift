@@ -8,8 +8,9 @@
 import Foundation
 
 public struct Value: Codable, Identifiable {
+    public typealias ID = Identifier
     
-    public var id: Identifier
+    public var id: ID
     public var data: Data
     
     /// The identifier of the version in which this value was stored. Can be nil, if

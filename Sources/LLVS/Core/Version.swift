@@ -8,8 +8,9 @@
 import Foundation
 
 public struct Version: Hashable, Identifiable {
-    
-    public var id: Identifier = .init()
+    public typealias ID = Identifier
+
+    public var id: ID = .init()
     public var predecessors: Predecessors?
     public var successors: Successors = .init()
     public var timestamp: TimeInterval
