@@ -16,9 +16,9 @@ These tools successfully solved the problem of decentralized collaboration, and 
 
 ### What is LLVS?
 
-LLVS is a new kind of beast, and is not easy to characterize in terms of existing technologies. A reasonable description would be that it is a _decentralized, versioned, key-value storage framework_.
+LLVS is best described as a _decentralized, versioned, key-value storage framework_. 
 
-It works a bit like a traditional key-value store, in which you can insert data values for given unique keys. But LLVS adds to this several extra dimensions, namely, that every time a value is stored, it gets assigned a version, and each version has an ancestry of other versions which you can trace back in time. Just as with Git, you can retrieve the values for any version at any time, determine the differences between two versions, and merge together versions.
+It works a bit like a traditional key-value store, in which you can insert data values for given unique keys. But LLVS adds to this several extra dimensions, namely, that when a set of values are stored, a new version is created in the store, and each version has an ancestry of other versions which you can trace back in time. Just as with Git, you can retrieve the values for any version at any time, determine the values that changed between any two versions, and merge together versions.
 
 All of this would be great on its own, but if it were isolated to a single store, it still would not be very useful in our decentralized world. So LLVS can _send_ and _receive_ versions from other stores, in the same way that you _push_ and _pull_ from other repositories with Git.
 
@@ -48,13 +48,15 @@ LLVS includes some classes to get you started. You can set up a basic store usin
 
 ## Installing
 
-### Swift Package Manager in Xcode 11 or later
+### Swift Package Manager (SPM) in Xcode 11 or later
 
-Xcode 11 includes direct support for SPM. To add LLVS, choose _File > Swift Packages > Add Package Dependency..._. Put the minimum version you require (eg 0.3), and add the package. You can choose which frameworks to include in your target.
+The easiest way to get started with LLVS is using Xcode 11 or later, which supports the Swift Package Manager (SPM). 
 
-### Swift Package Manager (SPM)
+To add LLVS, choose _File > Swift Packages > Add Package Dependency..._. Put the minimum version you require (eg 0.3.0), and add the package. You can choose which frameworks to include in your target.
 
-Add this to your `Package.swift`, if you have a project that uses SPM for dependencies. 
+### Swift Package Manager
+
+If you aren't building with Xcode, you can instead add this to your SPM `Package.swift`. 
 
 ```
 dependencies: [
@@ -62,19 +64,16 @@ dependencies: [
 ]
 ```
 
-If you have a standard Xcode project, see the section above.
-
 ### Manually with Xcode
 
-To add LLVS to your Xcode project, download the source code or add the project as a submodule with Git, and then drag the `LLVS` root folder into your own Xcode app project. Then select your app's target, and add the LLVS framework in the _Frameworks, Libraries, and Embedded Content_ section of the _General_ tab.
-
-If you want to use CloudKit, embed the LLVSCloudKit framework too.
+To manually add LLVS to your Xcode project, download the source code or add the project as a submodule with Git, and drag the `LLVS` root folder into your own Xcode app project. Then select your app's target, and add the LLVS framework in the _Frameworks, Libraries, and Embedded Content_ section of the _General_ tab.
 
 ### Trying it Out First
 
 If you don't want to go to the trouble of installing the framework, but do want to test it out in practice, you can try out the LoCo sample app via Test Flight. Use the link below to add the app to Test Flight on your iOS device.
 
 [https://testflight.apple.com/join/nMfzRxt4](https://testflight.apple.com/join/nMfzRxt4)
+
 
 ## Quick Start
 
