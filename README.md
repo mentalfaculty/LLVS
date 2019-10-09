@@ -48,6 +48,10 @@ LLVS includes some classes to get you started. You can set up a basic store usin
 
 ## Installing
 
+### Swift Package Manager in Xcode 11 or later
+
+Xcode 11 includes direct support for SPM. To add LLVS, choose _File > Swift Packages > Add Package Dependency..._. Put the minimum version you require (eg 0.3), and add the package. You can choose which frameworks to include in your target.
+
 ### Swift Package Manager (SPM)
 
 Add this to your `Package.swift`, if you have a project that uses SPM for dependencies. 
@@ -58,19 +62,7 @@ dependencies: [
 ]
 ```
 
-If you have a standard Xcode project, see the next section.
-
-### Swift Package Manager in Xcode 11 or later
-
-Xcode 11 includes direct support for SPM. To add LLVS, choose _File > Swift Packages > Add Package Dependency..._. Put the minimum version you require (eg 0.3), and add the package. You can choose which frameworks to include in your target.
-
-### Carthage
-
-Add this to your `Cartfile`.
-
-```
-github "mentalfaculty/LLVS" "0.3.0"
-```
+If you have a standard Xcode project, see the section above.
 
 ### Manually with Xcode
 
@@ -84,12 +76,27 @@ If you don't want to go to the trouble of installing the framework, but do want 
 
 [https://testflight.apple.com/join/nMfzRxt4](https://testflight.apple.com/join/nMfzRxt4)
 
+## Quick Start
 
-## Some Simple Examples
+This section gets you up and running as fast as possible with a iOS app that syncs via CloudKit.
 
-This section shows simple code for getting started, and provides a means to better understand the framework, and where it fits in to your toolkit.
+### Add a Store Coordinator
 
-### Creating a Store
+### Store Some Data
+
+### Fetch Data
+
+### Add an Exchange for Cloud Sync
+Configure CloudKit
+
+### Sync
+
+
+## A Bit More Depth
+
+This section presents simple code for basic operations with LLVS. It provides a means to better understand the framework, and where it fits in to your toolkit.
+
+### Creating a StoreCoordinator
 
 Creating a versioned store on a single device is as simple as passing in a directory URL.
 
@@ -100,6 +107,8 @@ let store = Store(rootDirectoryURL: rootStoreDirectory)
 ```
 
 This code uses the app group container, which is useful if you want to share data with app extensions. (LLVS stores can be shared directly between multiple processes, such as the main app and a sharing extension.)
+
+### Accessing the Store
 
 ### Storing Values
 
@@ -135,6 +144,8 @@ let secondVersion = try store.addVersion(basedOnPredecessor: firstVersion.identi
 The main difference here is that a non-nil predecessor is passed in when adding the version. The predecessor is just the identifier of the first version we created above.
 
 We have also used a shorter notation for the identifier, creating it inline with `.init`, rather than explicitly storing it in a variable.
+
+### Versions Explained
 
 ### Fetching Data
 
@@ -177,6 +188,8 @@ If we now attempted to fetch the value with identifier "CDEFGH" at the third ver
 If the history of changes is _serial_ — one set of changes always based on the preceding — it is easy to work with your data. It gets more complex when _concurrent_ changes are made. If two versions are added at about the same time, you can end up with divergence of your data, and this will likely need to be merged at a later time.
 
 An example of this is when a user makes changes on two different devices, with no interceding sync. Later, when the data does get transferred, the versions branch off, rather than appearing in a continuous ancestral line. This can even happen if you are not using sync; for example, if you have a sharing extension, and it adds a version while your main app is also adding a version.
+
+### Heads
 
 ### Navigating History
 
@@ -232,49 +245,6 @@ In this instance, we have used a built-in arbiter class called `MostRecentChange
 
 In your app, you are more likely to create your own arbiter class, to merge your data in custom ways. You can also choose to handle certain specific cases, and pass more standard tasks off to one of the existing arbiter classes.
 
-### Inside a MergeArbiter
-
-You might be wondering what the internals of an arbiter class look like. It's typically a loop over the differences, treating each type of conflict. One of the simplest is `MostRecentBranchFavoringArbiter`, which will simply favor the branch that has the most recent timestamp. Here is the whole class.
-
-```swift
-public class MostRecentBranchFavoringArbiter: MergeArbiter {
-    
-    public init() {}
-
-    public func changes(toResolve merge: Merge, in store: Store) throws -> [Value.Change] {
-        let v = merge.versions
-        let favoredBranch: Value.Fork.Branch = v.first.timestamp >= v.second.timestamp ? .first : .second
-        let favoredVersion = favoredBranch == .first ? v.first : v.second
-        var changes: [Value.Change] = []
-        for (valueId, fork) in merge.forksByValueIdentifier {
-            switch fork {
-            case let .removedAndUpdated(removeBranch):
-                if removeBranch == favoredBranch {
-                    changes.append(.preserveRemoval(valueId))
-                } else {
-                    let value = try store.value(valueId, prevailingAt: favoredVersion.identifier)!
-                    changes.append(.preserve(value.reference!))
-                }
-            case .twiceInserted, .twiceUpdated:
-                let value = try store.value(valueId, prevailingAt: favoredVersion.identifier)!
-                changes.append(.preserve(value.reference!))
-            case .inserted, .removed, .updated, .twiceRemoved:
-                break
-            }
-        }
-        return changes
-    }
-}
-```
-
-The engine of this class is the loop over _forks_. A fork summarizes the changes made in each branch for a single value identifier. Forks can be non-conflicting, like _.inserted_, _.removed_, _.updated_, and _.twiceRemoved_. These types involve either a change on a single branch, or a change on both branches that can be considered equivalent (_eg_ removing the value on both branches).
-
-Alternatively, a fork can be conflicting. At a minimum, the arbiter is required to return new changes for any forks that are conflicting. This is how they _resolve_ the conflicts in the merge. They can return a completely new change to resolve a conflicting fork, or they can _preserve_ an existing change. 
-
-You can see in the code above that when data is inserted on each branch, or updated on each branch, the arbiter _preserves_ the value from the more recent branch. When a _.removedAndUpdated_ is encountered — one branch removing the value, and another applying an update — the arbiter again preserves whichever change was made on the most recent branch.
-
-You need not worry much about arbiters when getting started. You can just choose one of the existing classes, and start with that. Later, as you need more control, you can think about developing your own custom class that conforms to the `MergeArbiter` protocol.
-
 
 ### Setting Up an Exchange
 
@@ -318,6 +288,53 @@ self.cloudKitExchange.send { result in
 LLVS has no limit on how many exchanges you setup. You can setup several for a single store, effectively pushing and pulling data via different routes. 
 
 Exchanges are also not limited to cloud services. You can write your own peer-to-peer class which conforms to the `Exchange` protocol. LLVS even includes `FileSystemExchange`, which is an exchange that works via a directory in the file system. This is very useful for testing your app without having to use the cloud.
+
+## Advanced
+
+This section includes more information for those already familiar with the basic workings of LLVS. You are advised to skip over it when first getting started.
+
+### Inside a MergeArbiter
+
+You might be wondering what the internals of an arbiter class look like. It's typically a loop over the differences, treating each type of conflict. One of the simplest is `MostRecentBranchFavoringArbiter`, which will simply favor the branch that has the most recent timestamp. Here is the whole class.
+
+```swift
+public class MostRecentBranchFavoringArbiter: MergeArbiter {
+    
+    public init() {}
+
+    public func changes(toResolve merge: Merge, in store: Store) throws -> [Value.Change] {
+        let v = merge.versions
+        let favoredBranch: Value.Fork.Branch = v.first.timestamp >= v.second.timestamp ? .first : .second
+        let favoredVersion = favoredBranch == .first ? v.first : v.second
+        var changes: [Value.Change] = []
+        for (valueId, fork) in merge.forksByValueIdentifier {
+            switch fork {
+            case let .removedAndUpdated(removeBranch):
+                if removeBranch == favoredBranch {
+                    changes.append(.preserveRemoval(valueId))
+                } else {
+                    let value = try store.value(valueId, prevailingAt: favoredVersion.identifier)!
+                    changes.append(.preserve(value.reference!))
+                }
+            case .twiceInserted, .twiceUpdated:
+                let value = try store.value(valueId, prevailingAt: favoredVersion.identifier)!
+                changes.append(.preserve(value.reference!))
+            case .inserted, .removed, .updated, .twiceRemoved:
+                break
+            }
+        }
+        return changes
+    }
+}
+```
+
+The engine of this class is the loop over _forks_. A fork summarizes the changes made in each branch for a single value identifier. Forks can be non-conflicting, like _.inserted_, _.removed_, _.updated_, and _.twiceRemoved_. These types involve either a change on a single branch, or a change on both branches that can be considered equivalent (_eg_ removing the value on both branches).
+
+Alternatively, a fork can be conflicting. At a minimum, the arbiter is required to return new changes for any forks that are conflicting. This is how they _resolve_ the conflicts in the merge. They can return a completely new change to resolve a conflicting fork, or they can _preserve_ an existing change. 
+
+You can see in the code above that when data is inserted on each branch, or updated on each branch, the arbiter _preserves_ the value from the more recent branch. When a _.removedAndUpdated_ is encountered — one branch removing the value, and another applying an update — the arbiter again preserves whichever change was made on the most recent branch.
+
+You need not worry much about arbiters when getting started. You can just choose one of the existing classes, and start with that. Later, as you need more control, you can think about developing your own custom class that conforms to the `MergeArbiter` protocol.
 
 
 ## Learning More
