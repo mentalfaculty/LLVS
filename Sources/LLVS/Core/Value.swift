@@ -24,7 +24,7 @@ public struct Value: Codable, Identifiable {
     
     public var reference: Reference? {
         guard let version = storedVersionId else { return nil }
-        return Reference(valueId: id, storedAtVersionWithId: version)
+        return Reference(valueId: id, storedVersionId: version)
     }
     
     /// If an id is not provided, a UUID will be used. The storedVersionId will be set to nil, because
@@ -34,8 +34,8 @@ public struct Value: Codable, Identifiable {
         self.data = data
     }
     
-    internal init(identifier: ID, storedVersionId: Version.ID, data: Data) {
-        self.id = identifier
+    internal init(id: ID, storedVersionId: Version.ID, data: Data) {
+        self.id = id
         self.storedVersionId = storedVersionId
         self.data = data
     }
@@ -46,7 +46,7 @@ public extension Value {
     
     struct Reference: Codable, Hashable {
         public var valueId: ID
-        public var storedAtVersionWithId: Version.ID
+        public var storedVersionId: Version.ID
     }
     
     struct Identifier: StringIdentifiable, Hashable, Codable {

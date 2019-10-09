@@ -152,7 +152,7 @@ extension Store {
         let deltas: [Map.Delta] = changes.map { change in
             switch change {
             case .insert(let value), .update(let value):
-                let valueRef = Value.Reference(valueId: value.id, storedAtVersionWithId: version.id)
+                let valueRef = Value.Reference(valueId: value.id, storedVersionId: version.id)
                 var delta = Map.Delta(key: Map.Key(value.id.stringValue))
                 delta.addedValueReferences = [valueRef]
                 return delta
@@ -344,17 +344,17 @@ extension Store {
     
     public func value(withId valueId: Value.ID, at versionId: Version.ID) throws -> Value? {
         let ref = try valueReference(withId: valueId, at: versionId)
-        return try ref.flatMap { try value(withId: valueId, storedAt: $0.storedAtVersionWithId) }
+        return try ref.flatMap { try value(withId: valueId, storedAt: $0.storedVersionId) }
     }
     
     public func value(withId valueId: Value.ID, storedAt versionId: Version.ID) throws -> Value? {
         guard let data = try valuesZone.data(for: .init(key: valueId.stringValue, version: versionId)) else { return nil }
-        let value = Value(identifier: valueId, storedVersionId: versionId, data: data)
+        let value = Value(id: valueId, storedVersionId: versionId, data: data)
         return value
     }
     
     public func value(storedAt valueReference: Value.Reference) throws -> Value? {
-        return try value(withId: valueReference.valueId, storedAt: valueReference.storedAtVersionWithId)
+        return try value(withId: valueReference.valueId, storedAt: valueReference.storedVersionId)
     }
     
     public func enumerate(version versionId: Version.ID, executingForEach block: (Value.Reference) throws -> Void) throws {
@@ -378,7 +378,7 @@ extension Store {
         guard let predecessors = version.predecessors else {
             var changes: [Value.Change] = []
             try valuesMap.enumerateValueReferences(forVersionIdentifiedBy: versionId) { ref in
-                let v = try value(withId: ref.valueId, storedAt: ref.storedAtVersionWithId)!
+                let v = try value(withId: ref.valueId, storedAt: ref.storedVersionId)!
                 changes.append(.insert(v))
             }
             return changes

@@ -51,13 +51,13 @@ public class StoreCoordinator {
     
     private class var defaultStoreDirectory: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let rootDir = appSupport.appendingPathComponent("LLVS/DefaultStore")
+        let rootDir = appSupport.appendingPathComponent("LLVS").appendingPathComponent("DefaultStore")
         return rootDir
     }
     
     private class var defaultCacheDirectory: URL {
         let cachesDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        let rootDir = cachesDir.appendingPathComponent("LLVS/CoordinatorCache")
+        let rootDir = cachesDir.appendingPathComponent("LLVS").appendingPathComponent("CoordinatorCache")
         return rootDir
     }
     

@@ -22,7 +22,7 @@ class DiffTests: XCTestCase {
         let versionId = Version.ID(version)
         var deltas: [Map.Delta] = []
         for valueKey in values {
-            let valueRef = Value.Reference(valueId: .init(valueKey), storedAtVersionWithId: versionId)
+            let valueRef = Value.Reference(valueId: .init(valueKey), storedVersionId: versionId)
             var delta: Map.Delta = .init(key: .init(valueKey))
             delta.addedValueReferences = [valueRef]
             deltas.append(delta)
