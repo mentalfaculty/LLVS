@@ -108,7 +108,7 @@ When you first create a store, you will probably want to add some initial data.
 ```swift
 let stringData = "My first data".data(using: .utf8)!
 let newValueId = Value.Identifier("ABCDEF")
-let newValue = Value(identifier: valueId, version: nil, data: stringData)
+let newValue = Value(identifier: newValueId, version: nil, data: stringData)
 let insert: Value.Change = .insert(newValue)
 let firstVersion = try store.addVersion(basedOnPredecessor: nil, storing: [insert])
 ```
@@ -170,7 +170,7 @@ let thirdVersion = try store.addVersion(basedOnPredecessor: secondVersion.identi
 
 The third version is based on the second one. There are two changes: it updates the value for "ABCDEF" with new data, and removes the value for "CDEFGH". 
 
-If we now attempted to fetch the value with identifier "CDEFGH" at the third version, we would get `nil`; however. the value would still exist if we fetched the second version.
+If we now attempted to fetch the value with identifier "CDEFGH" at the third version, we would get `nil`; however the value would still exist if we fetched the second version.
 
 ### Branching
 
