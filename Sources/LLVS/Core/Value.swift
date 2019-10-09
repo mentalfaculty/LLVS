@@ -27,6 +27,11 @@ public struct Value: Codable, Identifiable {
         return Reference(valueId: id, storedVersionId: version)
     }
     
+    /// Convenience that saves creating IDs
+    public init(idString: String = UUID().uuidString, data: Data) {
+        self.init(id: ID(idString), data: data)
+    }
+    
     /// If an id is not provided, a UUID will be used. The storedVersionId will be set to nil, because
     /// this value has not been stored yet.
     public init(id: ID = .init(UUID().uuidString), data: Data) {
