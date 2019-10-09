@@ -7,9 +7,9 @@
 
 import Foundation
 
-public struct Version: Codable, Hashable {
+public struct Version: Hashable, Identifiable {
     
-    public var identifier: Identifier = .init()
+    public var id: Identifier = .init()
     public var predecessors: Predecessors?
     public var successors: Successors = .init()
     public var timestamp: TimeInterval
@@ -22,16 +22,20 @@ public struct Version: Codable, Hashable {
         case metadata
     }
     
-    public init(identifier: Identifier = .init(), predecessors: Predecessors? = nil, metadata: Data? = nil) {
-        self.identifier = identifier
+    public init(id: ID = .init(), predecessors: Predecessors? = nil, metadata: Data? = nil) {
+        self.id = id
         self.predecessors = predecessors
         self.timestamp = Date().timeIntervalSinceReferenceDate
         self.metadata = metadata
     }
+}
+
+
+extension Version: Codable {
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        identifier = try container.decode(Identifier.self, forKey: .identifier)
+        id = try container.decode(ID.self, forKey: .identifier)
         predecessors = try container.decodeIfPresent(Predecessors.self, forKey: .predecessors)
         timestamp = try container.decode(TimeInterval.self, forKey: .timestamp)
         metadata = try container.decodeIfPresent(Data.self, forKey: .metadata)
@@ -39,7 +43,7 @@ public struct Version: Codable, Hashable {
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(identifier, forKey: .identifier)
+        try container.encode(id, forKey: .identifier)
         try container.encodeIfPresent(predecessors, forKey: .predecessors)
         try container.encode(timestamp, forKey: .timestamp)
         try container.encode(metadata, forKey: .metadata)
@@ -51,31 +55,31 @@ public struct Version: Codable, Hashable {
 extension Version {
     
     public struct Identifier: StringIdentifiable, Codable, Hashable {
-        public var identifierString: String
-        public init(_ identifierString: String = UUID().uuidString) {
-            self.identifierString = identifierString
+        public var stringValue: String
+        public init(_ stringValue: String = UUID().uuidString) {
+            self.stringValue = stringValue
         }
     }
     
     public struct Predecessors: Codable, Hashable {
-        public internal(set) var identifierOfFirst: Identifier
-        public internal(set) var identifierOfSecond: Identifier?
-        public var identifiers: [Identifier] {
-            var result = [identifierOfFirst]
-            if let second = identifierOfSecond { result.append(second) }
+        public internal(set) var idOfFirst: ID
+        public internal(set) var idOfSecond: ID?
+        public var ids: [ID] {
+            var result = [idOfFirst]
+            if let second = idOfSecond { result.append(second) }
             return result
         }
         
-        internal init(identifierOfFirst: Identifier, identifierOfSecond: Identifier?) {
-            self.identifierOfFirst = identifierOfFirst
-            self.identifierOfSecond = identifierOfSecond
+        internal init(idOfFirst: ID, idOfSecond: ID?) {
+            self.idOfFirst = idOfFirst
+            self.idOfSecond = idOfSecond
         }
     }
     
     public struct Successors: Codable, Hashable {
-        public internal(set) var identifiers: Set<Identifier>
-        internal init(identifiers: Set<Identifier> = []) {
-            self.identifiers = identifiers
+        public internal(set) var ids: Set<ID>
+        internal init(ids: Set<ID> = []) {
+            self.ids = ids
         }
     }
 
@@ -84,21 +88,21 @@ extension Version {
 
 public extension Collection where Element == Version {
     
-    var identifiers: [Version.Identifier] {
-        return map { $0.identifier }
+    var ids: [Version.ID] {
+        return map { $0.id }
     }
     
-    var identifierStrings: [String] {
-        return map { $0.identifier.identifierString }
+    var idStrings: [String] {
+        return map { $0.id.stringValue }
     }
     
 }
 
 
-public extension Collection where Element == Version.Identifier {
+public extension Collection where Element == Version.ID {
 
-    var identifierStrings: [String] {
-        return map { $0.identifierString }
+    var idStrings: [String] {
+        return map { $0.stringValue }
     }
     
 }

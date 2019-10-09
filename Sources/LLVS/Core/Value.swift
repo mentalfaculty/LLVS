@@ -7,53 +7,61 @@
 
 import Foundation
 
-
-public struct Value: Codable {
+public struct Value: Codable, Identifiable {
     
-    public var identifier: Identifier
-    public var version: Version.Identifier?
+    public var id: Identifier
     public var data: Data
     
+    /// The identifier of the version in which this value was stored. Can be nil, if
+    /// a value has not yet been stored.
+    public internal(set) var storedVersionId: Version.ID?
+    
     internal var zoneReference: ZoneReference? {
-        guard let version = version else { return nil }
-        return ZoneReference(key: identifier.identifierString, version: version)
+        guard let version = storedVersionId else { return nil }
+        return ZoneReference(key: id.stringValue, version: version)
     }
     
     public var reference: Reference? {
-        guard let version = version else { return nil }
-        return Reference(identifier: identifier, version: version)
+        guard let version = storedVersionId else { return nil }
+        return Reference(valueId: id, storedAtVersionWithId: version)
     }
     
-    public init(identifier: Identifier, version: Version.Identifier?, data: Data) {
-        self.identifier = identifier
-        self.version = version
+    /// If an id is not provided, a UUID will be used. The storedVersionId will be set to nil, because
+    /// this value has not been stored yet.
+    public init(id: ID = .init(UUID().uuidString), data: Data) {
+        self.id = id
         self.data = data
     }
-
+    
+    internal init(identifier: ID, storedVersionId: Version.ID, data: Data) {
+        self.id = identifier
+        self.storedVersionId = storedVersionId
+        self.data = data
+    }
 }
 
 
 public extension Value {
     
     struct Reference: Codable, Hashable {
-        public var identifier: Identifier
-        public var version: Version.Identifier
+        public var valueId: ID
+        public var storedAtVersionWithId: Version.ID
     }
     
     struct Identifier: StringIdentifiable, Hashable, Codable {
-        public var identifierString: String
+        public var stringValue: String
         
-        public init(_ identifierString: String = UUID().uuidString) {
-            self.identifierString = identifierString
+        public init(_ stringValue: String = UUID().uuidString) {
+            self.stringValue = stringValue
         }
     }
     
     enum Change: Codable {
         case insert(Value)
         case update(Value)
-        case remove(Identifier)
+        case remove(ID)
         case preserve(Reference)
-        case preserveRemoval(Identifier)
+        case preserveRemoval(ID)
         
         enum CodingKeys: String, CodingKey {
             case insert, update, remove, preserve, preserveRemoval
@@ -87,13 +95,13 @@ public extension Value {
             if let v = try? c.decode(Value.self, forKey: .update) {
                 self = .update(v); return
             }
-            if let i = try? c.decode(Identifier.self, forKey: .remove) {
+            if let i = try? c.decode(ID.self, forKey: .remove) {
                 self = .remove(i); return
             }
             if let r = try? c.decode(Reference.self, forKey: .preserve) {
                 self = .preserve(r); return
             }
-            if let i = try? c.decode(Identifier.self, forKey: .preserveRemoval) {
+            if let i = try? c.decode(ID.self, forKey: .preserveRemoval) {
                 self = .preserveRemoval(i); return
             }
             throw Error.changeDecodingFailure
@@ -132,15 +140,15 @@ public extension Value {
 
 extension Array where Element == Value.Change {
     
-    var valueIdentifiers: [Value.Identifier] {
+    var valueIds: [Value.ID] {
         return self.map { change in
             switch change {
             case .insert(let value), .update(let value):
-                return value.identifier
+                return value.id
             case .remove(let identifier), .preserveRemoval(let identifier):
                 return identifier
             case .preserve(let ref):
-                return ref.identifier
+                return ref.valueId
             }
         }
     }

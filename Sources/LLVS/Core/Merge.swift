@@ -11,7 +11,7 @@ public struct Merge {
     
     public var commonAncestor: Version?
     public var versions: (first: Version, second: Version)
-    public var forksByValueIdentifier: [Value.Identifier:Value.Fork] = [:]
+    public var forksByValueIdentifier: [Value.ID:Value.Fork] = [:]
     
     public init(versions: (first: Version, second: Version), commonAncestor: Version?) {
         self.commonAncestor = commonAncestor
@@ -42,11 +42,11 @@ public class MostRecentBranchFavoringArbiter: MergeArbiter {
                 if removeBranch == favoredBranch {
                     changes.append(.preserveRemoval(valueId))
                 } else {
-                    let value = try store.value(valueId, prevailingAt: favoredVersion.identifier)!
+                    let value = try store.value(withId: valueId, at: favoredVersion.id)!
                     changes.append(.preserve(value.reference!))
                 }
             case .twiceInserted, .twiceUpdated:
-                let value = try store.value(valueId, prevailingAt: favoredVersion.identifier)!
+                let value = try store.value(withId: valueId, at: favoredVersion.id)!
                 changes.append(.preserve(value.reference!))
             case .inserted, .removed, .updated, .twiceRemoved:
                 break
@@ -70,16 +70,16 @@ public class MostRecentChangeFavoringArbiter: MergeArbiter {
             switch fork {
             case let .removedAndUpdated(removeBranch):
                 let favoredVersion = removeBranch.opposite == .first ? v.first : v.second
-                let value = try store.value(valueId, prevailingAt: favoredVersion.identifier)!
+                let value = try store.value(withId: valueId, at: favoredVersion.id)!
                 changes.append(.preserve(value.reference!))
             case .twiceInserted, .twiceUpdated:
-                let value1 = try store.value(valueId, prevailingAt: v.first.identifier)!
+                let value1 = try store.value(withId: valueId, at: v.first.id)!
                 var version1: Version!
-                store.queryHistory { version1 = $0.version(identifiedBy: value1.version!) }
+                store.queryHistory { version1 = $0.version(identifiedBy: value1.storedVersionId!) }
                 
-                let value2 = try store.value(valueId, prevailingAt: v.second.identifier)!
+                let value2 = try store.value(withId: valueId, at: v.second.id)!
                 var version2: Version!
-                store.queryHistory { version2 = $0.version(identifiedBy: value2.version!) }
+                store.queryHistory { version2 = $0.version(identifiedBy: value2.storedVersionId!) }
                 
                 if version1.timestamp >= version2.timestamp {
                     changes.append(.preserve(value1.reference!))

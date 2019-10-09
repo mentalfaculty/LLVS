@@ -66,18 +66,18 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
         completionHandler(.success(()))
     }
     
-    public func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>) {
+    public func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>) {
         coordinateFileAccess(.read, completionHandler: completionHandler) {
             let contents = try self.fileManager.contentsOfDirectory(at: self.versionsDirectory, includingPropertiesForKeys: nil, options: [])
-            let versionIds = contents.map({ Version.Identifier($0.lastPathComponent) })
+            let versionIds = contents.map({ Version.ID($0.lastPathComponent) })
             completionHandler(.success(versionIds))
         }
     }
     
-    public func retrieveVersions(identifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
+    public func retrieveVersions(identifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
         coordinateFileAccess(.read, completionHandler: completionHandler) {
-            let versions: [Version] = try versionIdentifiers.map { versionIdentifier in
-                let url = self.versionsDirectory.appendingPathComponent(versionIdentifier.identifierString)
+            let versions: [Version] = try versionIds.map { versionId in
+                let url = self.versionsDirectory.appendingPathComponent(versionId.stringValue)
                 let data = try Data(contentsOf: url)
                 if let version = try JSONDecoder().decode([String:Version].self, from: data)["version"] {
                     return version
@@ -89,10 +89,10 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
         }
     }
     
-    public func retrieveValueChanges(forVersionsIdentifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier:[Value.Change]]>) {
+    public func retrieveValueChanges(forVersionsIdentifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID:[Value.Change]]>) {
         coordinateFileAccess(.read, completionHandler: completionHandler) {
-            let result: [Version.Identifier:[Value.Change]] = try versionIdentifiers.reduce(into: [:]) { result, versionId in
-                let url = self.changesDirectory.appendingPathComponent(versionId.identifierString)
+            let result: [Version.ID:[Value.Change]] = try versionIds.reduce(into: [:]) { result, versionId in
+                let url = self.changesDirectory.appendingPathComponent(versionId.stringValue)
                 let data = try Data(contentsOf: url)
                 let changes = try JSONDecoder().decode([Value.Change].self, from: data)
                 result[versionId] = changes
@@ -108,11 +108,11 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
     public func send(versionChanges: [VersionChanges], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         coordinateFileAccess(.write, completionHandler: completionHandler) {
              for (version, valueChanges) in versionChanges {
-                 let changesURL = self.changesDirectory.appendingPathComponent(version.identifier.identifierString)
+                 let changesURL = self.changesDirectory.appendingPathComponent(version.id.stringValue)
                  let changesData = try JSONEncoder().encode(valueChanges)
                  try changesData.write(to: changesURL)
                  
-                 let versionURL = self.versionsDirectory.appendingPathComponent(version.identifier.identifierString)
+                 let versionURL = self.versionsDirectory.appendingPathComponent(version.id.stringValue)
                  let versionData = try JSONEncoder().encode(["version":version])
                  try versionData.write(to: versionURL)
              }

@@ -18,9 +18,9 @@ final class ValueTests: XCTestCase {
         valuesURL = rootURL.appendingPathComponent("values")
         store = try! Store(rootDirectoryURL: rootURL)
         
-        originalValue = Value(identifier: .init("ABCDEF"), version: nil, data: "Bob".data(using: .utf8)!)
+        originalValue = Value(id: .init("ABCDEF"), data: "Bob".data(using: .utf8)!)
         let changes: [Value.Change] = [.insert(originalValue!)]
-        version = try! store.addVersion(basedOn: nil, storing: changes)
+        version = try! store.makeVersion(basedOn: nil, storing: changes)
     }
     
     override func tearDown() {
@@ -29,7 +29,7 @@ final class ValueTests: XCTestCase {
     }
     
     func testSavingValueCreatesSubDirectoriesAndFile() {
-        let v = version.identifier.identifierString
+        let v = version.id.stringValue
         let map = v.index(v.startIndex, offsetBy: 1)
         let versionSubDir = String(v[..<map])
         let versionFile = String(v[map...])
@@ -40,7 +40,7 @@ final class ValueTests: XCTestCase {
     }
     
     func testSavedFileContainsValue() {
-        let v = version.identifier.identifierString
+        let v = version.id.stringValue
         let map = v.index(v.startIndex, offsetBy: 1)
         let versionSubDir = String(v[..<map])
         let versionFile = String(v[map...])
@@ -50,30 +50,30 @@ final class ValueTests: XCTestCase {
     }
     
     func testFetchingNonExistentVersionOfValueGivesNil() {
-        let version = Version(identifier: .init(UUID().uuidString), predecessors: nil)
-        let fetchedValue = try! store.value(originalValue.identifier, storedAt: version.identifier)
+        let version = Version(id: .init(UUID().uuidString), predecessors: nil)
+        let fetchedValue = try! store.value(withId: originalValue.id, storedAt: version.id)
         XCTAssertNil(fetchedValue)
     }
     
     func testFetchingSavedVersionOfValue() {
-        let value = try! store.value(originalValue.identifier, storedAt: version.identifier)
+        let value = try! store.value(withId: originalValue.id, storedAt: version.id)
         XCTAssertNotNil(value)
-        XCTAssertEqual(value!.identifier.identifierString, originalValue.identifier.identifierString)
-        XCTAssertEqual(value!.version!, version.identifier)
+        XCTAssertEqual(value!.id.stringValue, originalValue.id.stringValue)
+        XCTAssertEqual(value!.storedVersionId!, version.id)
         XCTAssertEqual(value!.data, "Bob".data(using: .utf8)!)
     }
     
     func testAllVersionsOfValue() {
-        let newValue = Value(identifier: .init("ABCDEF"), version: nil, data: "Dave".data(using: .utf8)!)
+        let newValue = Value(id: .init("ABCDEF"), data: "Dave".data(using: .utf8)!)
         let changes: [Value.Change] = [.insert(newValue)]
-        let newVersion = try! store.addVersion(basedOn: nil, storing: changes)
+        let newVersion = try! store.makeVersion(basedOn: nil, storing: changes)
         
-        let versionIdentifiers = try! store.versionIdentifiers(for: newValue.identifier)
+        let versionIds = try! store.versionIds(for: newValue.id)
         
-        XCTAssertEqual(versionIdentifiers.count, 2)
+        XCTAssertEqual(versionIds.count, 2)
         
-        let versions: Set<Version.Identifier> = [version!.identifier, newVersion.identifier]
-        let fetchedVersions = Set(versionIdentifiers)
+        let versions: Set<Version.ID> = [version!.id, newVersion.id]
+        let fetchedVersions = Set(versionIds)
         XCTAssertEqual(versions, fetchedVersions)
     }
     

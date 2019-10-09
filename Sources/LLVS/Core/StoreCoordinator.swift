@@ -16,7 +16,7 @@ public class StoreCoordinator {
     
     private struct CachedData: Codable {
         var exchangeRestorationData: Data?
-        var currentVersionIdentifier: Version.Identifier
+        var currentVersionIdentifier: Version.ID
     }
     
     public let store: Store
@@ -37,9 +37,9 @@ public class StoreCoordinator {
     }
     
     @available (macOS 10.15, iOS 13, watchOS 6, *)
-    public lazy private(set) var currentVersionSubject: CurrentValueSubject<Version.Identifier, Never> = .init(.init())
+    public lazy private(set) var currentVersionSubject: CurrentValueSubject<Version.ID, Never> = .init(.init())
     
-    public private(set) var currentVersion: Version.Identifier {
+    public private(set) var currentVersion: Version.ID {
         didSet {
             guard self.currentVersion != oldValue else { return }
             persist()
@@ -78,7 +78,7 @@ public class StoreCoordinator {
         try FileManager.default.createDirectory(at: coordinatorCacheURL, withIntermediateDirectories: true, attributes: nil)
 
         self.store = try Store(rootDirectoryURL: storeURL)
-        self.currentVersion = Version.Identifier() // Set a temporary version. Final is in cache
+        self.currentVersion = Version.ID() // Set a temporary version. Final is in cache
         if #available (macOS 10.15, iOS 13, watchOS 6, *) {
             self.currentVersionSubject = .init(self.currentVersion)
         }
@@ -93,11 +93,11 @@ public class StoreCoordinator {
             cachedData = cached
         } else {
             // Get most recent, or make first commit
-            let version: Version.Identifier
+            let version: Version.ID
             if let head = store.mostRecentHead {
-                version = head.identifier
+                version = head.id
             } else {
-                version = try store.addVersion(basedOnPredecessor: nil, storing: []).identifier
+                version = try store.makeVersion(basedOnPredecessor: nil, storing: []).id
             }
             cachedData = CachedData(currentVersionIdentifier: version)
             shouldPersist = true
@@ -134,14 +134,14 @@ public class StoreCoordinator {
     /// coordinator can track versions.
     public func save(_ changes: [Value.Change]) throws {
         guard !changes.isEmpty else { return }
-        currentVersion = try store.addVersion(basedOnPredecessor: currentVersion, storing: changes).identifier
+        currentVersion = try store.makeVersion(basedOnPredecessor: currentVersion, storing: changes).id
     }
     
     
     // MARK: Fetching
     
     /// Pass a specific version, or nil for the current version
-    public func valueReferences(at version: Version.Identifier? = nil) throws -> [Value.Reference] {
+    public func valueReferences(at version: Version.ID? = nil) throws -> [Value.Reference] {
         var refs: [Value.Reference] = []
         try store.enumerate(version: version ?? currentVersion) { ref in
             refs.append(ref)
@@ -149,8 +149,8 @@ public class StoreCoordinator {
         return refs
     }
     
-    public func values(at version: Version.Identifier? = nil) throws -> [Value] {
-        return try valueReferences(at: version).map { try store.value(at: $0)! }
+    public func values(at version: Version.ID? = nil) throws -> [Value] {
+        return try valueReferences(at: version).map { try store.value(storedAt: $0)! }
     }
     
     

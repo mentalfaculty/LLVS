@@ -31,18 +31,18 @@ class MergeTests: XCTestCase {
         valuesURL = rootURL.appendingPathComponent("values")
         store = try! Store(rootDirectoryURL: rootURL)
         
-        originalValue = Value(identifier: .init("ABCDEF"), version: nil, data: "Bob".data(using: .utf8)!)
+        originalValue = Value(id: .init("ABCDEF"), data: "Bob".data(using: .utf8)!)
         let changes: [Value.Change] = [.insert(originalValue!)]
-        originalVersion = try! store.addVersion(basedOn: nil, storing: changes)
+        originalVersion = try! store.makeVersion(basedOn: nil, storing: changes)
         
-        newValue1 = Value(identifier: .init("ABCDEF"), version: nil, data: "Tom".data(using: .utf8)!)
+        newValue1 = Value(id: .init("ABCDEF"), data: "Tom".data(using: .utf8)!)
         let changes1: [Value.Change] = [.insert(newValue1)]
-        let predecessors: Version.Predecessors = .init(identifierOfFirst: originalVersion.identifier, identifierOfSecond: nil)
-        branch1 = try! store.addVersion(basedOn: predecessors, storing: changes1)
+        let predecessors: Version.Predecessors = .init(idOfFirst: originalVersion.id, idOfSecond: nil)
+        branch1 = try! store.makeVersion(basedOn: predecessors, storing: changes1)
         
-        let newValue2 = Value(identifier: .init("ABCDEF"), version: nil, data: "Jerry".data(using: .utf8)!)
+        let newValue2 = Value(id: .init("ABCDEF"), data: "Jerry".data(using: .utf8)!)
         let changes2: [Value.Change] = [.insert(newValue2)]
-        branch2 = try! store.addVersion(basedOn: predecessors, storing: changes2)
+        branch2 = try! store.makeVersion(basedOn: predecessors, storing: changes2)
     }
     
     override func tearDown() {
@@ -57,27 +57,27 @@ class MergeTests: XCTestCase {
                 return []
             }
         }
-        XCTAssertThrowsError(try store.mergeRelated(version: branch1.identifier, with: branch2.identifier, resolvingWith: Arbiter()))
+        XCTAssertThrowsError(try store.mergeRelated(version: branch1.id, with: branch2.id, resolvingWith: Arbiter()))
     }
     
     func testResolvedMergeSucceeds() {
         class Arbiter: MergeArbiter {
             func changes(toResolve merge: Merge, in store: Store) -> [Value.Change] {
-                let value = Value(identifier: .init("ABCDEF"), version: nil, data: "Jack".data(using: .utf8)!)
+                let value = Value(id: .init("ABCDEF"), data: "Jack".data(using: .utf8)!)
                 return [.insert(value)]
             }
         }
-        XCTAssertNoThrow(try store.mergeRelated(version: branch1.identifier, with: branch2.identifier, resolvingWith: Arbiter()))
+        XCTAssertNoThrow(try store.mergeRelated(version: branch1.id, with: branch2.id, resolvingWith: Arbiter()))
     }
     
     func testIncompletelyResolvedMergeFails() {
         class Arbiter: MergeArbiter {
             func changes(toResolve merge: Merge, in store: Store) -> [Value.Change] {
-                let value = Value(identifier: .init("CDEDEF"), version: nil, data: "Jack".data(using: .utf8)!)
+                let value = Value(id: .init("CDEDEF"), data: "Jack".data(using: .utf8)!)
                 return [.insert(value)]
             }
         }
-        XCTAssertThrowsError(try store.mergeRelated(version: branch1.identifier, with: branch2.identifier, resolvingWith: Arbiter()))
+        XCTAssertThrowsError(try store.mergeRelated(version: branch1.id, with: branch2.id, resolvingWith: Arbiter()))
     }
     
     func testPreserve() {
@@ -85,12 +85,12 @@ class MergeTests: XCTestCase {
             func changes(toResolve merge: Merge, in store: Store) -> [Value.Change] {
                 let fork = merge.forksByValueIdentifier[.init("ABCDEF")]
                 XCTAssertEqual(fork, .twiceUpdated)
-                let firstValue = try! store.value(.init("ABCDEF"), prevailingAt: merge.versions.first.identifier)!
+                let firstValue = try! store.value(withId: .init("ABCDEF"), at: merge.versions.first.id)!
                 return [.preserve(firstValue.reference!)]
             }
         }
-        let mergeVersion = try! store.mergeRelated(version: branch1.identifier, with: branch2.identifier, resolvingWith: Arbiter())
-        let mergeValue = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)!
+        let mergeVersion = try! store.mergeRelated(version: branch1.id, with: branch2.id, resolvingWith: Arbiter())
+        let mergeValue = try! store.value(withId: .init("ABCDEF"), at: mergeVersion.id)!
         XCTAssertEqual(mergeValue.data, "Tom".data(using: .utf8)!)
     }
     
@@ -99,17 +99,17 @@ class MergeTests: XCTestCase {
             func changes(toResolve merge: Merge, in store: Store) -> [Value.Change] {
                 let fork = merge.forksByValueIdentifier[.init("ABCDEF")]
                 XCTAssertEqual(fork, .twiceUpdated)
-                let firstValue = try! store.value(.init("ABCDEF"), prevailingAt: merge.versions.second.identifier)!
+                let firstValue = try! store.value(withId: .init("ABCDEF"), at: merge.versions.second.id)!
                 return [.preserve(firstValue.reference!)]
             }
         }
         
-        let predecessors: Version.Predecessors = .init(identifierOfFirst: branch2.identifier, identifierOfSecond: nil)
-        let newValue = Value(identifier: .init("ABCDEF"), version: nil, data: "Pete".data(using: .utf8)!)
-        branch2 = try! store.addVersion(basedOn: predecessors, storing: [.update(newValue)])
+        let predecessors: Version.Predecessors = .init(idOfFirst: branch2.id, idOfSecond: nil)
+        let newValue = Value(id: .init("ABCDEF"), data: "Pete".data(using: .utf8)!)
+        branch2 = try! store.makeVersion(basedOn: predecessors, storing: [.update(newValue)])
         
-        let mergeVersion = try! store.mergeRelated(version: branch1.identifier, with: branch2.identifier, resolvingWith: Arbiter())
-        let mergeValue = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)!
+        let mergeVersion = try! store.mergeRelated(version: branch1.id, with: branch2.id, resolvingWith: Arbiter())
+        let mergeValue = try! store.value(withId: .init("ABCDEF"), at: mergeVersion.id)!
         XCTAssertEqual(mergeValue.data, "Pete".data(using: .utf8)!)
     }
     
@@ -122,11 +122,11 @@ class MergeTests: XCTestCase {
             }
         }
         
-        let predecessors: Version.Predecessors = .init(identifierOfFirst: branch2.identifier, identifierOfSecond: nil)
-        branch2 = try! store.addVersion(basedOn: predecessors, storing: [.remove(.init("ABCDEF"))])
+        let predecessors: Version.Predecessors = .init(idOfFirst: branch2.id, idOfSecond: nil)
+        branch2 = try! store.makeVersion(basedOn: predecessors, storing: [.remove(.init("ABCDEF"))])
         
-        let mergeVersion = try! store.mergeRelated(version: branch1.identifier, with: branch2.identifier, resolvingWith: Arbiter())
-        let mergeValue = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)
+        let mergeVersion = try! store.mergeRelated(version: branch1.id, with: branch2.id, resolvingWith: Arbiter())
+        let mergeValue = try! store.value(withId: .init("ABCDEF"), at: mergeVersion.id)
         XCTAssertNil(mergeValue)
     }
     
@@ -139,14 +139,14 @@ class MergeTests: XCTestCase {
             }
         }
         
-        let predecessors1: Version.Predecessors = .init(identifierOfFirst: branch1.identifier, identifierOfSecond: nil)
-        branch1 = try! store.addVersion(basedOn: predecessors1, storing: [.remove(.init("ABCDEF"))])
+        let predecessors1: Version.Predecessors = .init(idOfFirst: branch1.id, idOfSecond: nil)
+        branch1 = try! store.makeVersion(basedOn: predecessors1, storing: [.remove(.init("ABCDEF"))])
         
-        let predecessors2: Version.Predecessors = .init(identifierOfFirst: branch2.identifier, identifierOfSecond: nil)
-        branch2 = try! store.addVersion(basedOn: predecessors2, storing: [.remove(.init("ABCDEF"))])
+        let predecessors2: Version.Predecessors = .init(idOfFirst: branch2.id, idOfSecond: nil)
+        branch2 = try! store.makeVersion(basedOn: predecessors2, storing: [.remove(.init("ABCDEF"))])
         
-        let mergeVersion = try! store.mergeRelated(version: branch1.identifier, with: branch2.identifier, resolvingWith: Arbiter())
-        let mergeValue = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)
+        let mergeVersion = try! store.mergeRelated(version: branch1.id, with: branch2.id, resolvingWith: Arbiter())
+        let mergeValue = try! store.value(withId: .init("ABCDEF"), at: mergeVersion.id)
         XCTAssertNil(mergeValue)
     }
     
@@ -155,43 +155,43 @@ class MergeTests: XCTestCase {
             func changes(toResolve merge: Merge, in store: Store) -> [Value.Change] {
                 let fork = merge.forksByValueIdentifier[.init("ABCDEF")]
                 XCTAssertEqual(fork, .twiceUpdated)
-                let secondValue = try! store.value(.init("ABCDEF"), prevailingAt: merge.versions.second.identifier)!
+                let secondValue = try! store.value(withId: .init("ABCDEF"), at: merge.versions.second.id)!
                 return [.preserve(secondValue.reference!)]
             }
         }
         
-        let predecessors1: Version.Predecessors = .init(identifierOfFirst: branch1.identifier, identifierOfSecond: nil)
-        let newValue1 = Value(identifier: .init("ABCDEF"), version: nil, data: "Pete".data(using: .utf8)!)
-        branch1 = try! store.addVersion(basedOn: predecessors1, storing: [.update(newValue1)])
+        let predecessors1: Version.Predecessors = .init(idOfFirst: branch1.id, idOfSecond: nil)
+        let newValue1 = Value(id: .init("ABCDEF"), data: "Pete".data(using: .utf8)!)
+        branch1 = try! store.makeVersion(basedOn: predecessors1, storing: [.update(newValue1)])
         
-        let predecessors2: Version.Predecessors = .init(identifierOfFirst: branch2.identifier, identifierOfSecond: nil)
-        let newValue2 = Value(identifier: .init("ABCDEF"), version: nil, data: "Joyce".data(using: .utf8)!)
-        branch2 = try! store.addVersion(basedOn: predecessors2, storing: [.update(newValue2)])
+        let predecessors2: Version.Predecessors = .init(idOfFirst: branch2.id, idOfSecond: nil)
+        let newValue2 = Value(id: .init("ABCDEF"), data: "Joyce".data(using: .utf8)!)
+        branch2 = try! store.makeVersion(basedOn: predecessors2, storing: [.update(newValue2)])
         
-        let mergeVersion = try! store.mergeRelated(version: branch1.identifier, with: branch2.identifier, resolvingWith: Arbiter())
-        let mergeValue = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)!
+        let mergeVersion = try! store.mergeRelated(version: branch1.id, with: branch2.id, resolvingWith: Arbiter())
+        let mergeValue = try! store.value(withId: .init("ABCDEF"), at: mergeVersion.id)!
         XCTAssertEqual(mergeValue.data, "Joyce".data(using: .utf8)!)
     }
     
     func testTwoWayMerge() {
-        let secondValue = Value(identifier: .init("CDEFGH"), version: nil, data: "Dave".data(using: .utf8)!)
-        let newValue = Value(identifier: .init("ABCDEF"), version: nil, data: "Joyce".data(using: .utf8)!)
+        let secondValue = Value(id: .init("CDEFGH"), data: "Dave".data(using: .utf8)!)
+        let newValue = Value(id: .init("ABCDEF"), data: "Joyce".data(using: .utf8)!)
         let changes: [Value.Change] = [.insert(secondValue), .update(newValue)]
-        let secondVersion = try! store.addVersion(basedOn: nil, storing: changes)
+        let secondVersion = try! store.makeVersion(basedOn: nil, storing: changes)
         let arbiter = MostRecentChangeFavoringArbiter()
-        let mergeVersion = try! store.mergeUnrelated(version: originalVersion.identifier, with: secondVersion.identifier, resolvingWith: arbiter)
-        let mergeValue = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)!
+        let mergeVersion = try! store.mergeUnrelated(version: originalVersion.id, with: secondVersion.id, resolvingWith: arbiter)
+        let mergeValue = try! store.value(withId: .init("ABCDEF"), at: mergeVersion.id)!
         XCTAssertEqual(mergeValue.data, "Joyce".data(using: .utf8)!)
-        let insertedValue = try! store.value(.init("CDEFGH"), prevailingAt: mergeVersion.identifier)!
+        let insertedValue = try! store.value(withId: .init("CDEFGH"), at: mergeVersion.id)!
         XCTAssertEqual(insertedValue.data, "Dave".data(using: .utf8)!)
     }
     
     func testTwoWayMergeDeletion() {
         let changes: [Value.Change] = []
         let arbiter = MostRecentChangeFavoringArbiter()
-        let secondVersion = try! store.addVersion(basedOn: nil, storing: changes)
-        let mergeVersion = try! store.mergeUnrelated(version: originalVersion.identifier, with: secondVersion.identifier, resolvingWith: arbiter)
-        let mergeValue = try! store.value(.init("ABCDEF"), prevailingAt: mergeVersion.identifier)
+        let secondVersion = try! store.makeVersion(basedOn: nil, storing: changes)
+        let mergeVersion = try! store.mergeUnrelated(version: originalVersion.id, with: secondVersion.id, resolvingWith: arbiter)
+        let mergeValue = try! store.value(withId: .init("ABCDEF"), at: mergeVersion.id)
         XCTAssertNotNil(mergeValue)
     }
     

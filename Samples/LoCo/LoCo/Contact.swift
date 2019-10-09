@@ -43,7 +43,7 @@ struct Address: Codable, Equatable {
 
 struct Contact: Equatable, Faultable {
     
-    var valueIdentifier: Value.Identifier
+    var valueId: Value.Identifier
     var prevailingVersionWhenLoaded: Version.Identifier?
     
     var person: Person?
@@ -54,24 +54,24 @@ struct Contact: Equatable, Faultable {
     var friends: [Value.Identifier] = []
     
     init() {
-        valueIdentifier = .init(UUID().uuidString)
+        valueId = .init(UUID().uuidString)
     }
     
-    init(_ valueIdentifier: Value.Identifier, prevailingAt version: Version.Identifier, loadingFrom store: Store) throws {
-        let loader = PropertyLoader<StoreKeys>(store: store, valueIdentifier: valueIdentifier, prevailingVersion: version)
+    init(_ valueId: Value.Identifier, at version: Version.Identifier, loadingFrom store: Store) throws {
+        let loader = PropertyLoader<StoreKeys>(store: store, valueId: valueId, prevailingVersion: version)
         self.person = try loader.load(.person)
         self.address = try loader.load(.address)
         self.email = try loader.load(.email)
         self.phoneNumber = try loader.load(.phoneNumber)
         self.avatarJPEGData = try loader.load(.avatarJPEGData)
         self.friends = try loader.load(.friends)!
-        self.valueIdentifier = valueIdentifier
+        self.valueId = valueId
         self.prevailingVersionWhenLoaded = version
     }
     
     func changesSinceLoad(from store: Store) throws -> [Value.Change] {
-        let originalContact = try prevailingVersionWhenLoaded.flatMap { try Contact(valueIdentifier, prevailingAt: $0, loadingFrom: store) }
-        let changeGenerator = PropertyChangeGenerator<StoreKeys>(store: store, valueIdentifier: valueIdentifier)
+        let originalContact = try prevailingVersionWhenLoaded.flatMap { try Contact(valueId, at: $0, loadingFrom: store) }
+        let changeGenerator = PropertyChangeGenerator<StoreKeys>(store: store, valueId: valueId)
         try changeGenerator.generate(.person, propertyValue: person, originalPropertyValue: originalContact?.person)
         try changeGenerator.generate(.address, propertyValue: address, originalPropertyValue: originalContact?.address)
         try changeGenerator.generate(.email, propertyValue: email, originalPropertyValue: originalContact?.email)
@@ -90,7 +90,7 @@ struct Contact: Equatable, Faultable {
         case friends
         
         func key(forIdentifier identifier: Value.Identifier) -> String {
-            return "\(identifier.identifierString).Contact.\(self)"
+            return "\(identifier.stringValue).Contact.\(self)"
         }
     }
 }

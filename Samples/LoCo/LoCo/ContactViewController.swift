@@ -32,7 +32,7 @@ class ContactViewController: UIViewController, UIImagePickerControllerDelegate, 
     
     private var contact: Contact? {
         guard let book = contactBook, let identifier = contactIdentifier else { return nil }
-        return book.contacts.first(where: { $0.valueIdentifier == identifier })?.value
+        return book.contacts.first(where: { $0.valueId == identifier })?.value
     }
     
     deinit {
@@ -61,7 +61,7 @@ class ContactViewController: UIViewController, UIImagePickerControllerDelegate, 
     
     func showContact(at index: Int, in book: ContactBook) {
         contactBook = book
-        contactIdentifier = contactBook!.contacts[index].valueIdentifier
+        contactIdentifier = contactBook!.contacts[index].valueId
         updateView()
     }
 

@@ -23,7 +23,7 @@ final class VersionTests: XCTestCase {
         rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         versionsURL = rootURL.appendingPathComponent("versions")
         store = try! Store(rootDirectoryURL: rootURL)
-        version = try! store.addVersion(basedOn: nil, storing: [])
+        version = try! store.makeVersion(basedOn: nil, storing: [])
     }
     
     override func tearDown() {
@@ -32,7 +32,7 @@ final class VersionTests: XCTestCase {
     }
     
     func testCreationOfVersionFile() {
-        let v = version.identifier.identifierString + ".json"
+        let v = version.id.stringValue + ".json"
         let prefix = String(v.prefix(2))
         let postfix = String(v.dropFirst(2))
         XCTAssert(fm.fileExists(atPath: versionsURL.appendingPathComponent(prefix).appendingPathComponent(postfix).path))
@@ -41,7 +41,7 @@ final class VersionTests: XCTestCase {
     func testLoadingOfVersion() {
         store = try! Store(rootDirectoryURL: rootURL)
         store.queryHistory { history in
-            XCTAssertEqual(history.headIdentifiers, [version.identifier])
+            XCTAssertEqual(history.headIdentifiers, [version.id])
         }
     }
 

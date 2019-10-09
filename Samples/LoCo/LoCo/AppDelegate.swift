@@ -34,21 +34,21 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDele
     
     lazy var contactBook: ContactBook = {
         let book: ContactBook
-        let versionIdentifier: Version.Identifier
+        let versionId: Version.Identifier
         if let versionString = userDefaults.string(forKey: storeVersionKey),
             let version = try! store.version(identifiedBy: .init(versionString)) {
             let data = userDefaults.data(forKey: UserDefaultKey.exchangeRestorationData.rawValue)
-            book = try! ContactBook(prevailingAt: version.identifier, loadingFrom: store, exchangeRestorationData: data)
-            versionIdentifier = version.identifier
-        } else if let version = store.mostRecentHead?.identifier {
-            versionIdentifier = version
+            book = try! ContactBook(at: version.id, loadingFrom: store, exchangeRestorationData: data)
+            versionId = version.id
+        } else if let version = store.mostRecentHead?.id {
+            versionId = version
             let data = userDefaults.data(forKey: UserDefaultKey.exchangeRestorationData.rawValue)
-            book = try! ContactBook(prevailingAt: version, loadingFrom: store, exchangeRestorationData: data)
+            book = try! ContactBook(at: version, loadingFrom: store, exchangeRestorationData: data)
         } else {
             book = try! ContactBook(creatingIn: store)
-            versionIdentifier = book.currentVersion
+            versionId = book.currentVersion
         }
-        userDefaults.set(book.currentVersion.identifierString, forKey: self.storeVersionKey)
+        userDefaults.set(book.currentVersion.stringValue, forKey: self.storeVersionKey)
         userDefaults.synchronize()
         return book
     }()
@@ -120,7 +120,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDele
     }
     
     func storeCurrentVersion() {
-        userDefaults.set(self.contactBook.currentVersion.identifierString, forKey: self.storeVersionKey)
+        userDefaults.set(self.contactBook.currentVersion.stringValue, forKey: self.storeVersionKey)
         userDefaults.synchronize()
     }
 

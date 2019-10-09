@@ -41,7 +41,7 @@ class FileSystemExchangeTests: XCTestCase {
     }
     
     private func value(_ identifier: String, stringData: String) -> Value {
-        return Value(identifier: .init(identifier), version: nil, data: stringData.data(using: .utf8)!)
+        return Value(id: .init(identifier), data: stringData.data(using: .utf8)!)
     }
     
     private var changeFiles: [URL] {
@@ -54,13 +54,13 @@ class FileSystemExchangeTests: XCTestCase {
     
     func testSendFiles() {
         let val = value("CDEFGH", stringData: "Origin")
-        let ver = try! store1.addVersion(basedOnPredecessor: nil, storing: [.insert(val)])
+        let ver = try! store1.makeVersion(basedOnPredecessor: nil, storing: [.insert(val)])
         XCTAssertEqual(changeFiles.count, 0)
         XCTAssertEqual(versionFiles.count, 0)
         let expect = self.expectation(description: "Send")
         exchange1.send { result in
             if case let .success(versionIds) = result {
-                XCTAssert(versionIds.contains(ver.identifier))
+                XCTAssert(versionIds.contains(ver.id))
                 XCTAssertEqual(self.changeFiles.count, 1)
                 XCTAssertEqual(self.versionFiles.count, 1)
             } else {
@@ -73,14 +73,14 @@ class FileSystemExchangeTests: XCTestCase {
     
     func testReceiveFiles() {
         let val = value("CDEFGH", stringData: "Origin")
-        let ver = try! store1.addVersion(basedOnPredecessor: nil, storing: [.insert(val)])
+        let ver = try! store1.makeVersion(basedOnPredecessor: nil, storing: [.insert(val)])
         let expect = self.expectation(description: "Retrieve")
         exchange1.send { _ in
             self.exchange2.retrieve { result in
                 if case let .success(versionIds) = result {
-                    XCTAssert(versionIds.contains(ver.identifier))
-                    XCTAssertEqual(ver, try! self.store2.version(identifiedBy: ver.identifier))
-                    XCTAssertNotNil(try! self.store2.value(val.identifier, prevailingAt: ver.identifier))
+                    XCTAssert(versionIds.contains(ver.id))
+                    XCTAssertEqual(ver, try! self.store2.version(identifiedBy: ver.id))
+                    XCTAssertNotNil(try! self.store2.value(withId: val.id, at: ver.id))
                 } else {
                     XCTFail()
                 }
@@ -92,7 +92,7 @@ class FileSystemExchangeTests: XCTestCase {
     
     func testConcurrentChanges() {
         let expectOrigin = self.expectation(description: "Share Origin")
-        let origin = try! store1.addVersion(basedOnPredecessor: nil, storing: [])
+        let origin = try! store1.makeVersion(basedOnPredecessor: nil, storing: [])
         exchange1.send { _ in
             self.exchange2.retrieve { result in
                 expectOrigin.fulfill()
@@ -106,7 +106,7 @@ class FileSystemExchangeTests: XCTestCase {
             for _ in 0..<numberOfVersions {
                 let id = UUID().uuidString
                 let val = value(id, stringData: id)
-                let ver = try! store.addVersion(basedOnPredecessor: versions.last?.identifier ?? origin.identifier, storing: [.insert(val)])
+                let ver = try! store.makeVersion(basedOnPredecessor: versions.last?.id ?? origin.id, storing: [.insert(val)])
                 versions.append(ver)
                 values.append(val)
             }
@@ -121,14 +121,14 @@ class FileSystemExchangeTests: XCTestCase {
             self.exchange2.retrieve { result in
                 self.exchange2.send { _ in
                     self.exchange1.retrieve { result in
-                        versions1.forEach { XCTAssertNotNil(try! self.store2.version(identifiedBy: $0.identifier)) }
-                        versions2.forEach { XCTAssertNotNil(try! self.store1.version(identifiedBy: $0.identifier)) }
+                        versions1.forEach { XCTAssertNotNil(try! self.store2.version(identifiedBy: $0.id)) }
+                        versions2.forEach { XCTAssertNotNil(try! self.store1.version(identifiedBy: $0.id)) }
                         for (ver, val) in zip(versions1, values1) {
-                            let val2 = try! self.store2.value(val.identifier, storedAt: ver.identifier)!
+                            let val2 = try! self.store2.value(withId: val.id, storedAt: ver.id)!
                             XCTAssertEqual(val.data, val2.data)
                         }
                         for (ver, val) in zip(versions2, values2) {
-                            let val1 = try! self.store1.value(val.identifier, storedAt: ver.identifier)!
+                            let val1 = try! self.store1.value(withId: val.id, storedAt: ver.id)!
                             XCTAssertEqual(val.data, val1.data)
                         }
                         expect.fulfill()
@@ -138,13 +138,13 @@ class FileSystemExchangeTests: XCTestCase {
         }
         wait(for: [expect], timeout: 10.0)
         
-        let merge = try! store1.mergeRelated(version: versions1.last!.identifier, with: versions2.last!.identifier, resolvingWith: MostRecentBranchFavoringArbiter())
+        let merge = try! store1.mergeRelated(version: versions1.last!.id, with: versions2.last!.id, resolvingWith: MostRecentBranchFavoringArbiter())
         let expectMerge = self.expectation(description: "Merge")
         exchange1.send { _ in
             self.exchange2.retrieve { result in
-                XCTAssertNotNil(try! self.store2.version(identifiedBy: merge.identifier))
+                XCTAssertNotNil(try! self.store2.version(identifiedBy: merge.id))
                 for val in values1 + values2 {
-                    let val2 = try! self.store2.value(val.identifier, prevailingAt: merge.identifier)!
+                    let val2 = try! self.store2.value(withId: val.id, at: merge.id)!
                     XCTAssertEqual(val.data, val2.data)
                 }
                 expectMerge.fulfill()
@@ -163,7 +163,7 @@ class FileSystemExchangeTests: XCTestCase {
             expect.fulfill()
         }
         
-        let _ = try! store1.addVersion(basedOnPredecessor: nil, storing: [])
+        let _ = try! store1.makeVersion(basedOnPredecessor: nil, storing: [])
         
         exchange1.send { _ in }
         wait(for: [expect], timeout: 3.0)

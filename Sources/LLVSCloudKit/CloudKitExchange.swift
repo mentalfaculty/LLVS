@@ -140,9 +140,9 @@ fileprivate extension CloudKitExchange {
         operation.addDependency(createZoneOperation!)
         operation.fetchAllChanges = true
         operation.recordChangedBlock = { record in
-            let versionIdentifier = Version.Identifier(record.recordID.recordName)
-            self.restoration.versionsInCloud.insert(versionIdentifier)
-            log.verbose("Found record for version: \(versionIdentifier)")
+            let versionId = Version.ID(record.recordID.recordName)
+            self.restoration.versionsInCloud.insert(versionId)
+            log.verbose("Found record for version: \(versionId)")
         }
         operation.recordZoneFetchCompletionBlock = { zoneID, token, clientData, moreComing, error in
             self.restoration.fetchRecordChangesToken = token
@@ -200,8 +200,8 @@ fileprivate extension CloudKitExchange {
                 self.restoration.lastQueryDate = Date.distantPast
                 completionHandler(.success(()))
             case .success(let records):
-                let versionIdentifiers = records.map { Version.Identifier($0.recordID.recordName) }
-                self.restoration.versionsInCloud.formUnion(versionIdentifiers)
+                let versionIds = records.map { Version.ID($0.recordID.recordName) }
+                self.restoration.versionsInCloud.formUnion(versionIds)
                 let modificationDates = records.map { $0.modificationDate! }
                 self.restoration.lastQueryDate = max(self.restoration.lastQueryDate ?? Date.distantPast, modificationDates.max() ?? Date.distantPast )
                 completionHandler(.success(()))
@@ -256,9 +256,9 @@ public extension CloudKitExchange {
         }
     }
     
-    func retrieveVersions(identifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
+    func retrieveVersions(identifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
         log.trace("Retrieving versions")
-        let recordIDs = versionIdentifiers.map { CKRecord.ID(recordName: $0.identifierString, zoneID: zoneID ?? .default) }
+        let recordIDs = versionIds.map { CKRecord.ID(recordName: $0.stringValue, zoneID: zoneID ?? .default) }
         let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
         fetchOperation.desiredKeys = [CKRecord.ExchangeKey.version.rawValue]
         fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
@@ -285,14 +285,14 @@ public extension CloudKitExchange {
         database.add(fetchOperation)
     }
     
-    func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>) {
-        log.verbose("Retrieved all versions: \(restoration.versionsInCloud.map({ $0.identifierString }))")
+    func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>) {
+        log.verbose("Retrieved all versions: \(restoration.versionsInCloud.map({ $0.stringValue }))")
         completionHandler(.success(Array(restoration.versionsInCloud)))
     }
     
-    func retrieveValueChanges(forVersionsIdentifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier:[Value.Change]]>) {
-        log.trace("Retrieving value changes for versions: \(versionIdentifiers)")
-        let recordIDs = versionIdentifiers.map { CKRecord.ID(recordName: $0.identifierString, zoneID: zoneID ?? .default) }
+    func retrieveValueChanges(forVersionsIdentifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID:[Value.Change]]>) {
+        log.trace("Retrieving value changes for versions: \(versionIds)")
+        let recordIDs = versionIds.map { CKRecord.ID(recordName: $0.stringValue, zoneID: zoneID ?? .default) }
         let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
         fetchOperation.desiredKeys = [CKRecord.ExchangeKey.valueChanges.rawValue, CKRecord.ExchangeKey.valueChangesAsset.rawValue]
         fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
@@ -302,7 +302,7 @@ public extension CloudKitExchange {
             }
             
             do {
-                let changesByVersion: [(Version.Identifier, [Value.Change])] = try recordsByRecordID.map { keyValue in
+                let changesByVersion: [(Version.ID, [Value.Change])] = try recordsByRecordID.map { keyValue in
                     let record = keyValue.value
                     let recordID = keyValue.key
                     let data: Data
@@ -315,7 +315,7 @@ public extension CloudKitExchange {
                     }
                     let valueChanges: [Value.Change] = try JSONDecoder().decode([Value.Change].self, from: data)
                     log.verbose("Retrieved value changes for \(recordID.recordName): \(valueChanges)")
-                    return (Version.Identifier(recordID.recordName), valueChanges)
+                    return (Version.ID(recordID.recordName), valueChanges)
                 }
                 
                 completionHandler(.success(.init(uniqueKeysWithValues: changesByVersion)))
@@ -343,7 +343,7 @@ public extension CloudKitExchange {
     }
     
     func send(versionChanges: [VersionChanges], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        log.trace("Sending versions: \(versionChanges.map({ $0.0.identifier }))")
+        log.trace("Sending versions: \(versionChanges.map({ $0.0.id }))")
         log.verbose("Value changes: \(versionChanges)")
         
         guard !versionChanges.isEmpty else {
@@ -370,7 +370,7 @@ public extension CloudKitExchange {
             let records: [CKRecord] = try versionChanges.map { t in
                 let version = t.version
                 let valueChanges = t.valueChanges
-                let recordID = CKRecord.ID(recordName: version.identifier.identifierString, zoneID: zoneID ?? .default)
+                let recordID = CKRecord.ID(recordName: version.id.stringValue, zoneID: zoneID ?? .default)
                 let record = CKRecord(recordType: .init(CKRecord.ExchangeType.Version.rawValue), recordID: recordID)
                 let versionData = try JSONEncoder().encode([version]) // Use an array, because JSON needs root dict or array
                 let changesData = try JSONEncoder().encode(valueChanges)
@@ -464,7 +464,7 @@ extension CloudKitExchange {
         }
         
         /// Set of all version ids in cloud
-        var versionsInCloud: Set<Version.Identifier> = []
+        var versionsInCloud: Set<Version.ID> = []
         
         /// Used for private database with custom zone
         var fetchRecordChangesToken: CKServerChangeToken?

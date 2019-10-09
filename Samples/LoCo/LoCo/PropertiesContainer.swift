@@ -14,18 +14,18 @@ fileprivate var decoder: JSONDecoder = .init()
 
 class PropertyLoader<KeyType: StoreKey> {
     let store: Store
-    let valueIdentifier: Value.Identifier
+    let valueId: Value.Identifier
     let prevailingVersion: Version.Identifier
     
-    init(store: Store, valueIdentifier: Value.Identifier, prevailingVersion: Version.Identifier) {
+    init(store: Store, valueId: Value.Identifier, prevailingVersion: Version.Identifier) {
         self.store = store
-        self.valueIdentifier = valueIdentifier
+        self.valueId = valueId
         self.prevailingVersion = prevailingVersion
     }
     
     func load<PropertyType: Codable>(_ storeKey: KeyType) throws -> PropertyType? {
-        let key = storeKey.key(forIdentifier: valueIdentifier)
-        guard let value = try store.value(.init(key), prevailingAt: prevailingVersion) else { return nil }
+        let key = storeKey.key(forIdentifier: valueId)
+        guard let value = try store.value(.init(key), at: prevailingVersion) else { return nil }
         let array = try decoder.decode([PropertyType].self, from: value.data) // Properties are in array to please JSON
         return array.first
     }
@@ -33,20 +33,20 @@ class PropertyLoader<KeyType: StoreKey> {
 
 class PropertyChangeGenerator<KeyType: StoreKey> {
     let store: Store
-    let valueIdentifier: Value.Identifier
+    let valueId: Value.Identifier
     var propertyChanges: [Value.Change] = []
     
-    init(store: Store, valueIdentifier: Value.Identifier) {
+    init(store: Store, valueId: Value.Identifier) {
         self.store = store
-        self.valueIdentifier = valueIdentifier
+        self.valueId = valueId
     }
     
     func generate<PropertyType: Codable & Equatable>(_ storeKey: KeyType, propertyValue: PropertyType?, originalPropertyValue: PropertyType?) throws {
-        let key = storeKey.key(forIdentifier: valueIdentifier)
+        let key = storeKey.key(forIdentifier: valueId)
         guard propertyValue != originalPropertyValue else { return }
         if let propertyValue = propertyValue {
             let data = try encoder.encode([propertyValue]) // Wrap properties in array to please JSON encoding. Requires array or dict root.
-            let value = Value(identifier: .init(key), version: nil, data: data)
+            let value = Value(id: .init(key), data: data)
             let change: Value.Change = originalPropertyValue == nil ? .insert(value) : .update(value)
             propertyChanges.append(change)
         } else if originalPropertyValue != nil {
@@ -61,7 +61,7 @@ protocol StoreKey {
 }
 
 extension Store {
-    func valueContainer<KeyType: StoreKey>(_ valueIdentifier: Value.Identifier, prevailingVersion: Version.Identifier) -> PropertyLoader<KeyType> {
-        return PropertyLoader(store: self, valueIdentifier: valueIdentifier, prevailingVersion: prevailingVersion)
+    func valueContainer<KeyType: StoreKey>(_ valueId: Value.Identifier, prevailingVersion: Version.Identifier) -> PropertyLoader<KeyType> {
+        return PropertyLoader(store: self, valueId: valueId, prevailingVersion: prevailingVersion)
     }
 }

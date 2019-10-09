@@ -29,7 +29,7 @@ final class Map {
         self.zone = zone
     }
     
-    func addVersion(_ version: Version.Identifier, basedOn baseVersion: Version.Identifier?, applying deltas: [Delta]) throws {
+    func addVersion(_ version: Version.ID, basedOn baseVersion: Version.ID?, applying deltas: [Delta]) throws {
         var rootNode: Node
         let rootRef = ZoneReference(key: rootKey, version: version)
         if let baseVersion = baseVersion {
@@ -65,12 +65,12 @@ final class Map {
             guard case let .values(keyValuePairs) = subNode.children else { throw Error.unexpectedNodeContent }
             
             let valueRefs = keyValuePairs.filter({ $0.key == key }).map({ $0.valueReference })
-            var valueRefsByIdentifier: [Value.Identifier:Value.Reference] = Dictionary(uniqueKeysWithValues: valueRefs.map({ ($0.identifier, $0) }) )
+            var valueRefsByIdentifier: [Value.ID:Value.Reference] = Dictionary(uniqueKeysWithValues: valueRefs.map({ ($0.valueId, $0) }) )
             for valueRef in delta.addedValueReferences {
-                valueRefsByIdentifier[valueRef.identifier] = valueRef
+                valueRefsByIdentifier[valueRef.valueId] = valueRef
             }
-            for valueIdentifier in delta.removedValueIdentifiers {
-                valueRefsByIdentifier[valueIdentifier] = nil
+            for valueId in delta.removedValueIdentifiers {
+                valueRefsByIdentifier[valueId] = nil
             }
             let newValueRefs = Array(valueRefsByIdentifier.values)
             var newPairs = keyValuePairs.filter { $0.key != key }
@@ -93,7 +93,7 @@ final class Map {
         try zone.store(data, for: rootNode.reference)
     }
     
-    func differences(between firstVersion: Version.Identifier, and secondVersion: Version.Identifier, withCommonAncestor commonAncestor: Version.Identifier?) throws -> [Diff] {
+    func differences(between firstVersion: Version.ID, and secondVersion: Version.ID, withCommonAncestor commonAncestor: Version.ID?) throws -> [Diff] {
         let originRef = commonAncestor.flatMap { ZoneReference(key: rootKey, version: $0) }
         let rootRef1 = ZoneReference(key: rootKey, version: firstVersion)
         let rootRef2 = ZoneReference(key: rootKey, version: secondVersion)
@@ -126,23 +126,23 @@ final class Map {
         var diffs: [Diff] = []
         for subNodeKey in allSubNodeKeys {
             
-            func appendDiffs(forIdentifiers ids: [Value.Identifier], fork: Value.Fork) throws {
+            func appendDiffs(forIdentifiers ids: [Value.ID], fork: Value.Fork) throws {
                 for id in ids {
-                    let diff = Diff(key: .init(subNodeKey), valueIdentifier: id, valueFork: fork)
+                    let diff = Diff(key: .init(subNodeKey), valueId: id, valueFork: fork)
                     diffs.append(diff)
                 }
             }
             
             func appendDiffs(forSubNode subNodeRef: ZoneReference, fork: Value.Fork) throws {
                 let refs = try valueReferences(forRootSubNode: subNodeRef)
-                try appendDiffs(forIdentifiers: refs.map({ $0.identifier }), fork: fork)
+                try appendDiffs(forIdentifiers: refs.map({ $0.valueId }), fork: fork)
             }
             
             func appendDiffs(forOriginNode originNode: ZoneReference, onlyBranchNode branchNode: ZoneReference, branch: Value.Fork.Branch) throws {
                 let vo = try valueReferences(forRootSubNode: originNode)
                 let vb = try valueReferences(forRootSubNode: branchNode)
-                let refOById: [Value.Identifier:Value.Reference] = .init(uniqueKeysWithValues: vo.map({ ($0.identifier, $0) }))
-                let refBById: [Value.Identifier:Value.Reference] = .init(uniqueKeysWithValues: vb.map({ ($0.identifier, $0) }))
+                let refOById: [Value.ID:Value.Reference] = .init(uniqueKeysWithValues: vo.map({ ($0.valueId, $0) }))
+                let refBById: [Value.ID:Value.Reference] = .init(uniqueKeysWithValues: vb.map({ ($0.valueId, $0) }))
                 let allIds = Set(refOById.keys).union(refBById.keys)
                 for valueId in allIds {
                     let refO = refOById[valueId]
@@ -172,9 +172,9 @@ final class Map {
                 let vo = try valueReferences(forRootSubNode: o)
                 let v1 = try valueReferences(forRootSubNode: r1)
                 let v2 = try valueReferences(forRootSubNode: r2)
-                let refOById: [Value.Identifier:Value.Reference] = .init(uniqueKeysWithValues: vo.map({ ($0.identifier, $0) }))
-                let ref1ById: [Value.Identifier:Value.Reference] = .init(uniqueKeysWithValues: v1.map({ ($0.identifier, $0) }))
-                let ref2ById: [Value.Identifier:Value.Reference] = .init(uniqueKeysWithValues: v2.map({ ($0.identifier, $0) }))
+                let refOById: [Value.ID:Value.Reference] = .init(uniqueKeysWithValues: vo.map({ ($0.valueId, $0) }))
+                let ref1ById: [Value.ID:Value.Reference] = .init(uniqueKeysWithValues: v1.map({ ($0.valueId, $0) }))
+                let ref2ById: [Value.ID:Value.Reference] = .init(uniqueKeysWithValues: v2.map({ ($0.valueId, $0) }))
                 let allIds = Set(refOById.keys).union(ref1ById.keys).union(ref2ById.keys)
                 for valueId in allIds {
                     let refO = refOById[valueId]
@@ -220,8 +220,8 @@ final class Map {
             case let (nil, r1?, r2?):
                 let v1 = try valueReferences(forRootSubNode: r1)
                 let v2 = try valueReferences(forRootSubNode: r2)
-                let ref1ById: [Value.Identifier:Value.Reference] = .init(uniqueKeysWithValues: v1.map({ ($0.identifier, $0) }))
-                let ref2ById: [Value.Identifier:Value.Reference] = .init(uniqueKeysWithValues: v2.map({ ($0.identifier, $0) }))
+                let ref1ById: [Value.ID:Value.Reference] = .init(uniqueKeysWithValues: v1.map({ ($0.valueId, $0) }))
+                let ref2ById: [Value.ID:Value.Reference] = .init(uniqueKeysWithValues: v2.map({ ($0.valueId, $0) }))
                 let allIds = Set(ref1ById.keys).union(ref2ById.keys)
                 for valueId in allIds {
                     let ref1 = ref1ById[valueId]
@@ -251,7 +251,7 @@ final class Map {
         return diffs
     }
     
-    func enumerateValueReferences(forVersionIdentifiedBy versionId: Version.Identifier, executingForEach block: (Value.Reference) throws -> Void) throws {
+    func enumerateValueReferences(forVersionIdentifiedBy versionId: Version.ID, executingForEach block: (Value.Reference) throws -> Void) throws {
         let rootRef = ZoneReference(key: rootKey, version: versionId)
         guard let rootNode = try node(for: rootRef) else { throw Error.missingVersionRoot }
         guard case let .nodes(subNodeRefs) = rootNode.children else { throw Error.missingNode }
@@ -264,7 +264,7 @@ final class Map {
         }
     }
     
-    func valueReferences(matching key: Map.Key, at version: Version.Identifier) throws -> [Value.Reference] {
+    func valueReferences(matching key: Map.Key, at version: Version.ID) throws -> [Value.Reference] {
         let rootRef = ZoneReference(key: rootKey, version: version)
         guard let rootNode = try node(for: rootRef) else { throw Error.missingVersionRoot }
         guard case let .nodes(subNodeRefs) = rootNode.children else { throw Error.missingNode }
@@ -275,7 +275,7 @@ final class Map {
         return keyValuePairs.filter({ $0.key == key }).map({ $0.valueReference })
     }
 
-    fileprivate func node(for key: String, version: Version.Identifier) throws -> Node? {
+    fileprivate func node(for key: String, version: Version.ID) throws -> Node? {
         let ref = ZoneReference(key: key, version: version)
         return try node(for: ref)
     }
@@ -314,7 +314,7 @@ extension Map {
     
     struct Diff {
         var key: Key
-        var valueIdentifier: Value.Identifier
+        var valueId: Value.ID
         var valueFork: Value.Fork
     }
     
@@ -326,7 +326,7 @@ extension Map {
     struct Delta {
         var key: Key
         var addedValueReferences: [Value.Reference] = []
-        var removedValueIdentifiers: [Value.Identifier] = []
+        var removedValueIdentifiers: [Value.ID] = []
         
         init(key: Key) {
             self.key = key

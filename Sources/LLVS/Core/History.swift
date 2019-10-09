@@ -10,15 +10,15 @@ import Foundation
 public class History {
     
     public enum Error: Swift.Error {
-        case attemptToAddPreexistingVersion(identifier: String)
+        case attemptToAddPreexistingVersion(id: String)
         case nonExistentVersionEncountered(identifier: String)
     }
     
-    private var versionsByIdentifier: [Version.Identifier:Version] = [:]
-    private var referencedVersionIdentifiers: Set<Version.Identifier> = [] // Any version that is a predecessor
+    private var versionsByIdentifier: [Version.ID:Version] = [:]
+    private var referencedVersionIdentifiers: Set<Version.ID> = [] // Any version that is a predecessor
     
-    public private(set) var headIdentifiers: Set<Version.Identifier> = []  // Versions that are not predecessors of other versions
-    public var allVersionIdentifiers: [Version.Identifier] { return Array(versionsByIdentifier.keys) }
+    public private(set) var headIdentifiers: Set<Version.ID> = []  // Versions that are not predecessors of other versions
+    public var allVersionIdentifiers: [Version.ID] { return Array(versionsByIdentifier.keys) }
     
     public var mostRecentHead: Version? {
         let maxId = headIdentifiers.max { (vId1, vId2) -> Bool in
@@ -29,21 +29,21 @@ public class History {
         return maxId.flatMap { version(identifiedBy: $0) }
     }
     
-    public func version(identifiedBy identifier: Version.Identifier) -> Version? {
+    public func version(identifiedBy identifier: Version.ID) -> Version? {
         return versionsByIdentifier[identifier]
     }
     
-    internal func version(prevailingFromCandidates candidates: [Version.Identifier], at versionIdentifier: Version.Identifier) -> Version? {
-        if let candidate = candidates.first(where: { $0 == versionIdentifier }) {
+    internal func version(prevailingFromCandidates candidates: [Version.ID], at versionId: Version.ID) -> Version? {
+        if let candidate = candidates.first(where: { $0 == versionId }) {
             return version(identifiedBy: candidate)
         }
         
-        var ancestors: Set<Version.Identifier> = [versionIdentifier]
+        var ancestors: Set<Version.ID> = [versionId]
         for v in self {
             // See if v is in our ancestry. If so, extend ancestry.
-            if ancestors.contains(v.identifier) {
-                ancestors.formUnion(v.predecessors?.identifiers ?? [])
-                ancestors.remove(v.identifier)
+            if ancestors.contains(v.id) {
+                ancestors.formUnion(v.predecessors?.ids ?? [])
+                ancestors.remove(v.id)
             }
             
             if let candidate = candidates.first(where: { ancestors.contains($0) }) {
@@ -54,7 +54,7 @@ public class History {
         return nil
     }
     
-    internal func isAncestralLine(from ancestor: Version.Identifier, to descendant: Version.Identifier) -> Bool {
+    internal func isAncestralLine(from ancestor: Version.ID, to descendant: Version.ID) -> Bool {
          return nil != version(prevailingFromCandidates: [ancestor], at: descendant)
     }
     
@@ -64,49 +64,49 @@ public class History {
     /// when loading them to setup the History. In that case, we only want to set them when all versions
     /// have been loaded.
     internal func add(_ version: Version, updatingPredecessorVersions: Bool) throws {
-        guard versionsByIdentifier[version.identifier] == nil else {
-            throw Error.attemptToAddPreexistingVersion(identifier: version.identifier.identifierString)
+        guard versionsByIdentifier[version.id] == nil else {
+            throw Error.attemptToAddPreexistingVersion(id: version.id.stringValue)
         }
         
-        versionsByIdentifier[version.identifier] = version
+        versionsByIdentifier[version.id] = version
         if updatingPredecessorVersions {
             try updateSuccessors(inPredecessorsOf: version)
         }
         
-        if !referencedVersionIdentifiers.contains(version.identifier) {
-            headIdentifiers.insert(version.identifier)
+        if !referencedVersionIdentifiers.contains(version.id) {
+            headIdentifiers.insert(version.id)
         }
     }
     
     internal func updateSuccessors(inPredecessorsOf version: Version) throws {
-        for predecessorIdentifier in version.predecessors?.identifiers ?? [] {
+        for predecessorIdentifier in version.predecessors?.ids ?? [] {
             guard let predecessor = self.version(identifiedBy: predecessorIdentifier) else {
-                throw Error.nonExistentVersionEncountered(identifier: predecessorIdentifier.identifierString)
+                throw Error.nonExistentVersionEncountered(identifier: predecessorIdentifier.stringValue)
             }
             
             referencedVersionIdentifiers.insert(predecessorIdentifier)
             headIdentifiers.remove(predecessorIdentifier)
             
             var newPredecessor = predecessor
-            let newSuccessorIdentifiers = predecessor.successors.identifiers.union([version.identifier])
-            newPredecessor.successors = Version.Successors(identifiers: newSuccessorIdentifiers)
-            versionsByIdentifier[newPredecessor.identifier] = newPredecessor
+            let newSuccessorIdentifiers = predecessor.successors.ids.union([version.id])
+            newPredecessor.successors = Version.Successors(ids: newSuccessorIdentifiers)
+            versionsByIdentifier[newPredecessor.id] = newPredecessor
         }
     }
     
-    public func greatestCommonAncestor(ofVersionsIdentifiedBy identifiers: (Version.Identifier, Version.Identifier)) throws -> Version.Identifier? {
+    public func greatestCommonAncestor(ofVersionsIdentifiedBy ids: (Version.ID, Version.ID)) throws -> Version.ID? {
         // Find all ancestors of first Version. Determine how many generations back each Version is.
         // We take the shortest path to any given Version, ie, the minimum of possible paths.
-        var generationById = [Version.Identifier:Int]()
-        var firstFront: Set<Version.Identifier> = [identifiers.0]
+        var generationById = [Version.ID:Int]()
+        var firstFront: Set<Version.ID> = [ids.0]
         
-        func propagateFront(front: inout Set<Version.Identifier>) throws {
-            var newFront = Set<Version.Identifier>()
+        func propagateFront(front: inout Set<Version.ID>) throws {
+            var newFront = Set<Version.ID>()
             for identifier in front {
                 guard let frontVersion = self.version(identifiedBy: identifier) else {
-                    throw Error.nonExistentVersionEncountered(identifier: identifier.identifierString)
+                    throw Error.nonExistentVersionEncountered(identifier: identifier.stringValue)
                 }
-                newFront.formUnion(frontVersion.predecessors?.identifiers ?? [])
+                newFront.formUnion(frontVersion.predecessors?.ids ?? [])
             }
             front = newFront
         }
@@ -119,7 +119,7 @@ public class History {
         }
         
         // Now go through ancestors of second version until we find the first in common with the first ancestors
-        var secondFront: Set<Version.Identifier> = [identifiers.1]
+        var secondFront: Set<Version.ID> = [ids.1]
         let ancestorsOfFirst = Set(generationById.keys)
         while secondFront.count > 0 {
             let common = ancestorsOfFirst.intersection(secondFront)
@@ -146,7 +146,7 @@ extension History: Sequence {
         public let history: History
         
         private var front: Set<Version>
-        private var referenceCountByIdentifier: [Version.Identifier:Int] = [:]
+        private var referenceCountByIdentifier: [Version.ID:Int] = [:]
         
         init(toIterate history: History) {
             self.history = history
@@ -158,17 +158,17 @@ extension History: Sequence {
         
         public mutating func next() -> Version? {
             guard let next = front.first(where: { version in
-                    let refCount = self.referenceCountByIdentifier[version.identifier] ?? 0
-                    let successorCount = version.successors.identifiers.count
+                    let refCount = self.referenceCountByIdentifier[version.id] ?? 0
+                    let successorCount = version.successors.ids.count
                     return refCount == successorCount
                 })
                 else {
                     return nil
                 }
             
-            for predecessorIdentifier in next.predecessors?.identifiers ?? [] {
+            for predecessorIdentifier in next.predecessors?.ids ?? [] {
                 let predecessor = history.version(identifiedBy: predecessorIdentifier)!
-                referenceCountByIdentifier[predecessor.identifier] = (referenceCountByIdentifier[predecessor.identifier] ?? 0) + 1
+                referenceCountByIdentifier[predecessor.id] = (referenceCountByIdentifier[predecessor.id] ?? 0) + 1
                 front.insert(predecessor)
             }
             

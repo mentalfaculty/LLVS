@@ -116,9 +116,9 @@ When you first create a store, you will probably want to add some initial data.
 ```swift
 let stringData = "My first data".data(using: .utf8)!
 let newValueId = Value.Identifier("ABCDEF")
-let newValue = Value(identifier: newValueId, version: nil, data: stringData)
+let newValue = Value(id: newValueId, data: stringData)
 let insert: Value.Change = .insert(newValue)
-let firstVersion = try store.addVersion(basedOnPredecessor: nil, storing: [insert])
+let firstVersion = try store.makeVersion(basedOnPredecessor: nil, storing: [insert])
 ```
 
 This code...
@@ -135,9 +135,9 @@ Storing subsequent values is very similar. The only difference is that you need 
 
 ```swift
 let secondData = "My second data".data(using: .utf8)!
-let secondValue = Value(identifier: .init("CDEFGH"), version: nil, data: secondData)
+let secondValue = Value(id: .init("CDEFGH"), data: secondData)
 let secondInsert: Value.Change = .insert(secondValue)
-let secondVersion = try store.addVersion(basedOnPredecessor: firstVersion.identifier, storing: [secondInsert])
+let secondVersion = try store.makeVersion(basedOnPredecessor: firstVersion.id, storing: [secondInsert])
 ```
 
 The main difference here is that a non-nil predecessor is passed in when adding the version. The predecessor is just the identifier of the first version we created above.
@@ -151,7 +151,7 @@ We have also used a shorter notation for the identifier, creating it inline with
 Once we have data in the store, we can of course retrieve it again. With LLVS you need to indicate which version of the data you want, because the store includes a complete history of changes.
 
 ```swift
-let value = try store.value(.init("CDEFGH"), prevailingAt: secondVersion.identifier)!
+let value = try store.value(.init("CDEFGH"), at: secondVersion.id)!
 let fetchedString = String(data: value.data, encoding: .utf8)
 ```
 
@@ -160,7 +160,7 @@ Here we have fetched the second value we added above, and converted it back into
 What about the first value we added above? That was added before the second version, so it continues to exist in future versions. (We say it "prevails".) So we can fetch it in exactly the same way. 
 
 ```swift
-let value = try store.value(.init("ABCDEF"), prevailingAt: secondVersion.identifier)!
+let value = try store.value(.init("ABCDEF"), at: secondVersion.id)!
 let fetchedString = String(data: value.data, encoding: .utf8)
 ```
 
@@ -172,10 +172,10 @@ Just as you can _insert_ new values, you can also _update_ existing values, and 
 
 ```swift
 let updateData = "An update of my first data".data(using: .utf8)!
-let updateValue = Value(identifier: .init("ABCDEF"), version: nil, data: updateData)
+let updateValue = Value(id: .init("ABCDEF"), data: updateData)
 let update: Value.Change = .update(updateValue)
 let removal: Value.Change = .remove(.init("CDEFGH"))
-let thirdVersion = try store.addVersion(basedOnPredecessor: secondVersion.identifier, storing: [update, removal])
+let thirdVersion = try store.makeVersion(basedOnPredecessor: secondVersion.id, storing: [update, removal])
 ```
 
 The third version is based on the second one. There are two changes: it updates the value for "ABCDEF" with new data, and removes the value for "CDEFGH". 
@@ -312,11 +312,11 @@ public class MostRecentBranchFavoringArbiter: MergeArbiter {
                 if removeBranch == favoredBranch {
                     changes.append(.preserveRemoval(valueId))
                 } else {
-                    let value = try store.value(valueId, prevailingAt: favoredVersion.identifier)!
+                    let value = try store.value(valueId, at: favoredVersion.id)!
                     changes.append(.preserve(value.reference!))
                 }
             case .twiceInserted, .twiceUpdated:
-                let value = try store.value(valueId, prevailingAt: favoredVersion.identifier)!
+                let value = try store.value(valueId, at: favoredVersion.id)!
                 changes.append(.preserve(value.reference!))
             case .inserted, .removed, .updated, .twiceRemoved:
                 break

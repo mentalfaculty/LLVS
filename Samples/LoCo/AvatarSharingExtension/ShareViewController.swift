@@ -37,9 +37,9 @@ class ShareViewController: UITableViewController {
         rootStoreDirectory = docDir.appendingPathComponent("ContactBook")
         store = try! Store(rootDirectoryURL: rootStoreDirectory)
 
-        if let version = store.mostRecentHead?.identifier {
+        if let version = store.mostRecentHead?.id {
             let data = userDefaults.data(forKey: UserDefaultKey.exchangeRestorationData.rawValue)
-            contactBook = try! ContactBook(prevailingAt: version, loadingFrom: store, exchangeRestorationData: data)
+            contactBook = try! ContactBook(at: version, loadingFrom: store, exchangeRestorationData: data)
         } else {
             contactBook = try! ContactBook(creatingIn: store)
         }

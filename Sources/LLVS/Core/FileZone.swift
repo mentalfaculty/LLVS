@@ -68,17 +68,17 @@ internal final class FileZone: Zone {
     func fileSystemLocation(for reference: ZoneReference) throws -> (directoryURL: URL, fileURL: URL) {
         let safeKey = reference.key.replacingOccurrences(of: "/", with: "LLVSSLASH").replacingOccurrences(of: ":", with: "LLVSCOLON")
         let valueDirectoryURL = rootDirectory.appendingSplitPathComponent(safeKey)
-        let versionName = reference.version.identifierString + "." + fileExtension
+        let versionName = reference.version.stringValue + "." + fileExtension
         let fileURL = valueDirectoryURL.appendingSplitPathComponent(versionName, prefixLength: 1)
         let directoryURL = fileURL.deletingLastPathComponent()
         return (directoryURL: directoryURL, fileURL: fileURL)
     }
     
-    internal func versionIdentifiers(for key: String) throws -> [Version.Identifier] {
+    internal func versionIds(for key: String) throws -> [Version.ID] {
         let valueDirectoryURL = rootDirectory.appendingSplitPathComponent(key)
         let valueDirLength = valueDirectoryURL.path.count
         let enumerator = fileManager.enumerator(at: valueDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
-        var versions: [Version.Identifier] = []
+        var versions: [Version.ID] = []
         let slash = Character("/")
         for any in enumerator {
             var isDirectory: ObjCBool = true
@@ -87,7 +87,7 @@ internal final class FileZone: Zone {
             let path = url.resolvingSymlinksInPath().deletingPathExtension().path
             let index = path.index(path.startIndex, offsetBy: Int(valueDirLength))
             let version = String(path[index...]).filter { $0 != slash }
-            versions.append(Version.Identifier(version))
+            versions.append(Version.ID(version))
         }
         return versions
     }

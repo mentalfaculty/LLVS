@@ -36,14 +36,14 @@ class ValueChangesInVersionTests: XCTestCase {
     }
     
     func testValuesConflictlessMerge() {
-        let val1 = Value(identifier: .init("ABCDEF"), version: nil, data: "Bob".data(using: .utf8)!)
-        var val2 = Value(identifier: .init("ABCD"), version: nil, data: "Tom".data(using: .utf8)!)
-        let origin = try! store.addVersion(basedOn: nil, storing: [])
-        let ver1 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [.insert(val1)])
-        let ver2 = try! store.addVersion(basedOnPredecessor: origin.identifier, storing: [.insert(val2)])
-        val2.version = ver2.identifier
-        let ver3 = try! store.addVersion(basedOn: .init(identifierOfFirst: ver1.identifier, identifierOfSecond: ver2.identifier), storing: [.preserve(val2.reference!)])
-        let valueChanges = try! store.valueChanges(madeInVersionIdentifiedBy: ver3.identifier)
+        let val1 = Value(id: .init("ABCDEF"), data: "Bob".data(using: .utf8)!)
+        var val2 = Value(id: .init("ABCD"), data: "Tom".data(using: .utf8)!)
+        let origin = try! store.makeVersion(basedOn: nil, storing: [])
+        let ver1 = try! store.makeVersion(basedOnPredecessor: origin.id, storing: [.insert(val1)])
+        let ver2 = try! store.makeVersion(basedOnPredecessor: origin.id, storing: [.insert(val2)])
+        val2.storedVersionId = ver2.id
+        let ver3 = try! store.makeVersion(basedOn: .init(idOfFirst: ver1.id, idOfSecond: ver2.id), storing: [.preserve(val2.reference!)])
+        let valueChanges = try! store.valueChanges(madeInVersionIdentifiedBy: ver3.id)
         let allPreserves = valueChanges.allSatisfy {
             if case .preserve = $0 {
                 return true

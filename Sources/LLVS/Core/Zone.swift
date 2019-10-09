@@ -9,7 +9,7 @@ import Foundation
 
 public struct ZoneReference: Codable, Hashable {
     var key: String
-    var version: Version.Identifier
+    var version: Version.ID
 }
 
 public protocol Zone {

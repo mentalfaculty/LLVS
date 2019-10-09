@@ -21,130 +21,130 @@ class HistoryTests: XCTestCase {
         XCTAssert(history.headIdentifiers.isEmpty)
         XCTAssertNil(history.mostRecentHead)
         
-        let versions: (Version.Identifier, Version.Identifier) = (.init("ABCD"), .init("CDEF"))
+        let versions: (Version.ID, Version.ID) = (.init("ABCD"), .init("CDEF"))
         XCTAssertThrowsError(try history.greatestCommonAncestor(ofVersionsIdentifiedBy: versions))
     }
     
     func testSingleVersion() {
-        let version = Version(identifier: .init("ABCD"), predecessors: nil)
+        let version = Version(id: .init("ABCD"), predecessors: nil)
         try! history.add(version, updatingPredecessorVersions: true)
         XCTAssertEqual(history.headIdentifiers.count, 1)
-        XCTAssertEqual(history.headIdentifiers.first?.identifierString, "ABCD")
-        XCTAssertEqual(history.mostRecentHead?.identifier.identifierString, "ABCD")
+        XCTAssertEqual(history.headIdentifiers.first?.stringValue, "ABCD")
+        XCTAssertEqual(history.mostRecentHead?.id.stringValue, "ABCD")
 
-        let versions: (Version.Identifier, Version.Identifier) = (.init("ABCD"), .init("CDEF"))
+        let versions: (Version.ID, Version.ID) = (.init("ABCD"), .init("CDEF"))
         XCTAssertThrowsError(try history.greatestCommonAncestor(ofVersionsIdentifiedBy: versions))
     }
     
     func testAddingVersionTwice() {
-        let version = Version(identifier: .init("ABCD"), predecessors: nil)
+        let version = Version(id: .init("ABCD"), predecessors: nil)
         try! history.add(version, updatingPredecessorVersions: true)
         XCTAssertThrowsError(try history.add(version, updatingPredecessorVersions: true))
     }
     
     func testUnrelatedVersions() {
-        let version1 = Version(identifier: .init("ABCD"), predecessors: nil)
+        let version1 = Version(id: .init("ABCD"), predecessors: nil)
         try! history.add(version1, updatingPredecessorVersions: true)
         
-        let version2 = Version(identifier: .init("CDEF"), predecessors: nil)
+        let version2 = Version(id: .init("CDEF"), predecessors: nil)
         try! history.add(version2, updatingPredecessorVersions: true)
         
-        let sortedHeads = history.headIdentifiers.sorted { $0.identifierString < $1.identifierString }
+        let sortedHeads = history.headIdentifiers.sorted { $0.stringValue < $1.stringValue }
         XCTAssertEqual(sortedHeads.count, 2)
-        XCTAssertEqual(sortedHeads.first?.identifierString, "ABCD")
-        XCTAssertEqual(sortedHeads.last?.identifierString, "CDEF")
-        XCTAssertEqual(history.mostRecentHead?.identifier.identifierString, "CDEF")
+        XCTAssertEqual(sortedHeads.first?.stringValue, "ABCD")
+        XCTAssertEqual(sortedHeads.last?.stringValue, "CDEF")
+        XCTAssertEqual(history.mostRecentHead?.id.stringValue, "CDEF")
         
-        let versions: (Version.Identifier, Version.Identifier) = (.init("ABCD"), .init("CDEF"))
+        let versions: (Version.ID, Version.ID) = (.init("ABCD"), .init("CDEF"))
         XCTAssertNil(try history.greatestCommonAncestor(ofVersionsIdentifiedBy: versions))
     }
     
     func testSimpleSerialHistory() {
-        let version1 = Version(identifier: .init("ABCD"), predecessors: nil)
+        let version1 = Version(id: .init("ABCD"), predecessors: nil)
         try! history.add(version1, updatingPredecessorVersions: true)
         
-        let predecessors = Version.Predecessors(identifierOfFirst: version1.identifier, identifierOfSecond: nil)
-        let version2 = Version(identifier: .init("CDEF"), predecessors: predecessors)
+        let predecessors = Version.Predecessors(idOfFirst: version1.id, idOfSecond: nil)
+        let version2 = Version(id: .init("CDEF"), predecessors: predecessors)
         try! history.add(version2, updatingPredecessorVersions: true)
         
-        let sortedHeads = history.headIdentifiers.sorted { $0.identifierString < $1.identifierString }
+        let sortedHeads = history.headIdentifiers.sorted { $0.stringValue < $1.stringValue }
         XCTAssertEqual(sortedHeads.count, 1)
-        XCTAssertEqual(sortedHeads.first?.identifierString, "CDEF")
-        XCTAssertEqual(history.mostRecentHead?.identifier.identifierString, "CDEF")
+        XCTAssertEqual(sortedHeads.first?.stringValue, "CDEF")
+        XCTAssertEqual(history.mostRecentHead?.id.stringValue, "CDEF")
         
-        let versions: (Version.Identifier, Version.Identifier) = (.init("ABCD"), .init("CDEF"))
+        let versions: (Version.ID, Version.ID) = (.init("ABCD"), .init("CDEF"))
         let common = try! history.greatestCommonAncestor(ofVersionsIdentifiedBy: versions)
-        XCTAssertEqual(common, version1.identifier)
+        XCTAssertEqual(common, version1.id)
     }
     
     func testSerialHistory() {
-        let version1 = Version(identifier: .init("ABCD"), predecessors: nil)
+        let version1 = Version(id: .init("ABCD"), predecessors: nil)
         try! history.add(version1, updatingPredecessorVersions: true)
         
-        let predecessors2 = Version.Predecessors(identifierOfFirst: version1.identifier, identifierOfSecond: nil)
-        let version2 = Version(identifier: .init("CDEF"), predecessors: predecessors2)
+        let predecessors2 = Version.Predecessors(idOfFirst: version1.id, idOfSecond: nil)
+        let version2 = Version(id: .init("CDEF"), predecessors: predecessors2)
         try! history.add(version2, updatingPredecessorVersions: true)
         
-        let predecessors3 = Version.Predecessors(identifierOfFirst: version2.identifier, identifierOfSecond: nil)
-        let version3 = Version(identifier: .init("GHIJ"), predecessors: predecessors3)
+        let predecessors3 = Version.Predecessors(idOfFirst: version2.id, idOfSecond: nil)
+        let version3 = Version(id: .init("GHIJ"), predecessors: predecessors3)
         try! history.add(version3, updatingPredecessorVersions: true)
         
-        let sortedHeads = history.headIdentifiers.sorted { $0.identifierString < $1.identifierString }
+        let sortedHeads = history.headIdentifiers.sorted { $0.stringValue < $1.stringValue }
         XCTAssertEqual(sortedHeads.count, 1)
-        XCTAssertEqual(sortedHeads.first?.identifierString, "GHIJ")
-        XCTAssertEqual(history.mostRecentHead?.identifier.identifierString, "GHIJ")
+        XCTAssertEqual(sortedHeads.first?.stringValue, "GHIJ")
+        XCTAssertEqual(history.mostRecentHead?.id.stringValue, "GHIJ")
         
-        let versions: (Version.Identifier, Version.Identifier) = (.init("ABCD"), .init("GHIJ"))
+        let versions: (Version.ID, Version.ID) = (.init("ABCD"), .init("GHIJ"))
         let common = try! history.greatestCommonAncestor(ofVersionsIdentifiedBy: versions)
-        XCTAssertEqual(common, version1.identifier)
+        XCTAssertEqual(common, version1.id)
     }
     
     func testBranch() {
-        let version1 = Version(identifier: .init("ABCD"), predecessors: nil)
+        let version1 = Version(id: .init("ABCD"), predecessors: nil)
         try! history.add(version1, updatingPredecessorVersions: true)
         
-        let predecessors2 = Version.Predecessors(identifierOfFirst: version1.identifier, identifierOfSecond: nil)
-        let version2 = Version(identifier: .init("CDEF"), predecessors: predecessors2)
+        let predecessors2 = Version.Predecessors(idOfFirst: version1.id, idOfSecond: nil)
+        let version2 = Version(id: .init("CDEF"), predecessors: predecessors2)
         try! history.add(version2, updatingPredecessorVersions: true)
         
-        let predecessors3 = Version.Predecessors(identifierOfFirst: version1.identifier, identifierOfSecond: nil)
-        let version3 = Version(identifier: .init("GHIJ"), predecessors: predecessors3)
+        let predecessors3 = Version.Predecessors(idOfFirst: version1.id, idOfSecond: nil)
+        let version3 = Version(id: .init("GHIJ"), predecessors: predecessors3)
         try! history.add(version3, updatingPredecessorVersions: true)
         
-        let sortedHeads = history.headIdentifiers.sorted { $0.identifierString < $1.identifierString }
+        let sortedHeads = history.headIdentifiers.sorted { $0.stringValue < $1.stringValue }
         XCTAssertEqual(sortedHeads.count, 2)
-        XCTAssertEqual(sortedHeads.first?.identifierString, "CDEF")
-        XCTAssertEqual(history.mostRecentHead?.identifier.identifierString, "GHIJ")
+        XCTAssertEqual(sortedHeads.first?.stringValue, "CDEF")
+        XCTAssertEqual(history.mostRecentHead?.id.stringValue, "GHIJ")
         
-        let versions: (Version.Identifier, Version.Identifier) = (.init("CDEF"), .init("GHIJ"))
+        let versions: (Version.ID, Version.ID) = (.init("CDEF"), .init("GHIJ"))
         let common = try! history.greatestCommonAncestor(ofVersionsIdentifiedBy: versions)
-        XCTAssertEqual(common, version1.identifier)
+        XCTAssertEqual(common, version1.id)
     }
     
     func testBranchAndMerge() {
-        let version1 = Version(identifier: .init("ABCD"), predecessors: nil)
+        let version1 = Version(id: .init("ABCD"), predecessors: nil)
         try! history.add(version1, updatingPredecessorVersions: true)
         
-        let predecessors2 = Version.Predecessors(identifierOfFirst: version1.identifier, identifierOfSecond: nil)
-        let version2 = Version(identifier: .init("CDEF"), predecessors: predecessors2)
+        let predecessors2 = Version.Predecessors(idOfFirst: version1.id, idOfSecond: nil)
+        let version2 = Version(id: .init("CDEF"), predecessors: predecessors2)
         try! history.add(version2, updatingPredecessorVersions: true)
         
-        let predecessors3 = Version.Predecessors(identifierOfFirst: version1.identifier, identifierOfSecond: nil)
-        let version3 = Version(identifier: .init("GHIJ"), predecessors: predecessors3)
+        let predecessors3 = Version.Predecessors(idOfFirst: version1.id, idOfSecond: nil)
+        let version3 = Version(id: .init("GHIJ"), predecessors: predecessors3)
         try! history.add(version3, updatingPredecessorVersions: true)
         
-        let predecessors4 = Version.Predecessors(identifierOfFirst: version2.identifier, identifierOfSecond: version3.identifier)
-        let version4 = Version(identifier: .init("KLMN"), predecessors: predecessors4)
+        let predecessors4 = Version.Predecessors(idOfFirst: version2.id, idOfSecond: version3.id)
+        let version4 = Version(id: .init("KLMN"), predecessors: predecessors4)
         try! history.add(version4, updatingPredecessorVersions: true)
         
-        let sortedHeads = history.headIdentifiers.sorted { $0.identifierString < $1.identifierString }
+        let sortedHeads = history.headIdentifiers.sorted { $0.stringValue < $1.stringValue }
         XCTAssertEqual(sortedHeads.count, 1)
-        XCTAssertEqual(sortedHeads.first?.identifierString, "KLMN")
-        XCTAssertEqual(history.mostRecentHead?.identifier.identifierString, "KLMN")
+        XCTAssertEqual(sortedHeads.first?.stringValue, "KLMN")
+        XCTAssertEqual(history.mostRecentHead?.id.stringValue, "KLMN")
         
-        let versions: (Version.Identifier, Version.Identifier) = (.init("KLMN"), .init("GHIJ"))
+        let versions: (Version.ID, Version.ID) = (.init("KLMN"), .init("GHIJ"))
         let common = try! history.greatestCommonAncestor(ofVersionsIdentifiedBy: versions)
-        XCTAssertEqual(common, version3.identifier)
+        XCTAssertEqual(common, version3.id)
     }
     
     static var allTests = [

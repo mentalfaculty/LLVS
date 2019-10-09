@@ -37,7 +37,7 @@ final class ContactBook {
     var currentVersion: Version.Identifier {
         didSet {
             guard self.currentVersion != oldValue else { return }
-            log.trace("Current version of ContactBook changed to \(self.currentVersion.identifierString)")
+            log.trace("Current version of ContactBook changed to \(self.currentVersion.stringValue)")
             try! fetchContacts()
             if !isSyncing {
                 NotificationCenter.default.post(name: .contactBookDidSaveLocalChanges, object: self)
@@ -45,7 +45,7 @@ final class ContactBook {
         }
     }
     
-    init(prevailingAt version: Version.Identifier, loadingFrom store: Store, exchangeRestorationData: Data?) throws {
+    init(at version: Version.Identifier, loadingFrom store: Store, exchangeRestorationData: Data?) throws {
         self.store = store
         self.currentVersion = version
         self.cloudKitExchange = CloudKitExchange(with: store, storeIdentifier: "ContactBook", cloudDatabasDescription: .privateDatabaseWithCustomZone(CKContainer.default(), zoneIdentifier: "ContactBook"))
@@ -56,9 +56,9 @@ final class ContactBook {
     init(creatingIn store: Store) throws {
         self.store = store
         let emptyArrayData = try JSONSerialization.data(withJSONObject: [], options: [])
-        let newValue = Value(identifier: ContactBook.sharedContactBookIdentifier, version: nil, data: emptyArrayData)
+        let newValue = Value(id: ContactBook.sharedContactBookIdentifier, data: emptyArrayData)
         let insert: Value.Change = .insert(newValue)
-        self.currentVersion = try store.addVersion(basedOnPredecessor: nil, storing: [insert]).identifier
+        self.currentVersion = try store.makeVersion(basedOnPredecessor: nil, storing: [insert]).id
         self.cloudKitExchange = CloudKitExchange(with: store, storeIdentifier: "ContactBook", cloudDatabasDescription: .privateDatabaseWithCustomZone(CKContainer.default(), zoneIdentifier: "ContactBook"))
     }
     
@@ -66,57 +66,57 @@ final class ContactBook {
     // MARK: Work with Contacts
     
     func add(_ contact: Contact) throws {
-        var valueIdentifiers = contacts.map(\.valueIdentifier)
-        valueIdentifiers.append(contact.valueIdentifier)
+        var valueIds = contacts.map(\.valueId)
+        valueIds.append(contact.valueId)
         
         let insertChanges = try contact.changesSinceLoad(from: store)
-        let changes = insertChanges + [try updateContactsChange(withContactIdentifiers: valueIdentifiers)]
+        let changes = insertChanges + [try updateContactsChange(withContactIdentifiers: valueIds)]
             
-        currentVersion = try store.addVersion(basedOnPredecessor: currentVersion, storing: changes).identifier
+        currentVersion = try store.makeVersion(basedOnPredecessor: currentVersion, storing: changes).id
     }
     
     func update(_ contact: Contact) throws {
         let updateChanges = try contact.changesSinceLoad(from: store)
         guard !updateChanges.isEmpty else { return }
-        currentVersion = try store.addVersion(basedOnPredecessor: currentVersion, storing: updateChanges).identifier
+        currentVersion = try store.makeVersion(basedOnPredecessor: currentVersion, storing: updateChanges).id
     }
     
     func delete(_ contact: Contact) throws {
-        var valueIdentifiers = contacts.map(\.valueIdentifier)
-        let index = valueIdentifiers.firstIndex(of: contact.valueIdentifier)!
-        valueIdentifiers.remove(at: index)
+        var valueIds = contacts.map(\.valueId)
+        let index = valueIds.firstIndex(of: contact.valueId)!
+        valueIds.remove(at: index)
         
-        let removal: Value.Change = .remove(contact.valueIdentifier)
-        let changes = [removal, try updateContactsChange(withContactIdentifiers: valueIdentifiers)]
-        currentVersion = try store.addVersion(basedOnPredecessor: currentVersion, storing: changes).identifier
+        let removal: Value.Change = .remove(contact.valueId)
+        let changes = [removal, try updateContactsChange(withContactIdentifiers: valueIds)]
+        currentVersion = try store.makeVersion(basedOnPredecessor: currentVersion, storing: changes).id
     }
     
     func move(contactAt index: Int, to destination: Int) throws {
-        var identifiers = contacts.map { $0.valueIdentifier }
-        let identifier = identifiers.remove(at: index)
-        identifiers.insert(identifier, at: destination)
+        var identifiers = contacts.map { $0.valueId }
+        let identifier = ids.remove(at: index)
+        ids.insert(identifier, at: destination)
         let change = try updateContactsChange(withContactIdentifiers: identifiers)
-        currentVersion = try store.addVersion(basedOnPredecessor: currentVersion, storing: [change]).identifier
+        currentVersion = try store.makeVersion(basedOnPredecessor: currentVersion, storing: [change]).id
     }
     
     
     // MARK: Fetch and Save in Store
     
     fileprivate func fetchContactIdentifiers(atVersionIdentifiedBy versionId: Version.Identifier) throws -> [Value.Identifier] {
-        let data = try store.value(ContactBook.sharedContactBookIdentifier, prevailingAt: versionId)!.data
+        let data = try store.value(ContactBook.sharedContactBookIdentifier, at: versionId)!.data
         let idStrings = try JSONSerialization.jsonObject(with: data, options: []) as! [String]
         return idStrings.map { Value.Identifier($0) }
     }
     
     fileprivate func fetchContacts() throws {
         let contactIds = try fetchContactIdentifiers(atVersionIdentifiedBy: currentVersion)
-        self.contacts = contactIds.map { Fault<Contact>($0, prevailingAtVersion: currentVersion, in: store) }
+        self.contacts = contactIds.map { Fault<Contact>($0, atVersion: currentVersion, in: store) }
     }
     
-    fileprivate func updateContactsChange(withContactIdentifiers valueIdentifiers: [Value.Identifier]) throws -> Value.Change {
-        let identifierStrings = valueIdentifiers.map { $0.identifierString }
-        let data = try JSONSerialization.data(withJSONObject: identifierStrings, options: [])
-        let newValue = Value(identifier: ContactBook.sharedContactBookIdentifier, version: nil, data: data)
+    fileprivate func updateContactsChange(withContactIdentifiers valueIds: [Value.Identifier]) throws -> Value.Change {
+        let stringValues = valueIds.map { $0.stringValue }
+        let data = try JSONSerialization.data(withJSONObject: stringValues, options: [])
+        let newValue = Value(id: ContactBook.sharedContactBookIdentifier, data: data)
         let update: Value.Change = .update(newValue)
         return update
     }
@@ -212,14 +212,14 @@ final class ContactBook {
         guard !heads.isEmpty else { return false }
         
         let arbiter = ContactMergeArbiter(contactBook: self)
-        var versionIdentifier: Version.Identifier = currentVersion
+        var versionId: Version.Identifier = currentVersion
         for otherHead in heads {
-            let newVersion = try! store.merge(version: versionIdentifier, with: otherHead, resolvingWith: arbiter)
-            versionIdentifier = newVersion.identifier
+            let newVersion = try! store.merge(version: versionId, with: otherHead, resolvingWith: arbiter)
+            versionId = newVersion.id
         }
         
         DispatchQueue.main.async {
-            self.currentVersion = versionIdentifier
+            self.currentVersion = versionId
         }
         
         return true
@@ -241,14 +241,14 @@ class ContactMergeArbiter: MergeArbiter {
             switch contactBookFork {
             case .twiceUpdated, .twiceInserted:
                 let contactIdsAncestor:  [Value.Identifier]
-                if let v = merge.commonAncestor?.identifier {
+                if let v = merge.commonAncestor?.id {
                     contactIdsAncestor = try contactBook.fetchContactIdentifiers(atVersionIdentifiedBy: v)
                 } else {
                     contactIdsAncestor = []
                 }
                 
-                let contactIds1 = try contactBook.fetchContactIdentifiers(atVersionIdentifiedBy: merge.versions.first.identifier)
-                let contactIds2 = try contactBook.fetchContactIdentifiers(atVersionIdentifiedBy: merge.versions.second.identifier)
+                let contactIds1 = try contactBook.fetchContactIdentifiers(atVersionIdentifiedBy: merge.versions.first.id)
+                let contactIds2 = try contactBook.fetchContactIdentifiers(atVersionIdentifiedBy: merge.versions.second.id)
                 let diff1 = ArrayDiff(originalValues: contactIdsAncestor, finalValues: contactIds1)
                 let diff2 = ArrayDiff(originalValues: contactIdsAncestor, finalValues: contactIds2)
                 let mergedDiff = ArrayDiff(merging: diff1, with: diff2)

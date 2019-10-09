@@ -10,7 +10,7 @@ import Foundation
 import LLVS
 
 protocol Faultable {
-    init(_ valueIdentifier: Value.Identifier, prevailingAt version: Version.Identifier, loadingFrom store: Store) throws
+    init(_ valueId: Value.Identifier, at version: Version.Identifier, loadingFrom store: Store) throws
 }
 
 final class Fault<ValueType: Faultable> {
@@ -20,14 +20,14 @@ final class Fault<ValueType: Faultable> {
     }
     
     let store: Store
-    let valueIdentifier: Value.Identifier
+    let valueId: Value.Identifier
     let prevailingVersionIdentifier: Version.Identifier
     private(set) var state: State = .fault
     
     var value: ValueType {
         switch state {
         case .fault:
-            let typedValue = try! ValueType(valueIdentifier, prevailingAt: prevailingVersionIdentifier, loadingFrom: store)
+            let typedValue = try! ValueType(valueId, at: prevailingVersionIdentifier, loadingFrom: store)
             state = .fetched(typedValue)
             return typedValue
         case let .fetched(value):
@@ -35,9 +35,9 @@ final class Fault<ValueType: Faultable> {
         }
     }
     
-    init(_ valueIdentifier: Value.Identifier, prevailingAtVersion versionIdentifier: Version.Identifier, in store: Store) {
-        self.valueIdentifier = valueIdentifier
-        self.prevailingVersionIdentifier = versionIdentifier
+    init(_ valueId: Value.Identifier, atVersion versionId: Version.Identifier, in store: Store) {
+        self.valueId = valueId
+        self.prevailingVersionIdentifier = versionId
         self.store = store
     }
 }

@@ -11,7 +11,7 @@ import XCTest
 class PrevailingValueTests: XCTestCase {
     
     let fm = FileManager.default
-    let valueIdentifier = Value.Identifier("ABCDEF")
+    let valueId = Value.ID("ABCDEF")
     
     var store: Store!
     var rootURL: URL!
@@ -20,14 +20,14 @@ class PrevailingValueTests: XCTestCase {
 
     override func setUp() {
         func addVersion(withName name: String) {
-            let values = [Value(identifier: valueIdentifier, version: nil, data: "\(name)".data(using: .utf8)!)]
+            let values = [Value(id: valueId, data: "\(name)".data(using: .utf8)!)]
             let changes: [Value.Change] = values.map { .insert($0) }
-            let version = try! store.addVersion(basedOnPredecessor: versions!.last?.identifier, storing: changes)
+            let version = try! store.makeVersion(basedOnPredecessor: versions!.last?.id, storing: changes)
             versions.append(version)
         }
         
         func addEmptyVersion() {
-            let version = try! store.addVersion(basedOnPredecessor: versions!.last?.identifier, storing: [])
+            let version = try! store.makeVersion(basedOnPredecessor: versions!.last?.id, storing: [])
             versions.append(version)
         }
         
@@ -52,16 +52,16 @@ class PrevailingValueTests: XCTestCase {
     }
     
     func testNoSavedVersionAtPrevailingVersion() {
-        XCTAssertNil(try store.value(valueIdentifier, prevailingAt: versions[0].identifier))
+        XCTAssertNil(try store.value(withId: valueId, at: versions[0].id))
     }
     
     func testSavedVersionMatchesPrevailingVersion() {
-        let value = try! store.value(valueIdentifier, prevailingAt: versions[1].identifier)
+        let value = try! store.value(withId: valueId, at: versions[1].id)
         XCTAssertEqual(value!.data, "1".data(using: .utf8)!)
     }
     
     func testSavedVersionPrecedesPrevailingVersion() {
-        let value = try! store.value(valueIdentifier, prevailingAt: versions[5].identifier)
+        let value = try! store.value(withId: valueId, at: versions[5].id)
         XCTAssertEqual(value!.data, "3".data(using: .utf8)!)
     }
 

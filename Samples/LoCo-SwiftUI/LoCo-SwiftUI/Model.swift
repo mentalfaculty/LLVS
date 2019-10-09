@@ -34,7 +34,7 @@ extension Model {
     /// Encode the model type as a Value for the LLVS store.
     func encodeValue() throws -> Value {
         let data = try encoder.encode(self)
-        return Value(identifier: type(of: self).storeValueId(for: id), version: nil, data: data)
+        return Value(id: type(of: self).storeValueId(for: id), data: data)
     }
     
     /// Decode data from LLVS to form our model type.
@@ -68,7 +68,7 @@ extension Model {
     /// This simply filters the values found based on the type string in the LLVS store identifier.
     static func all(in storeCoordinator: StoreCoordinator, at verison: Version.Identifier? = nil) throws -> [Self] {
         return try storeCoordinator.valueReferences(at: verison)
-            .filter { Self.isValid(storeValueId: $0.identifier.identifierString) }
+            .filter { Self.isValid(storeValueId: $0.id.stringValue) }
             .map { try Self.decode(from: try storeCoordinator.store.value(at: $0)!) }
     }
     

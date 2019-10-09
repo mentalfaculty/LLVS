@@ -24,13 +24,13 @@ public protocol Exchange: class {
     
     var restorationState: Data? { get set }
     
-    func retrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>)
+    func retrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>)
     func prepareToRetrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>)
-    func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>)
-    func retrieveVersions(identifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>)
-    func retrieveValueChanges(forVersionsIdentifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier:[Value.Change]]>)
+    func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>)
+    func retrieveVersions(identifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>)
+    func retrieveValueChanges(forVersionsIdentifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID:[Value.Change]]>)
 
-    func send(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>)
+    func send(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>)
     func prepareToSend(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>)
     func send(versionChanges: [VersionChanges], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>)
 }
@@ -39,7 +39,7 @@ public protocol Exchange: class {
 
 public extension Exchange {
     
-    func retrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>) {
+    func retrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>) {
         log.trace("Retrieving")
         
         let prepare = AsynchronousTask { finish in
@@ -48,7 +48,7 @@ public extension Exchange {
             }
         }
         
-        var remoteIds: [Version.Identifier]!
+        var remoteIds: [Version.ID]!
         let retrieveIds = AsynchronousTask { finish in
             self.retrieveAllVersionIdentifiers { result in
                 remoteIds = result.value
@@ -58,8 +58,8 @@ public extension Exchange {
         
         var remoteVersions: [Version]!
         let retrieveVersions = AsynchronousTask { finish in
-            let toRetrieveIds = self.versionIdentifiersMissingFromHistory(forRemoteIdentifiers: remoteIds)
-            log.verbose("Version identifiers to retrieve: \(toRetrieveIds.identifierStrings)")
+            let toRetrieveIds = self.versionIdsMissingFromHistory(forRemoteIdentifiers: remoteIds)
+            log.verbose("Version identifiers to retrieve: \(toRetrieveIds.idStrings)")
             self.retrieveVersions(identifiedBy: toRetrieveIds) { result in
                 remoteVersions = result.value
                 finish(result.voidResult)
@@ -67,7 +67,7 @@ public extension Exchange {
         }
         
         let addToHistory = AsynchronousTask { finish in
-            log.verbose("Adding to history versions: \(remoteVersions.identifierStrings)")
+            log.verbose("Adding to history versions: \(remoteVersions.idStrings)")
             self.addToHistory(remoteVersions) { result in
                 finish(result.voidResult)
             }
@@ -85,8 +85,8 @@ public extension Exchange {
         }
     }
     
-    private func versionIdentifiersMissingFromHistory(forRemoteIdentifiers remoteIdentifiers: [Version.Identifier]) -> [Version.Identifier] {
-        var toRetrieveIds: [Version.Identifier]!
+    private func versionIdsMissingFromHistory(forRemoteIdentifiers remoteIdentifiers: [Version.ID]) -> [Version.ID] {
+        var toRetrieveIds: [Version.ID]!
         self.store.queryHistory { history in
             let storeVersionIds = Set(history.allVersionIdentifiers)
             let remoteVersionIds = Set(remoteIdentifiers)
@@ -97,9 +97,9 @@ public extension Exchange {
     
     private func addToHistory(_ versions: [Version], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         let versionsByIdentifier = versions.reduce(into: [:]) { result, version in
-            result[version.identifier] = version
+            result[version.id] = version
         }
-        retrieveValueChanges(forVersionsIdentifiedBy: versions.identifiers) { result in
+        retrieveValueChanges(forVersionsIdentifiedBy: versions.ids) { result in
             switch result {
             case let .failure(error):
                 log.error("Failed adding to history: \(error)")
@@ -121,8 +121,8 @@ public extension Exchange {
             completionHandler(.success(()))
         } else if let version = appendableVersion(from: versions) {
             let valueChanges = versionsWithValueChanges[version]!
-            log.trace("Adding version to store: \(version.identifier.identifierString)")
-            log.verbose("Value changes for \(version.identifier.identifierString): \(valueChanges)")
+            log.trace("Adding version to store: \(version.id.stringValue)")
+            log.verbose("Value changes for \(version.id.stringValue): \(valueChanges)")
             
             do {
                 try self.store.addVersion(version, storing: valueChanges)
@@ -145,7 +145,7 @@ public extension Exchange {
     
     private func appendableVersion(from versions: [Version]) -> Version? {
         return versions.first { v in
-            return store.history(includesVersionsIdentifiedBy: v.predecessors?.identifiers ?? [])
+            return store.historyIncludesVersions(identifiedBy: v.predecessors?.ids ?? [])
         }
     }
     
@@ -155,14 +155,14 @@ public extension Exchange {
 
 public extension Exchange {
     
-    func send(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>) {
+    func send(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>) {
         let prepare = AsynchronousTask { finish in
             self.prepareToSend { result in
                 finish(result)
             }
         }
         
-        var remoteIds: [Version.Identifier]!
+        var remoteIds: [Version.ID]!
         let retrieveIds = AsynchronousTask { finish in
             self.retrieveAllVersionIdentifiers { result in
                 remoteIds = result.value
@@ -170,9 +170,9 @@ public extension Exchange {
             }
         }
         
-        var toSendIds: [Version.Identifier]!
+        var toSendIds: [Version.ID]!
         let sendVersions = AsynchronousTask { finish in
-            toSendIds = self.versionIdentifiersMissingRemotely(forRemoteIdentifiers: remoteIds)
+            toSendIds = self.versionIdsMissingRemotely(forRemoteIdentifiers: remoteIds)
             do {
                 let versionChanges: [VersionChanges] = try toSendIds!.map { versionId in
                     guard let version = try self.store.version(identifiedBy: versionId) else {
@@ -205,8 +205,8 @@ public extension Exchange {
         }
     }
     
-    private func versionIdentifiersMissingRemotely(forRemoteIdentifiers remoteIdentifiers: [Version.Identifier]) -> [Version.Identifier] {
-        var toSendIds: [Version.Identifier]!
+    private func versionIdsMissingRemotely(forRemoteIdentifiers remoteIdentifiers: [Version.ID]) -> [Version.ID] {
+        var toSendIds: [Version.ID]!
         self.store.queryHistory { history in
             let storeVersionIds = Set(history.allVersionIdentifiers)
             let remoteVersionIds = Set(remoteIdentifiers)

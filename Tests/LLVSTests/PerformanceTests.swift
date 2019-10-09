@@ -12,8 +12,8 @@ class PerformanceTests: XCTestCase {
     
     let fm = FileManager.default
     
-    let valueIdentifier1 = Value.Identifier("ABCDEF")
-    let valueIdentifier2 = Value.Identifier("ABCDGH")
+    let valueId1 = Value.ID("ABCDEF")
+    let valueId2 = Value.ID("ABCDGH")
     
     var store: Store!
     var rootURL: URL!
@@ -33,7 +33,7 @@ class PerformanceTests: XCTestCase {
     func makeChanges(_ number: Int) -> [Value.Change]  {
         return (0..<number).map { _ in
             let data = try! JSONSerialization.data(withJSONObject: ["name":"Tom Jones", "age":18], options: [])
-            let value = Value(identifier: .init(UUID().uuidString), version: nil, data: data)
+            let value = Value(id: .init(UUID().uuidString), data: data)
             return .insert(value)
         }
     }
@@ -43,20 +43,20 @@ class PerformanceTests: XCTestCase {
     func testStoring() {
         let changes = makeChanges(numberOfValues)
         self.measure {
-            let _ = try! store.addVersion(basedOnPredecessor: nil, storing: changes)
+            let _ = try! store.makeVersion(basedOnPredecessor: nil, storing: changes)
         }
     }
     
     func testLoading() {
         let changes = makeChanges(numberOfValues)
-        let valueIds: [Value.Identifier] = changes.compactMap { change in
-            if case let .insert(value) = change { return value.identifier }
+        let valueIds: [Value.ID] = changes.compactMap { change in
+            if case let .insert(value) = change { return value.id }
             fatalError()
         }
-        let version = try! store.addVersion(basedOnPredecessor: nil, storing: changes)
+        let version = try! store.makeVersion(basedOnPredecessor: nil, storing: changes)
         self.measure {
             let _: [Any] = valueIds.map { valueId in
-                let value = try! store.value(valueId, prevailingAt: version.identifier)!
+                let value = try! store.value(withId: valueId, at: version.id)!
                 return try! JSONSerialization.jsonObject(with: value.data, options: [])
             }
         }

@@ -67,8 +67,8 @@ class ZoneTests: XCTestCase {
     func testVersionsQuery() {
         try! zone.store(Data(), for: ref)
         try! zone.store(Data(), for: .init(key: "ABCDEF", version: .init("1245")))
-        let versions = try! zone.versionIdentifiers(for: "ABCDEF")
-        let versionStrings = versions.map { $0.identifierString }
+        let versions = try! zone.versionIds(for: "ABCDEF")
+        let versionStrings = versions.map { $0.stringValue }
         XCTAssertEqual(versions.count, 2)
         XCTAssert(versionStrings.contains("1234"))
         XCTAssert(versionStrings.contains("1245"))

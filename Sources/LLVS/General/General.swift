@@ -8,7 +8,7 @@
 import Foundation
 
 public protocol StringIdentifiable {
-    var identifierString: String { get }
+    var stringValue: String { get }
 }
 
 public extension Result {
