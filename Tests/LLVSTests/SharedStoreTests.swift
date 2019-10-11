@@ -37,7 +37,7 @@ class SharedStoreTests: XCTestCase {
         let ver = try! store1.makeVersion(basedOnPredecessor: nil, storing: [.insert(val)])
         try! store2.reloadHistory()
         XCTAssertNotNil(try! store2.version(identifiedBy: ver.id))
-        XCTAssertEqual(val.data, try! store2.value(withId: .init("CDEFGH"), storedAt: ver.id)!.data)
+        XCTAssertEqual(val.data, try! store2.value(id: .init("CDEFGH"), storedAt: ver.id)!.data)
     }
     
     func testTwoWayTransfer() {
@@ -50,7 +50,7 @@ class SharedStoreTests: XCTestCase {
         
         try! store1.reloadHistory()
         XCTAssertNotNil(try! store1.version(identifiedBy: ver2.id))
-        XCTAssertEqual(val2.data, try! store1.value(withId: .init("CDEFGH"), storedAt: ver2.id)!.data)
+        XCTAssertEqual(val2.data, try! store1.value(id: .init("CDEFGH"), storedAt: ver2.id)!.data)
     }
 
     static var allTests = [

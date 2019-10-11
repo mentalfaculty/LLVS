@@ -41,7 +41,7 @@ class MostRecentChangeMergeArbiterTests: XCTestCase {
         let ver1 = try! store.makeVersion(basedOnPredecessor: origin.id, storing: [.remove(.init("CDEFGH"))])
         let ver2 = try! store.makeVersion(basedOnPredecessor: origin.id, storing: [])
         let mergeVersion = try! store.mergeRelated(version: ver1.id, with: ver2.id, resolvingWith: recentChangeArbiter)
-        let f = try! store.value(withId: .init("CDEFGH"), at: mergeVersion.id)
+        let f = try! store.value(id: .init("CDEFGH"), at: mergeVersion.id)
         XCTAssertNil(f)
     }
     
@@ -50,7 +50,7 @@ class MostRecentChangeMergeArbiterTests: XCTestCase {
         let ver2 = try! store.makeVersion(basedOnPredecessor: origin.id, storing: [.remove(.init("CDEFGH"))])
         let ver3 = try! store.makeVersion(basedOnPredecessor: ver2.id, storing: [])
         let mergeVersion = try! store.mergeRelated(version: ver1.id, with: ver3.id, resolvingWith: recentChangeArbiter)
-        let f = try! store.value(withId: .init("CDEFGH"), at: mergeVersion.id)
+        let f = try! store.value(id: .init("CDEFGH"), at: mergeVersion.id)
         XCTAssertNil(f)
     }
     
@@ -61,7 +61,7 @@ class MostRecentChangeMergeArbiterTests: XCTestCase {
             let ver2 = try! store.makeVersion(basedOnPredecessor: origin.id, storing: [])
             let ver3 = try! store.makeVersion(basedOnPredecessor: ver1.id, storing: [])
             let mergeVersion = try! store.mergeRelated(version: ver3.id, with: ver2.id, resolvingWith: recentChangeArbiter)
-            let f = try! store.value(withId: .init("ABCDEF"), at: mergeVersion.id)!
+            let f = try! store.value(id: .init("ABCDEF"), at: mergeVersion.id)!
             XCTAssertEqual(f.data, "Bob".data(using: .utf8))
             XCTAssertEqual(f.storedVersionId, ver1.id)
         }
@@ -71,7 +71,7 @@ class MostRecentChangeMergeArbiterTests: XCTestCase {
             let ver1 = try! store.makeVersion(basedOnPredecessor: origin.id, storing: [])
             let ver2 = try! store.makeVersion(basedOnPredecessor: origin.id, storing: [.insert(val1)])
             let mergeVersion = try! store.mergeRelated(version: ver1.id, with: ver2.id, resolvingWith: recentChangeArbiter)
-            let f = try! store.value(withId: .init("ABCDEF"), at: mergeVersion.id)!
+            let f = try! store.value(id: .init("ABCDEF"), at: mergeVersion.id)!
             XCTAssertEqual(f.data, "Bob".data(using: .utf8))
             XCTAssertEqual(f.storedVersionId, ver2.id)
         }
@@ -84,7 +84,7 @@ class MostRecentChangeMergeArbiterTests: XCTestCase {
         let ver2 = try! store.makeVersion(basedOnPredecessor: origin.id, storing: [.insert(val2)])
         let ver3 = try! store.makeVersion(basedOnPredecessor: ver1.id, storing: [])
         let mergeVersion = try! store.mergeRelated(version: ver3.id, with: ver2.id, resolvingWith: recentChangeArbiter)
-        let f = try! store.value(withId: .init("ABCDEF"), at: mergeVersion.id)!
+        let f = try! store.value(id: .init("ABCDEF"), at: mergeVersion.id)!
         XCTAssertEqual(f.data, "Tom".data(using: .utf8))
         XCTAssertEqual(f.storedVersionId, ver2.id)
     }
@@ -97,7 +97,7 @@ class MostRecentChangeMergeArbiterTests: XCTestCase {
         let ver2 = try! store.makeVersion(basedOnPredecessor: origin.id, storing: [.insert(val2)])
         let ver3 = try! store.makeVersion(basedOnPredecessor: ver1.id, storing: [.update(val3)])
         let mergeVersion = try! store.mergeRelated(version: ver3.id, with: ver2.id, resolvingWith: recentChangeArbiter)
-        let f = try! store.value(withId: .init("ABCDEF"), at: mergeVersion.id)!
+        let f = try! store.value(id: .init("ABCDEF"), at: mergeVersion.id)!
         XCTAssertEqual(f.data, "Dave".data(using: .utf8))
         XCTAssertEqual(f.storedVersionId, ver3.id)
     }
@@ -107,7 +107,7 @@ class MostRecentChangeMergeArbiterTests: XCTestCase {
         let ver1 = try! store.makeVersion(basedOnPredecessor: origin.id, storing: [.update(val1)])
         let ver2 = try! store.makeVersion(basedOnPredecessor: origin.id, storing: [])
         let mergeVersion = try! store.mergeRelated(version: ver1.id, with: ver2.id, resolvingWith: recentChangeArbiter)
-        let f = try! store.value(withId: .init("CDEFGH"), at: mergeVersion.id)!
+        let f = try! store.value(id: .init("CDEFGH"), at: mergeVersion.id)!
         XCTAssertEqual(f.data, "Bob".data(using: .utf8))
         XCTAssertEqual(f.storedVersionId, ver1.id)
     }
@@ -120,7 +120,7 @@ class MostRecentChangeMergeArbiterTests: XCTestCase {
         let ver2 = try! store.makeVersion(basedOnPredecessor: origin.id, storing: [.update(val2)])
         let ver3 = try! store.makeVersion(basedOnPredecessor: ver1.id, storing: [.update(val3)])
         let mergeVersion = try! store.mergeRelated(version: ver3.id, with: ver2.id, resolvingWith: recentChangeArbiter)
-        let f = try! store.value(withId: .init("CDEFGH"), at: mergeVersion.id)!
+        let f = try! store.value(id: .init("CDEFGH"), at: mergeVersion.id)!
         XCTAssertEqual(f.data, "Dave".data(using: .utf8))
         XCTAssertEqual(f.storedVersionId, ver3.id)
     }
@@ -131,7 +131,7 @@ class MostRecentChangeMergeArbiterTests: XCTestCase {
             let ver1 = try! store.makeVersion(basedOnPredecessor: origin.id, storing: [.update(val1)])
             let ver2 = try! store.makeVersion(basedOnPredecessor: origin.id, storing: [.remove(.init("CDEFGH"))])
             let mergeVersion = try! store.mergeRelated(version: ver1.id, with: ver2.id, resolvingWith: recentChangeArbiter)
-            let f = try! store.value(withId: .init("CDEFGH"), at: mergeVersion.id)!
+            let f = try! store.value(id: .init("CDEFGH"), at: mergeVersion.id)!
             XCTAssertEqual(f.data, "Bob".data(using: .utf8))
             XCTAssertEqual(f.storedVersionId, ver1.id)
         }
@@ -140,7 +140,7 @@ class MostRecentChangeMergeArbiterTests: XCTestCase {
             let ver1 = try! store.makeVersion(basedOnPredecessor: origin.id, storing: [.remove(.init("CDEFGH"))])
             let ver2 = try! store.makeVersion(basedOnPredecessor: origin.id, storing: [.update(val1)])
             let mergeVersion = try! store.mergeRelated(version: ver1.id, with: ver2.id, resolvingWith: recentChangeArbiter)
-            let f = try! store.value(withId: .init("CDEFGH"), at: mergeVersion.id)!
+            let f = try! store.value(id: .init("CDEFGH"), at: mergeVersion.id)!
             XCTAssertEqual(f.data, "Bob".data(using: .utf8))
             XCTAssertEqual(f.storedVersionId, ver2.id)
         }

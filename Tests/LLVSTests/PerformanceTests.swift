@@ -56,7 +56,7 @@ class PerformanceTests: XCTestCase {
         let version = try! store.makeVersion(basedOnPredecessor: nil, storing: changes)
         self.measure {
             let _: [Any] = valueIds.map { valueId in
-                let value = try! store.value(withId: valueId, at: version.id)!
+                let value = try! store.value(id: valueId, at: version.id)!
                 return try! JSONSerialization.jsonObject(with: value.data, options: [])
             }
         }

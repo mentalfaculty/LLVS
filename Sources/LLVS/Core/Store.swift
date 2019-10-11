@@ -184,6 +184,41 @@ extension Store {
 }
 
 
+// MARK:- Fetching Values
+
+extension Store {
+    
+    public func valueReference(id valueId: Value.ID, at versionId: Version.ID) throws -> Value.Reference? {
+        return try valuesMap.valueReferences(matching: .init(valueId.stringValue), at: versionId).first
+    }
+    
+    /// Convenient method to avoid having to create id types
+    public func value(idString valueIdString: String, atVersionWithIdString versionIdString: String) throws -> Value? {
+        return try value(id: .init(valueIdString), at: .init(versionIdString))
+    }
+    
+    public func value(id valueId: Value.ID, at versionId: Version.ID) throws -> Value? {
+        let ref = try valueReference(id: valueId, at: versionId)
+        return try ref.flatMap { try value(id: valueId, storedAt: $0.storedVersionId) }
+    }
+    
+    public func value(id valueId: Value.ID, storedAt versionId: Version.ID) throws -> Value? {
+        guard let data = try valuesZone.data(for: .init(key: valueId.stringValue, version: versionId)) else { return nil }
+        let value = Value(id: valueId, storedVersionId: versionId, data: data)
+        return value
+    }
+    
+    public func value(storedAt valueReference: Value.Reference) throws -> Value? {
+        return try value(id: valueReference.valueId, storedAt: valueReference.storedVersionId)
+    }
+    
+    public func enumerate(version versionId: Version.ID, executingForEach block: (Value.Reference) throws -> Void) throws {
+        try valuesMap.enumerateValueReferences(forVersionIdentifiedBy: versionId, executingForEach: block)
+    }
+    
+}
+
+
 // MARK:- Merging
 
 extension Store {
@@ -314,7 +349,7 @@ extension Store {
             case .inserted(let branch) where branch == .second:
                 fallthrough
             case .updated(let branch) where branch == .second:
-                let ref = try valueReference(withId: diff.valueId, at: secondVersion.id)!
+                let ref = try valueReference(id: diff.valueId, at: secondVersion.id)!
                 changes.append(.preserve(ref))
             case .removed(let branch) where branch == .second:
                 changes.append(.preserveRemoval(diff.valueId))
@@ -324,41 +359,6 @@ extension Store {
         }
         
         return try makeVersion(basedOn: predecessors, storing: changes, metadata: metadata)
-    }
-    
-}
-
-
-// MARK:- Fetching Values
-
-extension Store {
-    
-    public func valueReference(withId valueId: Value.ID, at versionId: Version.ID) throws -> Value.Reference? {
-        return try valuesMap.valueReferences(matching: .init(valueId.stringValue), at: versionId).first
-    }
-    
-    /// Convenient method to avoid having to create id types
-    public func value(withIdString valueIdString: String, atVersionWithIdString versionIdString: String) throws -> Value? {
-        return try value(withId: .init(valueIdString), at: .init(versionIdString))
-    }
-    
-    public func value(withId valueId: Value.ID, at versionId: Version.ID) throws -> Value? {
-        let ref = try valueReference(withId: valueId, at: versionId)
-        return try ref.flatMap { try value(withId: valueId, storedAt: $0.storedVersionId) }
-    }
-    
-    public func value(withId valueId: Value.ID, storedAt versionId: Version.ID) throws -> Value? {
-        guard let data = try valuesZone.data(for: .init(key: valueId.stringValue, version: versionId)) else { return nil }
-        let value = Value(id: valueId, storedVersionId: versionId, data: data)
-        return value
-    }
-    
-    public func value(storedAt valueReference: Value.Reference) throws -> Value? {
-        return try value(withId: valueReference.valueId, storedAt: valueReference.storedVersionId)
-    }
-    
-    public func enumerate(version versionId: Version.ID, executingForEach block: (Value.Reference) throws -> Void) throws {
-        try valuesMap.enumerateValueReferences(forVersionIdentifiedBy: versionId, executingForEach: block)
     }
     
 }
@@ -378,7 +378,7 @@ extension Store {
         guard let predecessors = version.predecessors else {
             var changes: [Value.Change] = []
             try valuesMap.enumerateValueReferences(forVersionIdentifiedBy: versionId) { ref in
-                let v = try value(withId: ref.valueId, storedAt: ref.storedVersionId)!
+                let v = try value(id: ref.valueId, storedAt: ref.storedVersionId)!
                 changes.append(.insert(v))
             }
             return changes
@@ -394,15 +394,15 @@ extension Store {
                 case .twiceInserted:
                     changes.append(.remove(diff.valueId))
                 case .twiceUpdated, .removedAndUpdated:
-                    let value = try self.value(withId: diff.valueId, at: versionId)!
+                    let value = try self.value(id: diff.valueId, at: versionId)!
                     changes.append(.update(value))
                 case .twiceRemoved:
-                    let value = try self.value(withId: diff.valueId, at: versionId)!
+                    let value = try self.value(id: diff.valueId, at: versionId)!
                     changes.append(.insert(value))
                 case .inserted:
                     changes.append(.preserveRemoval(diff.valueId))
                 case .removed, .updated:
-                    let value = try self.value(withId: diff.valueId, at: versionId)!
+                    let value = try self.value(id: diff.valueId, at: versionId)!
                     changes.append(.preserve(value.reference!))
                 }
             }
@@ -422,12 +422,12 @@ extension Store {
         for diff in diffs {
             switch diff.valueFork {
             case .inserted:
-                let value = try self.value(withId: diff.valueId, at: versionId2)!
+                let value = try self.value(id: diff.valueId, at: versionId2)!
                 changes.append(.insert(value))
             case .removed:
                 changes.append(.remove(diff.valueId))
             case .updated:
-                let value = try self.value(withId: diff.valueId, at: versionId2)!
+                let value = try self.value(id: diff.valueId, at: versionId2)!
                 changes.append(.update(value))
             case .removedAndUpdated, .twiceInserted, .twiceRemoved, .twiceUpdated:
                 fatalError("Should not be possible with only a single branch")

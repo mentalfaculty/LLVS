@@ -80,7 +80,7 @@ class FileSystemExchangeTests: XCTestCase {
                 if case let .success(versionIds) = result {
                     XCTAssert(versionIds.contains(ver.id))
                     XCTAssertEqual(ver, try! self.store2.version(identifiedBy: ver.id))
-                    XCTAssertNotNil(try! self.store2.value(withId: val.id, at: ver.id))
+                    XCTAssertNotNil(try! self.store2.value(id: val.id, at: ver.id))
                 } else {
                     XCTFail()
                 }
@@ -124,11 +124,11 @@ class FileSystemExchangeTests: XCTestCase {
                         versions1.forEach { XCTAssertNotNil(try! self.store2.version(identifiedBy: $0.id)) }
                         versions2.forEach { XCTAssertNotNil(try! self.store1.version(identifiedBy: $0.id)) }
                         for (ver, val) in zip(versions1, values1) {
-                            let val2 = try! self.store2.value(withId: val.id, storedAt: ver.id)!
+                            let val2 = try! self.store2.value(id: val.id, storedAt: ver.id)!
                             XCTAssertEqual(val.data, val2.data)
                         }
                         for (ver, val) in zip(versions2, values2) {
-                            let val1 = try! self.store1.value(withId: val.id, storedAt: ver.id)!
+                            let val1 = try! self.store1.value(id: val.id, storedAt: ver.id)!
                             XCTAssertEqual(val.data, val1.data)
                         }
                         expect.fulfill()
@@ -144,7 +144,7 @@ class FileSystemExchangeTests: XCTestCase {
             self.exchange2.retrieve { result in
                 XCTAssertNotNil(try! self.store2.version(identifiedBy: merge.id))
                 for val in values1 + values2 {
-                    let val2 = try! self.store2.value(withId: val.id, at: merge.id)!
+                    let val2 = try! self.store2.value(id: val.id, at: merge.id)!
                     XCTAssertEqual(val.data, val2.data)
                 }
                 expectMerge.fulfill()

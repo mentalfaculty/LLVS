@@ -52,16 +52,16 @@ class PrevailingValueTests: XCTestCase {
     }
     
     func testNoSavedVersionAtPrevailingVersion() {
-        XCTAssertNil(try store.value(withId: valueId, at: versions[0].id))
+        XCTAssertNil(try store.value(id: valueId, at: versions[0].id))
     }
     
     func testSavedVersionMatchesPrevailingVersion() {
-        let value = try! store.value(withId: valueId, at: versions[1].id)
+        let value = try! store.value(id: valueId, at: versions[1].id)
         XCTAssertEqual(value!.data, "1".data(using: .utf8)!)
     }
     
     func testSavedVersionPrecedesPrevailingVersion() {
-        let value = try! store.value(withId: valueId, at: versions[5].id)
+        let value = try! store.value(id: valueId, at: versions[5].id)
         XCTAssertEqual(value!.data, "3".data(using: .utf8)!)
     }
 

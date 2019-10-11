@@ -103,7 +103,7 @@ final class ContactBook {
     // MARK: Fetch and Save in Store
     
     fileprivate func fetchContactIdentifiers(atVersionIdentifiedBy versionId: Version.Identifier) throws -> [Value.Identifier] {
-        let data = try store.value(withId: ContactBook.sharedContactBookIdentifier, at: versionId)!.data
+        let data = try store.value(id: ContactBook.sharedContactBookIdentifier, at: versionId)!.data
         let idStrings = try JSONSerialization.jsonObject(with: data, options: []) as! [String]
         return idStrings.map { Value.Identifier($0) }
     }

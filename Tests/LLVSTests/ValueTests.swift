@@ -51,12 +51,12 @@ final class ValueTests: XCTestCase {
     
     func testFetchingNonExistentVersionOfValueGivesNil() {
         let version = Version(id: .init(UUID().uuidString), predecessors: nil)
-        let fetchedValue = try! store.value(withId: originalValue.id, storedAt: version.id)
+        let fetchedValue = try! store.value(id: originalValue.id, storedAt: version.id)
         XCTAssertNil(fetchedValue)
     }
     
     func testFetchingSavedVersionOfValue() {
-        let value = try! store.value(withId: originalValue.id, storedAt: version.id)
+        let value = try! store.value(id: originalValue.id, storedAt: version.id)
         XCTAssertNotNil(value)
         XCTAssertEqual(value!.id.stringValue, originalValue.id.stringValue)
         XCTAssertEqual(value!.storedVersionId!, version.id)

@@ -68,8 +68,8 @@ extension Model {
     /// This simply filters the values found based on the type string in the LLVS store identifier.
     static func all(in storeCoordinator: StoreCoordinator, at verison: Version.Identifier? = nil) throws -> [Self] {
         return try storeCoordinator.valueReferences(at: verison)
-            .filter { Self.isValid(storeValueId: $0.id.stringValue) }
-            .map { try Self.decode(from: try storeCoordinator.store.value(at: $0)!) }
+            .filter { Self.isValid(storeValueId: $0.valueId.stringValue) }
+            .map { try Self.decode(from: try storeCoordinator.store.value(storedAt: $0)!) }
     }
     
 }

@@ -42,11 +42,11 @@ public class MostRecentBranchFavoringArbiter: MergeArbiter {
                 if removeBranch == favoredBranch {
                     changes.append(.preserveRemoval(valueId))
                 } else {
-                    let value = try store.value(withId: valueId, at: favoredVersion.id)!
+                    let value = try store.value(id: valueId, at: favoredVersion.id)!
                     changes.append(.preserve(value.reference!))
                 }
             case .twiceInserted, .twiceUpdated:
-                let value = try store.value(withId: valueId, at: favoredVersion.id)!
+                let value = try store.value(id: valueId, at: favoredVersion.id)!
                 changes.append(.preserve(value.reference!))
             case .inserted, .removed, .updated, .twiceRemoved:
                 break
@@ -70,14 +70,14 @@ public class MostRecentChangeFavoringArbiter: MergeArbiter {
             switch fork {
             case let .removedAndUpdated(removeBranch):
                 let favoredVersion = removeBranch.opposite == .first ? v.first : v.second
-                let value = try store.value(withId: valueId, at: favoredVersion.id)!
+                let value = try store.value(id: valueId, at: favoredVersion.id)!
                 changes.append(.preserve(value.reference!))
             case .twiceInserted, .twiceUpdated:
-                let value1 = try store.value(withId: valueId, at: v.first.id)!
+                let value1 = try store.value(id: valueId, at: v.first.id)!
                 var version1: Version!
                 store.queryHistory { version1 = $0.version(identifiedBy: value1.storedVersionId!) }
                 
-                let value2 = try store.value(withId: valueId, at: v.second.id)!
+                let value2 = try store.value(id: valueId, at: v.second.id)!
                 var version2: Version!
                 store.queryHistory { version2 = $0.version(identifiedBy: value2.storedVersionId!) }
                 

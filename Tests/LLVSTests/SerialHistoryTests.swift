@@ -49,16 +49,16 @@ class SerialHistoryTests: XCTestCase {
     func testValuesThroughoutHistory() {
 //        XCTAssertEqual(try store.value(valueId1, at: versions[0].id)!.data, "11".data(using: .utf8))
 //        XCTAssertNil(try store.value(valueId2, at: versions[0].id))
-        XCTAssertEqual(try store.value(withId: valueId1, at: versions[1].id)!.data, "11".data(using: .utf8))
-        XCTAssertEqual(try store.value(withId: valueId2, at: versions[1].id)!.data, "21".data(using: .utf8))
-        XCTAssertEqual(try store.value(withId: valueId1, at: versions[2].id)!.data, "12".data(using: .utf8))
-        XCTAssertEqual(try store.value(withId: valueId2, at: versions[2].id)!.data, "21".data(using: .utf8))
-        XCTAssertEqual(try store.value(withId: valueId1, at: versions[3].id)!.data, "12".data(using: .utf8))
-        XCTAssertEqual(try store.value(withId: valueId2, at: versions[3].id)!.data, "22".data(using: .utf8))
-        XCTAssertEqual(try store.value(withId: valueId1, at: versions[4].id)!.data, "13".data(using: .utf8))
-        XCTAssertEqual(try store.value(withId: valueId2, at: versions[4].id)!.data, "22".data(using: .utf8))
-        XCTAssertEqual(try store.value(withId: valueId1, at: versions[5].id)!.data, "13".data(using: .utf8))
-        XCTAssertEqual(try store.value(withId: valueId2, at: versions[5].id)!.data, "23".data(using: .utf8))
+        XCTAssertEqual(try store.value(id: valueId1, at: versions[1].id)!.data, "11".data(using: .utf8))
+        XCTAssertEqual(try store.value(id: valueId2, at: versions[1].id)!.data, "21".data(using: .utf8))
+        XCTAssertEqual(try store.value(id: valueId1, at: versions[2].id)!.data, "12".data(using: .utf8))
+        XCTAssertEqual(try store.value(id: valueId2, at: versions[2].id)!.data, "21".data(using: .utf8))
+        XCTAssertEqual(try store.value(id: valueId1, at: versions[3].id)!.data, "12".data(using: .utf8))
+        XCTAssertEqual(try store.value(id: valueId2, at: versions[3].id)!.data, "22".data(using: .utf8))
+        XCTAssertEqual(try store.value(id: valueId1, at: versions[4].id)!.data, "13".data(using: .utf8))
+        XCTAssertEqual(try store.value(id: valueId2, at: versions[4].id)!.data, "22".data(using: .utf8))
+        XCTAssertEqual(try store.value(id: valueId1, at: versions[5].id)!.data, "13".data(using: .utf8))
+        XCTAssertEqual(try store.value(id: valueId2, at: versions[5].id)!.data, "23".data(using: .utf8))
     }
 
     static var allTests = [
