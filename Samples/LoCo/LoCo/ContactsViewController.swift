@@ -53,7 +53,7 @@ class ContactsViewController: UITableViewController {
     }
 
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        if segue.id == "showContact" {
+        if segue.identifier == "showContact" {
             if let indexPath = tableView.indexPathForSelectedRow {
                 let navController = segue.destination as! UINavigationController
                 let contactViewController = navController.topViewController as! ContactViewController
@@ -61,7 +61,7 @@ class ContactsViewController: UITableViewController {
                 contactViewController.navigationItem.leftBarButtonItem = splitViewController?.displayModeButtonItem
                 contactViewController.navigationItem.leftItemsSupplementBackButton = true
             }
-        } else if segue.id == "toDeveloper" {
+        } else if segue.identifier == "toDeveloper" {
             let navController = segue.destination as! UINavigationController
             let developerViewController = navController.topViewController as! DeveloperViewController
             developerViewController.contactBook = contactBook

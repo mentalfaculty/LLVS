@@ -48,7 +48,7 @@ final class ContactBook {
     init(at version: Version.Identifier, loadingFrom store: Store, exchangeRestorationData: Data?) throws {
         self.store = store
         self.currentVersion = version
-        self.cloudKitExchange = CloudKitExchange(with: store, storeIdentifier: "ContactBook", cloudDatabasDescription: .privateDatabaseWithCustomZone(CKContainer.default(), zoneIdentifier: "ContactBook"))
+        self.cloudKitExchange = CloudKitExchange(with: store, storeIdentifier: "ContactBook", cloudDatabaseDescription: .privateDatabaseWithCustomZone(CKContainer.default(), zoneIdentifier: "ContactBook"))
         self.cloudKitExchange.restorationState = exchangeRestorationData
         try fetchContacts()
     }
@@ -59,14 +59,14 @@ final class ContactBook {
         let newValue = Value(id: ContactBook.sharedContactBookIdentifier, data: emptyArrayData)
         let insert: Value.Change = .insert(newValue)
         self.currentVersion = try store.makeVersion(basedOnPredecessor: nil, storing: [insert]).id
-        self.cloudKitExchange = CloudKitExchange(with: store, storeIdentifier: "ContactBook", cloudDatabasDescription: .privateDatabaseWithCustomZone(CKContainer.default(), zoneIdentifier: "ContactBook"))
+        self.cloudKitExchange = CloudKitExchange(with: store, storeIdentifier: "ContactBook", cloudDatabaseDescription: .privateDatabaseWithCustomZone(CKContainer.default(), zoneIdentifier: "ContactBook"))
     }
     
     
     // MARK: Work with Contacts
     
     func add(_ contact: Contact) throws {
-        var valueIds = contacts.map(\.valueId)
+        var valueIds: [Value.ID] = contacts.map { $0.valueId }
         valueIds.append(contact.valueId)
         
         let insertChanges = try contact.changesSinceLoad(from: store)
@@ -82,7 +82,7 @@ final class ContactBook {
     }
     
     func delete(_ contact: Contact) throws {
-        var valueIds = contacts.map(\.valueId)
+        var valueIds = contacts.map { $0.valueId }
         let index = valueIds.firstIndex(of: contact.valueId)!
         valueIds.remove(at: index)
         
@@ -92,10 +92,10 @@ final class ContactBook {
     }
     
     func move(contactAt index: Int, to destination: Int) throws {
-        var identifiers = contacts.map { $0.valueId }
+        var ids = contacts.map { $0.valueId }
         let identifier = ids.remove(at: index)
         ids.insert(identifier, at: destination)
-        let change = try updateContactsChange(withContactIdentifiers: identifiers)
+        let change = try updateContactsChange(withContactIdentifiers: ids)
         currentVersion = try store.makeVersion(basedOnPredecessor: currentVersion, storing: [change]).id
     }
     
@@ -103,7 +103,7 @@ final class ContactBook {
     // MARK: Fetch and Save in Store
     
     fileprivate func fetchContactIdentifiers(atVersionIdentifiedBy versionId: Version.Identifier) throws -> [Value.Identifier] {
-        let data = try store.value(ContactBook.sharedContactBookIdentifier, at: versionId)!.data
+        let data = try store.value(withId: ContactBook.sharedContactBookIdentifier, at: versionId)!.data
         let idStrings = try JSONSerialization.jsonObject(with: data, options: []) as! [String]
         return idStrings.map { Value.Identifier($0) }
     }
@@ -149,7 +149,7 @@ final class ContactBook {
                     finish(.failure(error))
                 case let .success(versionIds):
                     downloadedNewVersions = !versionIds.isEmpty
-                    finish(.success)
+                    finish(.success(()))
                 }
             }
         }
@@ -160,7 +160,7 @@ final class ContactBook {
                 case let .failure(error):
                     finish(.failure(error))
                 case .success:
-                    finish(.success)
+                    finish(.success(()))
                 }
             }
         }
