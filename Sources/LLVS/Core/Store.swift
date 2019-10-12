@@ -104,8 +104,8 @@ public final class Store {
 extension Store {
     
     /// Convenience to avoid having to create Value.Change values yourself
-    @discardableResult public func makeVersion(basedOnPredecessor version: Version.ID?, inserting insertedValues: [Value] = [], updating updatedValues: [Value] = [], removing removedIds: [Value.ID] = [], metadata: Data? = nil) throws -> Version {
-        let predecessors = version.flatMap { Version.Predecessors(idOfFirst: $0, idOfSecond: nil) }
+    @discardableResult public func makeVersion(basedOnPredecessor versionId: Version.ID?, inserting insertedValues: [Value] = [], updating updatedValues: [Value] = [], removing removedIds: [Value.ID] = [], metadata: Data? = nil) throws -> Version {
+        let predecessors = versionId.flatMap { Version.Predecessors(idOfFirst: $0, idOfSecond: nil) }
         let inserts: [Value.Change] = insertedValues.map { .insert($0) }
         let updates: [Value.Change] = updatedValues.map { .update($0) }
         let removes: [Value.Change] = removedIds.map { .remove($0) }

@@ -93,61 +93,136 @@ This section gets you up and running as fast as possible with a iOS app that syn
 
 We are going to walk through a project called 'TheMessage', which you can find in the _Samples_ directory. It's about the simplest app you can envisage, which is exactly why it is useful for our purposes. 
 
-A single message is shown on the screen. The user can edit the message if they choose. The message is saved into an LLVS store, and syncs via the CloudKit public database to anyone else using the app. So the message is shared between all users, and can be updated by any of them — they all share the same LLVS distributed store.
+A single message is shown on the screen. The user can edit the message if they choose. The message is saved into an LLVS store, and syncs via the CloudKit public database to anyone else using the app. So the message is shared between all users, and can be updated by any of them — they all share the same LLVS distributed store.
 
 ### Setting Up the Project
 
-#### Creating the Xcode Project
-
 Before we look at the code, let's walk through some aspects of setting up the project.
 
-TheMessage was generated using Xcode using the _Single View App_ template, with SwiftUI included.
+#### Creating the Xcode Project
+
+TheMessage was generated as an Xcode project using the _Single View App_ template. We will be using SwiftUI for the view layer, so make sure that is checked.
 
 #### Adding LLVS
 
-LLVS and LLVSCloudKit
+With a project in place, we now need to add LLVS. You can use any of the approaches in the section on Installing above. 
+
+The approach taken for the sample project was to drag the LLVS root folder into the Xcode project, and then add the frameworks to the target.
+
+The frameworks we need for TheMessage are LLVS and LLVSCloudKit.
 
 #### Adding CloudKit
 
-#### Registering CloudKit Container
+Now that LLVS is in place, we need to setup CloudKit. 
 
-Once the project was created, 
+1. Select TheMessage project in the source list.
+2. Select the app target, and the the _Signing & Capabilities_ tab.
+3. Press the + button, and add iCloud.
+4. Check the CloudKit checkbox.
+5. Add a container for the app. _E.g._ "iCloud.com.yourcompany.themessage"
 
 ### Add a Store Coordinator
 
-Most of the source code resides directly in the _AppDelegate_ file. (Do not try this at home!) First, we have code to setup a `StoreCoordinator` object.
+Most of the source code resides directly in the _AppDelegate_ file. (Do not try this at home!) 
+
+First, we have code to setup a `StoreCoordinator` object.
 
 ```swift
 lazy var storeCoordinator: StoreCoordinator = {
     LLVS.log.level = .verbose
     let coordinator = try! StoreCoordinator()
     let container = CKContainer(identifier: "iCloud.com.mentalfaculty.themessage")
-    let exchange = CloudKitExchange(with: coordinator.store, storeIdentifier: "MainStore", cloudDatabaseDescription: .publicDatabase(container))
+    let exchange = CloudKitExchange(with: coordinator.store, 
+        storeIdentifier: "MainStore", 
+        cloudDatabaseDescription: .publicDatabase(container))
     coordinator.exchange = exchange
     return coordinator
 }()
 ```
 
+A `StoreCoordinator` takes care of a lot of the mundane aspects of managing an LLVS store, such as tracking what version of the data your app is using, and merging data from other devices. It also makes saving and fetching data more convenient, so it is perfect for your first app.
+
+In addition to creating the `StoreCoordinator`, the code above also sets up a `CloudKitExchange`, and attaches it to the coordinator. An `Exchange` is an object that can send and receive the store data; in this case, it is sending data to CloudKit so that other devices can add it to their local store, and receiving changes made by other devices from CloudKit.
 
 ### Store Some Data
 
+The `AppDelegate` includes the data for the message shown on screen, as well as functions to fetch it from the store, and save it to the store.
+
+```swift
+let messageId = Value.ID("MESSAGE") // Id in the store
+@Published var message: String = ""
+```
+
+The message has an identifier in LLVS, called a _value identifier_. Value identifiers are the _keys_ in the LLVS key-value store. They uniquely identify a value in the store.
+
+As you can see, we declare a single fixed identifier for our message, of the type `Value.ID`. It is set to the string "MESSAGE", but the actual value is arbitrary. We need it to be the same on all devices, but it could be any string. As long as we end up with a single identifier, so that all users are updating the same message.
+
+Storing data in LLVS is handled by the `post` function.
+
+```swift
+/// Update the message in the store, and sync it to the cloud
+func post(message: String) {
+    let data = message.data(using: .utf8)!
+    let newValue = Value(id: messageId, data: data)
+    try! storeCoordinator.save(updating: [newValue])
+    sync()
+}
+```
+
+LLVS stores `Value`s, which have an identifier (_ie_ key), and contain some data. So whatever data we use in our app needs to be converted into `Data` to store in `Value`s. In this case, where the message is just a `String`, this is trivial. In more advanced apps, you would likely use `Codable` types.
+
+To save with the `StoreCoordinator`, we simply pass in an array of values we are updating. If needed, we could also pass values to insert and remove. (Note that updating will insert the value if the value is not yet in the store.)
+
+After updating the value, there is a sync, to ensure the data is uploaded to CloudKit. This is discussed more below.
+
 ### Fetch Data
 
-### Add an Exchange for Cloud Sync
-Configure CloudKit
+Fetching the message from the LLVS store is just as simple.
+
+```swift
+/// Fetch the message for the current version from the store
+func fetchMessage() -> String? {
+    guard let value = try? storeCoordinator.value(id: messageId) else { return nil }
+    return String(data: value.data, encoding: .utf8)
+}
+```
+
+The `value(id:)` func of `StoreCoordinator` will return a value if it exists in the store, and `nil` otherwise. The `fetchMessage` func uses this to try to get the message value, with the same message identifier that we use in the save. If it is found, the data is extracted from the value and converted into the message `String`; if not found, the function returns `nil`.
 
 ### Sync
 
-### Preparing to Ship
+Syncing with LLVS is also very simple.
 
-CloudKit production DB scheme update
+```swift
+func sync() {
+    // Exchange with the cloud
+    storeCoordinator.exchange { _ in
+        // Merge branches to get the latest version
+        self.storeCoordinator.merge()
+    }
+}
+```
+
+No networking code or complex CloudKit operations needed. Just call `exchange` to send and receive any changes with the cloud, and then call `merge` to resolve any changes made between devices.
+
+### Ship It!
+
+The rest of the code is generic SwiftUI, and won't be covered here. All up, The Message is less than 200 lines of code. Sure, it doesn't do very much, but as we have seen above, saving, fetching, and even syncing can be achieved in just a few lines.
+
+If we were to distribute The Message via the App Store, we would first need go to the [CloudKit Dashboard](http://icloud.developer.apple.com) and make sure the development schema gets deployed to production. 
 
 
-## A Bit More Depth
+## Advanced: The `Store` Class
 
-This section presents simple code for basic operations with LLVS. It provides a means to better understand the framework, and where it fits in to your toolkit.
+The Quick Start makes use of a class called `StoreCoordinator`, which simplifies using LLVS a lot. You can ignore many of the internal details, like versions, branching, and merging. This is a good way to begin using the framework, and for many apps will be all you need.
 
-### Creating a StoreCoordinator
+But LLVS has a lot more to offer. It gives you full access to the history of your data. You can fetch data for any version, compare changes between versions, and apply powerful merging algorithms to create new versions.
+
+All of this is available via the core class of LLVS: `Store`. 
+
+### Creating a Store
+
+A `StoreCoordinator` wraps around a `Store`, which is accessible via the `store` property, but you can also completely ignore `StoreCoordinator` and use `Store` directly. `StoreCoordinator` is just a convenience — you can do it all with `Store`.
 
 Creating a versioned store on a single device is as simple as passing in a directory URL.
 
@@ -159,64 +234,58 @@ let store = Store(rootDirectoryURL: rootStoreDirectory)
 
 This code uses the app group container, which is useful if you want to share data with app extensions. (LLVS stores can be shared directly between multiple processes, such as the main app and a sharing extension.)
 
-### Accessing the Store
-
-### Storing Values
+### Inserting Values
 
 When you first create a store, you will probably want to add some initial data.
 
 ```swift
-let stringData = "My first data".data(using: .utf8)!
-let newValueId = Value.Identifier("ABCDEF")
-let newValue = Value(id: newValueId, data: stringData)
-let insert: Value.Change = .insert(newValue)
-let firstVersion = try store.makeVersion(basedOnPredecessor: nil, storing: [insert])
+let v1 = Value(idString: "ABCDEF", data: "First Value".data(using: .utf8)!)
+let firstVersion = try store.makeVersion(basedOnPredecessor: nil, inserting: [v1])
 ```
 
-This code...
+This code makes a new version in the store, inserting a new value. 
 
-1. Creates some data from the string "My first data".
-2. Makes a `Value.Identifier` for the new data with string "ABCDEF". (You will often use a UUID for this.)
-3. Combines the identifier and data in a `Value`.  
-4. The value is wrapped in a `Change` type, in this case indicating that the value is being inserted into the store for the first time.
-5. The last line creates a new version in the store, and stores the insertion change. Because it is the first version, it has no "predecessor" versions.
+The argument for `basedOnPredecessor` is `nil`, which indicates this is the first version in the store — there are no predecessor versions. (For Git users, this is the same as an initial commit.) 
 
-At this point, a new version is returned. You could typically store this version somewhere (eg a variable, a file, user defaults), so that it can be used in fetching data. 
+Usually, you would might have a number of values to insert, update, and remove. All of this can be handled in a single call to `makeVersion`. The version made applies to the whole store, not just the values being manipulated.
 
-Storing subsequent values is very similar. The only difference is that you need to pass in the version upon which the changes are based. 
+If you are using `StoreCoordinator`, it will take care of storing the new version that is created; if you are using `Store` directly, it is up to you to follow which version you consider to be the current version for your app's UI. Typically, you would store it somewhere (_eg_ a variable, a file, user defaults), so that it can be used in fetching data. 
+
+### Updating Values
+
+Storing subsequent values is very similar. The only difference is that you need to pass in the version upon which the changes are based, which is generally the current version being used by your app.
 
 ```swift
-let secondData = "My second data".data(using: .utf8)!
-let secondValue = Value(id: .init("CDEFGH"), data: secondData)
-let secondInsert: Value.Change = .insert(secondValue)
-let secondVersion = try store.makeVersion(basedOnPredecessor: firstVersion.id, storing: [secondInsert])
+let v2 = Value(idString: "CDEFGH", data: "My second data".data(using: .utf8)!)
+let secondVersion = try store.makeVersion(basedOnPredecessor: firstVersion.id, inserting: [v2])
 ```
 
-The main difference here is that a non-nil predecessor is passed in when adding the version. The predecessor is just the identifier of the first version we created above.
+The main difference here is that a non-nil predecessor is passed in when making the version. The predecessor is the identifier of the first version we created above, _ie_, `firstVersion.id`.
 
-We have also used a shorter notation for the identifier, creating it inline with `.init`, rather than explicitly storing it in a variable.
+### Versions are Store-Wide
 
-### Versions Explained
+It is important to realize that versions apply to the store as a whole. They are global, and form a complete history of the store, just like they do in a system like Git. Once a value has been added, it remains in existence, until it is removed or updated in a future version.
 
 ### Fetching Data
 
-Once we have data in the store, we can of course retrieve it again. With LLVS you need to indicate which version of the data you want, because the store includes a complete history of changes.
+Once we have data in the store, we can retrieve it again. With LLVS you need to indicate which version of the data you want, because the store includes a complete history of changes.
 
 ```swift
-let value = try store.value(.init("CDEFGH"), at: secondVersion.id)!
+let value = try store.value(idString: "CDEFGH", atVersionWithIdString: secondVersion.id.stringValue)!
 let fetchedString = String(data: value.data, encoding: .utf8)
 ```
 
-Here we have fetched the second value we added above, and converted it back into a string. We passed in the second version identifier; if we had passed in the first version, which was created before the value was added, `nil` would have been returned.
+Here we have fetched the second value we added above, and converted it back into a string. We passed in the second version identifier; if we had passed in the first version, `nil` would have been returned, because the value had not yet been added in that version.
 
-What about the first value we added above? That was added before the second version, so it continues to exist in future versions. (We say it "prevails".) So we can fetch it in exactly the same way. 
+What about the first value we added above? That was added before the second version, so it continues to exist in future versions. So we can fetch it in exactly the same way. 
 
 ```swift
-let value = try store.value(.init("ABCDEF"), at: secondVersion.id)!
+let valueId = Value.ID("ABCDEF")
+let value = try store.value(id: valueId, at: secondVersion.id)!
 let fetchedString = String(data: value.data, encoding: .utf8)
 ```
 
-Even though it was not added to the store in the second version, it remains in existence in descendent versions until it is explicitly removed.
+We've used a slightly different `value` func for this call, which takes the value identifier instead of a string, but the end result is the same.
 
 ### Updating and Removing Values
 
@@ -224,15 +293,20 @@ Just as you can _insert_ new values, you can also _update_ existing values, and 
 
 ```swift
 let updateData = "An update of my first data".data(using: .utf8)!
-let updateValue = Value(id: .init("ABCDEF"), data: updateData)
-let update: Value.Change = .update(updateValue)
-let removal: Value.Change = .remove(.init("CDEFGH"))
-let thirdVersion = try store.makeVersion(basedOnPredecessor: secondVersion.id, storing: [update, removal])
+let updateValue = Value(idString: "ABCDEF", data: updateData)
+let removeId = Value.ID("CDEFGH")
+let thirdVersion = try store.makeVersion(basedOnPredecessor: secondVersion.id, 
+    updating: [updateValue], removing: [removeId])
 ```
 
 The third version is based on the second one. There are two changes: it updates the value for "ABCDEF" with new data, and removes the value for "CDEFGH". 
 
-If we now attempted to fetch the value with identifier "CDEFGH" at the third version, we would get `nil`; however the value would still exist if we fetched the second version.
+If we now attempted to fetch the value with identifier "CDEFGH", we get `nil`.
+
+```swift
+// This will be nil
+let value = try store.value(id: Value.ID("CDEFGH"), at: thirdVersion.id)
+```
 
 ### Branching
 
@@ -240,13 +314,19 @@ If the history of changes is _serial_ — one set of changes always based on the
 
 An example of this is when a user makes changes on two different devices, with no interceding sync. Later, when the data does get transferred, the versions branch off, rather than appearing in a continuous ancestral line. This can even happen if you are not using sync; for example, if you have a sharing extension, and it adds a version while your main app is also adding a version.
 
-### Heads
-
-### Navigating History
+### Predecessors, Successors, and Heads
 
 The `Version` type forms the basis of the history tracking in LLVS. A version can have up to two _predecessor_  versions upon which it is based, and it can have zero or more _successors_.
 
-If a version has no successors, it is a _head_. You can ask for the heads at any time.
+A _head_ is a version that has no successors: there are no versions based off of the head version. They form the tips of branches; if you imagine the version history as a tree, with the bottom rooted at the initial version, the heads form the tips of branches at the top.
+
+Heads are important, because they usually represent recent changes. Most of the time, your app will use a head as the current version, and will base new versions off of a head.
+
+Heads are also important because, if there are more than one, they generally need to be merged together to create a single head version for the app to use.
+
+### Navigating History
+
+The `History` class is used to query the history of the store. For example, you can ask for the heads at any time like so...
 
 ```swift
 var heads: Set<Version.Identifier>?
@@ -255,9 +335,9 @@ store.queryHistory { history in
 }
 ```
 
-Getting the current heads is useful to determine what you need to merge together.
+The `queryHistory` function gets you access to the store's history object. You need to provide it with a block, which will be called synchronously. The reason the history is not vended as a simple property is to control access from different threads. Using the block allows access to the history to be serialized, so it can't change while you are querying it.
 
-Use the `queryHistory` function to get a history object that you can navigate. You can request the heads, but you can also retrieve any version you choose.
+Once you have the `History` object, you can request the heads, but you can also retrieve any version you choose.
 
 Getting the most recent head is also easy.
 
@@ -275,20 +355,16 @@ There are two types of merges in LLVS: two-way and three-way. Most of the time y
 
 Merging in this way is much more powerful than the facilities you get from most data modelling frameworks, because you don't just know what the latest values are, you also know what they were in the past, so you can determine what has changed.
 
-Three-way merges are also what are used in Git. In fact, they are the only type of merge possible with Git, which assumes all data derives from a single initial commit. 
-
-LLVS supports a second type of merge: two-way. This happens when more than one data set is added to the store that does not have any predecessors. Effectively, you have two initial commits.
-
-Two-way merges are much more rare than three-way merges, and you can even choose to disallow them entirely if you wish, and adopt a Git-like approach where the app is required to choose one initial data set or the other, but cannot merge them together.
+LLVS supports a second type of merge: two-way. This happens when more than one data set is added to the store that does not have any predecessors. Effectively, you have two initial versions. 
 
 You can get started with merging quite easily. 
 
 ```swift
 let arbiter = MostRecentChangeFavoringArbiter()
-let newVersion = try! store.merge(version: currentVersionId, with: otherHead, resolvingWith: arbiter)
+let newVersion = try! store.merge(currentVersionId, with: otherHeadId, resolvingWith: arbiter)
 ```
 
-If it turns out that `otherHead` is a descendent of the current version, this will not actually add a new version, but will just return the new head. (In Git terminology, it will _fast forward_.)
+If it turns out that the version for `otherHeadId` is a descendent of the current version, this will not actually add a new version, but will just return the new head. (In Git terminology, it will _fast forward_.)
 
 However, normally the two versions will be divergent, and will need a three-way merge. The merge method will search back through the history, and find a common ancestor. It will then determine the differences between the two new versions by comparing them to the common ancestor. These differences will be passed to a `MergeArbiter` object, whose task it is to resolve any conflicts.
 
@@ -296,53 +372,6 @@ In this instance, we have used a built-in arbiter class called `MostRecentChange
 
 In your app, you are more likely to create your own arbiter class, to merge your data in custom ways. You can also choose to handle certain specific cases, and pass more standard tasks off to one of the existing arbiter classes.
 
-
-### Setting Up an Exchange
-
-LLVS is a decentralized storage framework, so you need a way to move versions between stores. For this purpose, we use an _Exchange_. An Exchange is a class that can send and receive data with the goal of moving it to/from other stores. 
-
-CloudKit is a good choice for transferring data on Apple platforms. The `CloudKitExchange` class can be used to move data between LLVS stores using CloudKit.
-
-To get started, we create the exchange.
-
-```swift
-let cloudDatabase = CKContainer.default().privateCloudDatabase
-self.cloudKitExchange = CloudKitExchange(with: store, zoneIdentifier: "MyZone", cloudDatabase: cloudDatabase)
-```
-
-To retrieve new versions from the cloud, we simply call the `retrieve` func, which is asynchronous, with a completion callback.
-
-```swift
-self.cloudKitExchange.retrieve { result in
-    switch result {
-    case let .failure(error):
-        // Handle failure
-    case let .success(versionIds):
-        // Handle success
-    }
-}
-```
-
-Sending new versions to the cloud is just as easy.
-
-```swift
-self.cloudKitExchange.send { result in
-    switch result {
-    case let .failure(error):
-        // Handle failure
-    case .success:
-        // Handle success
-    }
-}
-```
-
-LLVS has no limit on how many exchanges you setup. You can setup several for a single store, effectively pushing and pulling data via different routes. 
-
-Exchanges are also not limited to cloud services. You can write your own peer-to-peer class which conforms to the `Exchange` protocol. LLVS even includes `FileSystemExchange`, which is an exchange that works via a directory in the file system. This is very useful for testing your app without having to use the cloud.
-
-## Advanced
-
-This section includes more information for those already familiar with the basic workings of LLVS. You are advised to skip over it when first getting started.
 
 ### Inside a MergeArbiter
 
@@ -352,7 +381,7 @@ You might be wondering what the internals of an arbiter class look like. It's ty
 public class MostRecentBranchFavoringArbiter: MergeArbiter {
     
     public init() {}
-
+    
     public func changes(toResolve merge: Merge, in store: Store) throws -> [Value.Change] {
         let v = merge.versions
         let favoredBranch: Value.Fork.Branch = v.first.timestamp >= v.second.timestamp ? .first : .second
@@ -388,12 +417,79 @@ You can see in the code above that when data is inserted on each branch, or upda
 You need not worry much about arbiters when getting started. You can just choose one of the existing classes, and start with that. Later, as you need more control, you can think about developing your own custom class that conforms to the `MergeArbiter` protocol.
 
 
+### Setting Up an Exchange
+
+LLVS is a decentralized storage framework, so you need a way to move versions between stores. For this purpose, we use an _Exchange_. An Exchange is a class that can send and receive data with the goal of moving it to/from other stores. 
+
+CloudKit is a good choice for transferring data on Apple platforms. The `CloudKitExchange` class can be used to move data between LLVS stores using CloudKit.
+
+To get started, we create the exchange.
+
+```swift
+self.cloudKitExchange = CloudKitExchange(with: store, storeIdentifier: "MyStore", cloudDatabaseDescription: .privateDatabaseWithCustomZone(CKContainer.default(), zoneIdentifier: "MyZone"))
+```
+
+To retrieve new versions from the cloud, we simply call the `retrieve` func, which is asynchronous, with a completion callback.
+
+```swift
+self.cloudKitExchange.retrieve { result in
+    switch result {
+    case let .failure(error):
+        // Handle failure
+    case let .success(versionIds):
+        // Handle success
+    }
+}
+```
+
+Sending new versions to the cloud is just as easy.
+
+```swift
+self.cloudKitExchange.send { result in
+    switch result {
+    case let .failure(error):
+        // Handle failure
+    case .success:
+        // Handle success
+    }
+}
+```
+
+LLVS has no limit on how many exchanges you setup. You can setup several for a single store, effectively pushing and pulling data via different routes. 
+
+Exchanges are also not limited to cloud services. You can write your own peer-to-peer class which conforms to the `Exchange` protocol. LLVS even includes `FileSystemExchange`, which is an exchange that works via a directory in the file system. This is very useful for testing your app without having to use the cloud.
+
+
 ## Learning More
 
-You can begin to explore the code itself, which includes documentary comments. But perhaps the best way to see how it works is to look in the provided Samples. 
+The best way to see how LLVS works in practice is to look in the provided Samples. There are very simple examples like TheMessage, but also more advanced apps like Loco-SwiftUI, a contact book app.
+
+There are also useful posts at the [LLVS Blog](https://mentalfaculty.github.io/LLVS/).
+
+
+## How to Structure Your Data
 
 If you are looking into the sample code, bear in mind that LLVS places no restrictions on what data you put into it. It is entirely up to you how you structure your app data. LLVS gives you a means to store and move the data around, and to track how it is changing, but the data itself is opaque to the framework.
 
+Something to consider is the granularity of the data you put in each `Value`. You can go very fine grained, putting every single property of your model types into a separate `Value`, or you can go the other extreme and put all the data in a single `Value`. A good middle ground is to put each entity in the model (_eg_ struct or class) into a `Value`.
+
+There are tradeoffs to each of these:
+
+- The fine grained, property level approach...
+    - Works well for merging, allowing each property to be merged independently
+    - Leads to slower loading, because each property must be fetched separately
+    - Results in many small files on disk, each containing a single property
+- The whole store in one `Value` approach...
+    - Can give fast loading, because only a single file is read
+    - Could lead to large disk and cloud use, as each version will add a new file with all values
+    - Will generally require manual merging of all data
+- The one entity per `Value` approach...
+    - Works reasonably well for merging, merging each entity independently
+    - Loads faster than property level storage
+    - Results in moderate file numbers, and loading times
+    
+    
+Our advice for getting started is to use the _one entity per value_ approach — it's Goldilocks.
 
 ## Features of LLVS
 

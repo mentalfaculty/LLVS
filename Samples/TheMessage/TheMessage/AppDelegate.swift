@@ -30,8 +30,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, ObservableObject {
     
     // MARK: Message
     
-    let messageId: Value.ID = .init("MESSAGE") // Id in the store
-    
+    let messageId = Value.ID("MESSAGE") // Id in the store
     @Published var message: String = ""
     
     /// Fetch the message for the current version from the store
