@@ -9,13 +9,32 @@
 import SwiftUI
 
 struct ContentView: View {
+    
+    @EnvironmentObject var appDelegate: AppDelegate
+    
+    @State var editedMessage: String?
+    
     var body: some View {
-        Text("Hello World")
+        HStack {
+            if editedMessage != nil {
+                TextField("The Message",
+                    text: $appDelegate.message,
+                    onCommit: {
+                        if self.editedMessage != self.appDelegate.message {
+                            self.appDelegate.post(message: self.appDelegate.message)
+                        }
+                        self.editedMessage = nil
+                    })
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .multilineTextAlignment(.center)
+            } else {
+                Text(appDelegate.message)
+                    .onTapGesture {
+                        self.editedMessage = self.appDelegate.message
+                    }
+            }
+        }
     }
+    
 }
 
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
-    }
-}

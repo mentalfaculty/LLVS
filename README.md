@@ -138,6 +138,10 @@ Configure CloudKit
 
 ### Sync
 
+### Preparing to Ship
+
+CloudKit production DB scheme update
+
 
 ## A Bit More Depth
 
