@@ -131,10 +131,15 @@ public class StoreCoordinator {
     // MARK: Saving
     
     /// You should use this to save instead of using the store directly, so that the
-    /// coordinator can track versions.
+    /// coordinator can track versions. Otherwise you will need to merge to see the changes.
     public func save(_ changes: [Value.Change]) throws {
         guard !changes.isEmpty else { return }
         currentVersion = try store.makeVersion(basedOnPredecessor: currentVersion, storing: changes).id
+    }
+    
+    public func save(inserting inserts: [Value] = [], updating updates: [Value] = [], removing removals: [Value.ID] = []) throws {
+        guard !inserts.isEmpty || !updates.isEmpty || !removals.isEmpty else { return }
+        currentVersion = try store.makeVersion(basedOnPredecessor: currentVersion, inserting: inserts, updating: updates, removing: removals).id
     }
     
     
@@ -151,6 +156,14 @@ public class StoreCoordinator {
     
     public func values(at version: Version.ID? = nil) throws -> [Value] {
         return try valueReferences(at: version).map { try store.value(storedAt: $0)! }
+    }
+    
+    public func value(idString: String) throws -> Value? {
+        return try store.value(idString: idString, atVersionWithIdString: currentVersion.stringValue)
+    }
+    
+    public func value(id: Value.ID) throws -> Value? {
+        return try store.value(id: id, at: currentVersion)
     }
     
     
