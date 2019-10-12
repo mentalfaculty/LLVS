@@ -11,6 +11,7 @@ import LLVS
 import LLVSCloudKit
 import CloudKit
 import Combine
+import CryptoKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate, ObservableObject {
@@ -29,20 +30,21 @@ class AppDelegate: UIResponder, UIApplicationDelegate, ObservableObject {
     
     // MARK: Message
     
-    let messageId = "MESSAGE" // Id in the store
+    let messageId: Value.ID = .init("MESSAGE") // Id in the store
     
     @Published var message: String = ""
     
-    func fetchMessage(at versionId: Version.ID) -> String? {
-        let value = try? self.store.value(idString: messageId, atVersionWithIdString: versionId.stringValue)
-        return value.flatMap { String(data: $0.data, encoding: .utf8) }
+    /// Fetch the message for the current version from the store
+    func fetchMessage() -> String? {
+        guard let value = try? storeCoordinator.value(id: messageId) else { return nil }
+        return String(data: value.data, encoding: .utf8)
     }
     
     /// Update the message in the store, and sync it to the cloud
     func post(message: String) {
         let data = message.data(using: .utf8)!
-        let newValue = Value(idString: messageId, data: data)
-        try! store.makeVersion(basedOnPredecessor: storeCoordinator.currentVersion, updating: [newValue])
+        let newValue = Value(id: messageId, data: data)
+        try! storeCoordinator.save(updating: [newValue])
         sync()
     }
     
@@ -66,7 +68,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, ObservableObject {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Monitor changes in the current version, and update the message when these are detected
         messageSubscriber = storeCoordinator.currentVersionSubject
-            .map({ versionId in self.fetchMessage(at: versionId) ?? "Let there be light!" })
+            .map({ _ in self.fetchMessage() ?? "Let there be light!" })
             .receive(on: DispatchQueue.main)
             .assign(to: \.message, on: self)
         

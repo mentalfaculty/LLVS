@@ -52,7 +52,12 @@ LLVS includes some classes to get you started. You can set up a basic store usin
 
 The easiest way to get started with LLVS is using Xcode 11 or later, which supports the Swift Package Manager (SPM). 
 
-To add LLVS, choose _File > Swift Packages > Add Package Dependency..._. Put the minimum version you require (eg 0.3.0), and add the package. You can choose which frameworks to include in your target.
+1. To add LLVS, choose _File > Swift Packages > Add Package Dependency..._. 
+2. Enter the LLVS repo URL: [https://github.com/mentalfaculty/LLVS](https://github.com/mentalfaculty/LLVS)
+3. Now enter the minimum version you require (eg 0.3.0), and add the package. 
+4. Select your project in the Xcode source list on the left.
+5. Select your app target and go to the _General_ tab.
+6. Add the frameworks you need to your app target in the _Frameworks, Libraries, and Embedded Content_ (_e.g._ LLVS, LLVSCloudKit).
 
 ### Swift Package Manager
 
@@ -66,7 +71,12 @@ dependencies: [
 
 ### Manually with Xcode
 
-To manually add LLVS to your Xcode project, download the source code or add the project as a submodule with Git, and drag the `LLVS` root folder into your own Xcode app project. Then select your app's target, and add the LLVS framework in the _Frameworks, Libraries, and Embedded Content_ section of the _General_ tab.
+To manually add LLVS to your Xcode project...
+
+1. Download the source code or add the project as a submodule with Git.
+2. Drag the _LLVS_ root folder into your own Xcode app project.
+3. Select your project in the source list, and then your app's target.
+4. Add the _LLVS_ framework in the _Frameworks, Libraries, and Embedded Content_ section of the _General_ tab.
 
 ### Trying it Out First
 
@@ -77,9 +87,47 @@ If you don't want to go to the trouble of installing the framework, but do want 
 
 ## Quick Start
 
-This section gets you up and running as fast as possible with a iOS app that syncs via CloudKit.
+This section gets you up and running as fast as possible with a iOS app that syncs via CloudKit. 
+
+### The Message
+
+We are going to walk through a project called 'TheMessage', which you can find in the _Samples_ directory. It's about the simplest app you can envisage, which is exactly why it is useful for our purposes. 
+
+A single message is shown on the screen. The user can edit the message if they choose. The message is saved into an LLVS store, and syncs via the CloudKit public database to anyone else using the app. So the message is shared between all users, and can be updated by any of them — they all share the same LLVS distributed store.
+
+### Setting Up the Project
+
+#### Creating the Xcode Project
+
+Before we look at the code, let's walk through some aspects of setting up the project.
+
+TheMessage was generated using Xcode using the _Single View App_ template, with SwiftUI included.
+
+#### Adding LLVS
+
+LLVS and LLVSCloudKit
+
+#### Adding CloudKit
+
+#### Registering CloudKit Container
+
+Once the project was created, 
 
 ### Add a Store Coordinator
+
+Most of the source code resides directly in the _AppDelegate_ file. (Do not try this at home!) First, we have code to setup a `StoreCoordinator` object.
+
+```swift
+lazy var storeCoordinator: StoreCoordinator = {
+    LLVS.log.level = .verbose
+    let coordinator = try! StoreCoordinator()
+    let container = CKContainer(identifier: "iCloud.com.mentalfaculty.themessage")
+    let exchange = CloudKitExchange(with: coordinator.store, storeIdentifier: "MainStore", cloudDatabaseDescription: .publicDatabase(container))
+    coordinator.exchange = exchange
+    return coordinator
+}()
+```
+
 
 ### Store Some Data
 
