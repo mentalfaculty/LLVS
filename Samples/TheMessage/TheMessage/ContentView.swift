@@ -12,18 +12,19 @@ struct ContentView: View {
     
     @EnvironmentObject var appDelegate: AppDelegate
     
-    @State var editedMessage: String?
+    @State var editedMessage: String = ""
+    @State var isEditing = false
     
     var body: some View {
         HStack {
-            if editedMessage != nil {
+            if isEditing {
                 TextField("The Message",
-                    text: $appDelegate.message,
+                    text: $editedMessage,
                     onCommit: {
                         if self.editedMessage != self.appDelegate.message {
-                            self.appDelegate.post(message: self.appDelegate.message)
+                            self.appDelegate.post(message: self.editedMessage)
                         }
-                        self.editedMessage = nil
+                        self.isEditing = false
                     })
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .multilineTextAlignment(.center)
@@ -31,6 +32,7 @@ struct ContentView: View {
                 Text(appDelegate.message)
                     .onTapGesture {
                         self.editedMessage = self.appDelegate.message
+                        self.isEditing = true
                     }
             }
         }
