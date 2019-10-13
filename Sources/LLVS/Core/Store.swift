@@ -82,9 +82,9 @@ public final class Store {
     
     /// Provides access to the history object in a serialized way, allowing access from any thread.
     /// Calls the block passed after getting exclusive history to the history object, and passes the history.
-    public func queryHistory(in block: (History)->Void) {
-        historyAccessQueue.sync {
-            block(self.history)
+    public func queryHistory(in block: (History) throws ->Void) rethrows {
+        try historyAccessQueue.sync {
+            try block(self.history)
         }
     }
     
