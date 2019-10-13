@@ -71,7 +71,8 @@ public class WatchConnectivityExchange: NSObject, Exchange {
 
 
 extension WatchConnectivityExchange: WCSessionDelegate {
-    public func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
+    
+    public func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Swift.Error?) {
         
     }
     
