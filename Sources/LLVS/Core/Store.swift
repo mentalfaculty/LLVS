@@ -193,8 +193,8 @@ extension Store {
     }
     
     /// Convenient method to avoid having to create id types
-    public func value(idString valueIdString: String, atVersionWithIdString versionIdString: String) throws -> Value? {
-        return try value(id: .init(valueIdString), at: .init(versionIdString))
+    public func value(idString valueIdString: String, at versionId: Version.ID) throws -> Value? {
+        return try value(id: .init(valueIdString), at: versionId)
     }
     
     public func value(id valueId: Value.ID, at versionId: Version.ID) throws -> Value? {

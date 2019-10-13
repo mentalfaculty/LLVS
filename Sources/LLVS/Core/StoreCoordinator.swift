@@ -159,7 +159,7 @@ public class StoreCoordinator {
     }
     
     public func value(idString: String) throws -> Value? {
-        return try store.value(idString: idString, atVersionWithIdString: currentVersion.stringValue)
+        return try store.value(idString: idString, at: currentVersion)
     }
     
     public func value(id: Value.ID) throws -> Value? {
