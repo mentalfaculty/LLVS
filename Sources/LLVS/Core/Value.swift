@@ -28,7 +28,7 @@ public struct Value: Codable, Identifiable {
     }
     
     /// Convenience that saves creating IDs
-    public init(idString: String = UUID().uuidString, data: Data) {
+    public init(idString: String, data: Data) {
         self.init(id: ID(idString), data: data)
     }
     
