@@ -43,7 +43,7 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
     fileprivate let fileManager = FileManager()
     fileprivate let queue = OperationQueue()
 
-    init(rootDirectoryURL: URL, store: Store, usesFileCoordination: Bool) {
+    public init(rootDirectoryURL: URL, store: Store, usesFileCoordination: Bool) {
         self.rootDirectoryURL = rootDirectoryURL
         self.store = store
         self.usesFileCoordination = usesFileCoordination
