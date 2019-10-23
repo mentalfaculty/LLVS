@@ -70,7 +70,7 @@ public final class Store {
     public func reloadHistory() throws {
         try historyAccessQueue.sync {
             var newVersions: Set<Version> = []
-            for version in try versions() where history.version(identifiedBy: version.id) == nil {
+            for version in try storedVersions() where history.version(identifiedBy: version.id) == nil {
                 newVersions.insert(version)
                 try history.add(version, updatingPredecessorVersions: false)
             }
@@ -82,9 +82,9 @@ public final class Store {
     
     /// Provides access to the history object in a serialized way, allowing access from any thread.
     /// Calls the block passed after getting exclusive history to the history object, and passes the history.
-    public func queryHistory(in block: (History)->Void) {
-        historyAccessQueue.sync {
-            block(self.history)
+    public func queryHistory(in block: (History) throws ->Void) rethrows {
+        try historyAccessQueue.sync {
+            try block(self.history)
         }
     }
     
@@ -193,8 +193,8 @@ extension Store {
     }
     
     /// Convenient method to avoid having to create id types
-    public func value(idString valueIdString: String, atVersionWithIdString versionIdString: String) throws -> Value? {
-        return try value(id: .init(valueIdString), at: .init(versionIdString))
+    public func value(idString valueIdString: String, at versionId: Version.ID) throws -> Value? {
+        return try value(id: .init(valueIdString), at: versionId)
     }
     
     public func value(id valueId: Value.ID, at versionId: Version.ID) throws -> Value? {
@@ -451,7 +451,26 @@ extension Store {
         try data.write(to: file)
     }
     
-    internal func versionIds(for valueId: Value.ID) throws -> [Version.ID] {
+    /// Returns all versions of a value with the given identifier in the history.
+    /// Order is topological, from recent to ancient. No timestamp ordering has been applied
+    /// This can be expensive, as it iterates all history.
+    public func versionIds(for valueId: Value.ID) throws -> [Version.ID] {
+        var existingVersions: Set<Version.ID> = []
+        var valueVersions: [Version.ID] = []
+        try queryHistory { history in
+            for v in history {
+                if let ref = try valueReference(id: valueId, at: v.id), !existingVersions.contains(ref.storedVersionId) {
+                    valueVersions.append(ref.storedVersionId)
+                    existingVersions.insert(ref.storedVersionId)
+                }
+            }
+        }
+        return valueVersions
+    }
+    
+    
+    /// Version ids found in store. This makes no use of the loaded history.
+    internal func storedVersionIds(for valueId: Value.ID) throws -> [Version.ID] {
         let valueDirectoryURL = valuesDirectoryURL.appendingSplitPathComponent(valueId.stringValue)
         let enumerator = fileManager.enumerator(at: valueDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
         let valueDirComponents = valueDirectoryURL.standardizedFileURL.pathComponents
@@ -469,7 +488,8 @@ extension Store {
         return versionIds
     }
     
-    fileprivate func versions() throws -> [Version] {
+    /// Versions found in store. This makes no use of the loaded history.
+    fileprivate func storedVersions() throws -> [Version] {
         let enumerator = fileManager.enumerator(at: versionsDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
         var versions: [Version] = []
         for any in enumerator {

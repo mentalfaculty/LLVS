@@ -271,7 +271,7 @@ It is important to realize that versions apply to the store as a whole. They are
 Once we have data in the store, we can retrieve it again. With LLVS you need to indicate which version of the data you want, because the store includes a complete history of changes.
 
 ```swift
-let value = try store.value(idString: "CDEFGH", atVersionWithIdString: secondVersion.id.stringValue)!
+let value = try store.value(idString: "CDEFGH", at: secondVersion.id)!
 let fetchedString = String(data: value.data, encoding: .utf8)
 ```
 
