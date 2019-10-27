@@ -68,13 +68,12 @@ public class WatchConnectivityExchange: NSObject, Exchange {
         fileSystemExchange.send(versionChanges: versionChanges, executingUponCompletion: completionHandler)
     }
     
-    private func localVersionFilenames() throws -> Set<String> {
+    fileprivate func localVersionFilenames() throws -> Set<String> {
         let files = try Set(fileManager.contentsOfDirectory(atPath: fileSystemExchange.versionsDirectory.path))
         return files
     }
     
-    private func remoteVersionFilenames(executingUponCompletion completion: CompletionHandler<Set<String>>) throws {
-//        session.sendMessage(<#T##message: [String : Any]##[String : Any]#>, replyHandler: <#T##(([String : Any]) -> Void)?##(([String : Any]) -> Void)?##([String : Any]) -> Void#>, errorHandler: <#T##((Error) -> Void)?##((Error) -> Void)?##(Error) -> Void#>)
+    fileprivate func remoteVersionFilenames(executingUponCompletion completion: CompletionHandler<Set<String>>) throws {
     }
     
 }
@@ -100,20 +99,38 @@ extension WatchConnectivityExchange: WCSessionDelegate {
         
     }
     
-    public func session(_ session: WCSession, didReceive file: WCSessionFile) {
-        
-    }
-    
-    public func session(_ session: WCSession, didReceiveMessage message: [String : Any]) {
-        
-    }
+//    public func session(_ session: WCSession, didReceiveMessage message: [String : Any]) {
+//
+//    }
     
     public func session(_ session: WCSession, didReceiveMessage message: [String : Any], replyHandler: @escaping ([String : Any]) -> Void) {
+        guard let string = message[MessageKey.request.rawValue] as? String, let request = Request(rawValue: string) else {
+            replyHandler([MessageKey.error.rawValue : RequestError.invalidRequestInMessage.rawValue])
+            return
+        }
+        guard let data = message[MessageKey.message.rawValue] as? Data else {
+            replyHandler([MessageKey.error.rawValue : RequestError.noDataInMessage.rawValue])
+            return
+        }
         
-    }
-    
-    public func session(_ session: WCSession, didReceiveMessageData messageData: Data) {
-        
+        do {
+            let decoder = JSONDecoder()
+            let encoder = JSONEncoder()
+            switch request {
+            case .versionFileList:
+                var message = try decoder.decode(RequestVersionFileList.self, from: data)
+                message.resultFilenames = try localVersionFilenames()
+                let dict: [String:Any] = [MessageKey.message.rawValue : try encoder.encode(message)]
+                replyHandler(dict)
+            case .versionFiles:
+                break
+            case .changesFiles:
+                break
+            }
+        } catch {
+            replyHandler([MessageKey.error.rawValue : RequestError.unexpectedError.rawValue])
+            return
+        }
     }
     
 }

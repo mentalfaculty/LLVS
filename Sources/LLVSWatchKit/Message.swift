@@ -13,66 +13,50 @@ enum MessageError: Swift.Error {
     case unexpectedValueInResult
 }
 
-enum MessageType: MessageValue {
-    case requestVersionFileList
-    case requestVersionFiles(filenames: [String])
-    case requestChangesFiles(filenames: [String])
-    
-    var messageDictionaryValue: Any {
-        return ""
-    }
+enum RequestError: Int {
+    case unexpectedError
+    case invalidRequestInMessage
+    case noDataInMessage
+}
+
+enum Request: String, Codable {
+    case versionFileList
+    case versionFiles
+    case changesFiles
 }
 
 enum MessageKey: String {
-    case messageType
-    case resultValue
+    case message, request, error
 }
 
-protocol MessageValue {
-    var messageDictionaryValue: Any { get }
-}
-
-protocol Message {
-    associatedtype ResultType: MessageResult
-    var messageDictionary: [MessageKey:MessageValue] { get }
-}
-
-extension Message {
-    private var messageDictionaryForSession: [String:Any] {
-        return [:]
-    }
-    
-    func send(via sesssion: WCSession, executingUponCompletion completion: @escaping CompletionHandler<ResultType>) {
-        sesssion.sendMessage(messageDictionaryForSession, replyHandler: { replyDict in
-            guard let anyResult = replyDict[MessageKey.resultValue.rawValue], let result = try? ResultType(value: anyResult) else {
-                completion(.failure(MessageError.unexpectedValueInResult))
-                return
-            }
-            completion(.success(result))
-        }) { error in
-            completion(.failure(error))
-        }
-    }
-}
-
-protocol MessageResult {
-    init(value: Any) throws
-}
-
-struct FilenameSet: MessageResult {
-    var filenames: Set<String>
-    
-    init(value: Any) throws {
-        guard let names = value as? Set<String> else {
-            throw MessageError.unexpectedValueInResult
-        }
-        self.filenames = names
-    }
+protocol Message: Codable, Identifiable {
+    var request: Request { get }
 }
 
 struct RequestVersionFileList: Message {
-    typealias ResultType = FilenameSet
-    var messageDictionary: [MessageKey:MessageValue] {
-        return [.messageType : MessageType.requestVersionFileList]
+    var id: UUID = .init()
+    var request: Request { .versionFileList }
+    var resultFilenames: Set<String>?
+}
+
+extension Message {
+    func send(via sesssion: WCSession, executingUponCompletion completion: @escaping CompletionHandler<Self>) {
+        let dict: [String:Any]
+        do {
+            dict = [MessageKey.message.rawValue : try JSONEncoder().encode(self), MessageKey.request.rawValue : request.rawValue]
+        } catch {
+            completion(.failure(error))
+            return
+        }
+        
+        sesssion.sendMessage(dict, replyHandler: { replyDict in
+            guard let data = replyDict["message"] as? Data, let resultMessage = try? JSONDecoder().decode(type(of: self), from: data) else {
+                completion(.failure(MessageError.unexpectedValueInResult))
+                return
+            }
+            completion(.success(resultMessage))
+        }) { error in
+            completion(.failure(error))
+        }
     }
 }
