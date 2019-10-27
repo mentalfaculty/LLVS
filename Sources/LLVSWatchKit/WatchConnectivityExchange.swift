@@ -73,7 +73,16 @@ public class WatchConnectivityExchange: NSObject, Exchange {
         return files
     }
     
-    fileprivate func remoteVersionFilenames(executingUponCompletion completion: CompletionHandler<Set<String>>) throws {
+    fileprivate func remoteVersionFilenames(executingUponCompletion completion: @escaping CompletionHandler<Set<String>>) throws {
+        let message = RequestVersionFileList()
+        message.send(via: session) { result in
+            switch result {
+            case let .failure(error):
+                completion(.failure(error))
+            case let .success(resultMessage):
+                completion(.success(resultMessage.resultFilenames ?? []))
+            }
+        }
     }
     
 }
