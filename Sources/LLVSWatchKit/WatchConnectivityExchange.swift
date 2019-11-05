@@ -17,15 +17,20 @@ public class WatchConnectivityExchange: NSObject, Exchange {
         case changesFileInvalid
     }
     
-    private let fileSystemExchange: FileSystemExchange
     private let session: WCSession
     
-    public var store: Store { fileSystemExchange.store }
-    public var rootDirectoryURL: URL { fileSystemExchange.rootDirectoryURL }
+    public let store: Store
+    
+    private let minimumDelayBeforeNotifyingOfNewVersions = 1.0
+    
+    @available(macOS 10.15, iOS 13, watchOS 6, *)
+    private lazy var newVersionsSubject: PassthroughSubject<Void, Never> = .init()
 
     @available(macOS 10.15, iOS 13, watchOS 6, *)
     public var newVersionsAvailable: AnyPublisher<Void, Never> {
-        fileSystemExchange.newVersionsAvailable
+        newVersionsSubject
+            .debounce(for: .seconds(minimumDelayBeforeNotifyingOfNewVersions), scheduler: RunLoop.main)
+            .eraseToAnyPublisher()
     }
         
     public var restorationState: Data? {
@@ -33,54 +38,54 @@ public class WatchConnectivityExchange: NSObject, Exchange {
         set {}
     }
 
-    fileprivate let fileManager = FileManager()
     fileprivate let queue = OperationQueue()
 
-    init(rootDirectoryURL: URL, store: Store, usesFileCoordination: Bool) {
-        self.fileSystemExchange = .init(rootDirectoryURL: rootDirectoryURL, store: store, usesFileCoordination: usesFileCoordination)
+    init(store: Store) {
         self.session = WCSession.default
+        self.store = store
         super.init()
         self.session.delegate = self
         self.session.activate()
     }
     
     public func prepareToRetrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        fileSystemExchange.prepareToRetrieve(executingUponCompletion: completionHandler)
+        completionHandler(.success(()))
     }
     
-    public func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier]>) {
-        fileSystemExchange.retrieveAllVersionIdentifiers(executingUponCompletion: completionHandler)
+    public func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>) {
+        let message = RequestVersionIdentifiers()
+        send(message, executingUponCompletion: completionHandler)
     }
     
-    public func retrieveVersions(identifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
-        fileSystemExchange.retrieveVersions(identifiedBy: versionIdentifiers, executingUponCompletion: completionHandler)
+    public func retrieveVersions(identifiedBy versionIdentifiers: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
+//        fileSystemExchange.retrieveVersions(identifiedBy: versionIdentifiers, executingUponCompletion: completionHandler)
     }
     
-    public func retrieveValueChanges(forVersionsIdentifiedBy versionIdentifiers: [Version.Identifier], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.Identifier:[Value.Change]]>) {
-        fileSystemExchange.retrieveValueChanges(forVersionsIdentifiedBy: versionIdentifiers, executingUponCompletion: completionHandler)
+    public func retrieveValueChanges(forVersionsIdentifiedBy versionIdentifiers: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID:[Value.Change]]>) {
+//        fileSystemExchange.retrieveValueChanges(forVersionsIdentifiedBy: versionIdentifiers, executingUponCompletion: completionHandler)
     }
     
     public func prepareToSend(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        fileSystemExchange.prepareToSend(executingUponCompletion: completionHandler)
+        completionHandler(.success(()))
     }
     
     public func send(versionChanges: [VersionChanges], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        fileSystemExchange.send(versionChanges: versionChanges, executingUponCompletion: completionHandler)
+//        fileSystemExchange.send(versionChanges: versionChanges, executingUponCompletion: completionHandler)
     }
     
-    fileprivate func localVersionFilenames() throws -> Set<String> {
-        let files = try Set(fileManager.contentsOfDirectory(atPath: fileSystemExchange.versionsDirectory.path))
-        return files
+    fileprivate func localVersionIdentifiers() throws -> [Version.ID] {
+        var ids: [Version.ID] = []
+        store.queryHistory { ids = $0.allVersionIdentifiers }
+        return ids
     }
     
-    fileprivate func remoteVersionFilenames(executingUponCompletion completion: @escaping CompletionHandler<Set<String>>) throws {
-        let message = RequestVersionFileList()
+    fileprivate func send<T:Message>(_ message: T, executingUponCompletion completion: @escaping CompletionHandler<T.ResponseType>) {
         message.send(via: session) { result in
             switch result {
             case let .failure(error):
                 completion(.failure(error))
             case let .success(resultMessage):
-                completion(.success(resultMessage.resultFilenames ?? []))
+                completion(.success(resultMessage.response!))
             }
         }
     }
@@ -126,14 +131,14 @@ extension WatchConnectivityExchange: WCSessionDelegate {
             let decoder = JSONDecoder()
             let encoder = JSONEncoder()
             switch request {
-            case .versionFileList:
-                var message = try decoder.decode(RequestVersionFileList.self, from: data)
-                message.resultFilenames = try localVersionFilenames()
+            case .versionIdentifiers:
+                var message = try decoder.decode(RequestVersionIdentifiers.self, from: data)
+                message.response = try localVersionIdentifiers()
                 let dict: [String:Any] = [MessageKey.message.rawValue : try encoder.encode(message)]
                 replyHandler(dict)
-            case .versionFiles:
+            case .versions:
                 break
-            case .changesFiles:
+            case .changes:
                 break
             }
         } catch {

@@ -20,9 +20,9 @@ enum RequestError: Int {
 }
 
 enum Request: String, Codable {
-    case versionFileList
-    case versionFiles
-    case changesFiles
+    case versionIdentifiers
+    case versions
+    case changes
 }
 
 enum MessageKey: String {
@@ -30,13 +30,27 @@ enum MessageKey: String {
 }
 
 protocol Message: Codable, Identifiable {
+    associatedtype ResponseType: Codable
     var request: Request { get }
+    var response: ResponseType? { get set }
 }
 
-struct RequestVersionFileList: Message {
+struct RequestVersionIdentifiers: Message {
     var id: UUID = .init()
-    var request: Request { .versionFileList }
-    var resultFilenames: Set<String>?
+    var request: Request { .versionIdentifiers }
+    var response: [Version.ID]?
+}
+
+struct RequestVersions: Message {
+    var id: UUID = .init()
+    var request: Request { .versions }
+    var response: [Version]?
+}
+
+struct RequestChanges: Message {
+    var id: UUID = .init()
+    var request: Request { .changes }
+    var response: [Value.Change]?
 }
 
 extension Message {
