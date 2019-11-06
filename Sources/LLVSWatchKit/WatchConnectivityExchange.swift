@@ -13,9 +13,11 @@ import Combine
 public class WatchConnectivityExchange: NSObject, Exchange {
 
     public enum Error: Swift.Error {
-        case versionFileInvalid
-        case changesFileInvalid
+        case versionInvalid
+        case changesInvalid
     }
+    
+    public let isPeerToPeer: Bool = true
     
     private let session: WCSession
     
@@ -38,8 +40,6 @@ public class WatchConnectivityExchange: NSObject, Exchange {
         set {}
     }
 
-    fileprivate let queue = OperationQueue()
-
     init(store: Store) {
         self.session = WCSession.default
         self.store = store
@@ -58,19 +58,22 @@ public class WatchConnectivityExchange: NSObject, Exchange {
     }
     
     public func retrieveVersions(identifiedBy versionIdentifiers: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
-//        fileSystemExchange.retrieveVersions(identifiedBy: versionIdentifiers, executingUponCompletion: completionHandler)
+        let message = RequestVersions(versionIds: versionIdentifiers)
+        send(message, executingUponCompletion: completionHandler)
     }
     
     public func retrieveValueChanges(forVersionsIdentifiedBy versionIdentifiers: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID:[Value.Change]]>) {
-//        fileSystemExchange.retrieveValueChanges(forVersionsIdentifiedBy: versionIdentifiers, executingUponCompletion: completionHandler)
+        let message = RequestChanges(versionIds: versionIdentifiers)
+        send(message, executingUponCompletion: completionHandler)
     }
     
     public func prepareToSend(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        completionHandler(.success(()))
+        completionHandler(.failure(ExchangeError.attemptToSendWithPeerToPeerExchange))
     }
     
     public func send(versionChanges: [VersionChanges], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-//        fileSystemExchange.send(versionChanges: versionChanges, executingUponCompletion: completionHandler)
+        // Because this is a peer-to-peer system, this should never be called. Peers only retrieve, they don't send.
+        completionHandler(.failure(ExchangeError.attemptToSendWithPeerToPeerExchange))
     }
     
     fileprivate func localVersionIdentifiers() throws -> [Version.ID] {
@@ -97,7 +100,6 @@ extension WatchConnectivityExchange: WCSessionDelegate {
     
     #if os(iOS)
     public func sessionDidBecomeInactive(_ session: WCSession) {
-        
     }
     
     public func sessionDidDeactivate(_ session: WCSession) {
@@ -106,16 +108,10 @@ extension WatchConnectivityExchange: WCSessionDelegate {
     #endif
     
     public func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Swift.Error?) {
-        
     }
     
     public func sessionReachabilityDidChange(_ session: WCSession) {
-        
     }
-    
-//    public func session(_ session: WCSession, didReceiveMessage message: [String : Any]) {
-//
-//    }
     
     public func session(_ session: WCSession, didReceiveMessage message: [String : Any], replyHandler: @escaping ([String : Any]) -> Void) {
         guard let string = message[MessageKey.request.rawValue] as? String, let request = Request(rawValue: string) else {
@@ -130,20 +126,39 @@ extension WatchConnectivityExchange: WCSessionDelegate {
         do {
             let decoder = JSONDecoder()
             let encoder = JSONEncoder()
+            
+            let replyData: Data
             switch request {
             case .versionIdentifiers:
                 var message = try decoder.decode(RequestVersionIdentifiers.self, from: data)
                 message.response = try localVersionIdentifiers()
-                let dict: [String:Any] = [MessageKey.message.rawValue : try encoder.encode(message)]
-                replyHandler(dict)
+                replyData = try encoder.encode(message)
             case .versions:
-                break
+                var message = try decoder.decode(RequestVersions.self, from: data)
+                message.response = try message.versionIds.map { id in
+                    var version: Version?
+                    try self.store.queryHistory { history in
+                        if let v = history.version(identifiedBy: id) {
+                            version = v
+                        } else {
+                            throw Error.versionInvalid
+                        }
+                    }
+                    return version!
+                }
+                replyData = try encoder.encode(message)
             case .changes:
-                break
+                var message = try decoder.decode(RequestChanges.self, from: data)
+                message.response = try message.versionIds.reduce(into: [:]) { changesById, versionId in
+                    changesById[versionId] = try self.store.valueChanges(madeInVersionIdentifiedBy: versionId)
+                }
+                replyData = try encoder.encode(message)
             }
+            
+            let dict: [String:Any] = [MessageKey.message.rawValue : replyData]
+            replyHandler(dict)
         } catch {
             replyHandler([MessageKey.error.rawValue : RequestError.unexpectedError.rawValue])
-            return
         }
     }
     

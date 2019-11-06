@@ -54,6 +54,8 @@ public class CloudKitExchange: Exchange {
         return result
     }()
     
+    public let isPeerToPeer: Bool = false
+    
     /// The store the exchange is updating.
     public var store: Store
     

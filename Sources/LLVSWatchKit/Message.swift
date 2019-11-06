@@ -11,6 +11,7 @@ import LLVS
 
 enum MessageError: Swift.Error {
     case unexpectedValueInResult
+    case counterpartDeviceUnreachable
 }
 
 enum RequestError: Int {
@@ -43,34 +44,41 @@ struct RequestVersionIdentifiers: Message {
 
 struct RequestVersions: Message {
     var id: UUID = .init()
+    var versionIds: [Version.ID]
     var request: Request { .versions }
     var response: [Version]?
 }
 
 struct RequestChanges: Message {
     var id: UUID = .init()
+    var versionIds: [Version.ID]
     var request: Request { .changes }
-    var response: [Value.Change]?
+    var response: [Version.ID:[Value.Change]]?
 }
 
 extension Message {
-    func send(via sesssion: WCSession, executingUponCompletion completion: @escaping CompletionHandler<Self>) {
+    func send(via session: WCSession, executingUponCompletion completionHandler: @escaping CompletionHandler<Self>) {
+        guard session.isReachable else {
+            completionHandler(.failure(MessageError.counterpartDeviceUnreachable))
+            return
+        }
+        
         let dict: [String:Any]
         do {
             dict = [MessageKey.message.rawValue : try JSONEncoder().encode(self), MessageKey.request.rawValue : request.rawValue]
         } catch {
-            completion(.failure(error))
+            completionHandler(.failure(error))
             return
         }
         
-        sesssion.sendMessage(dict, replyHandler: { replyDict in
+        session.sendMessage(dict, replyHandler: { replyDict in
             guard let data = replyDict["message"] as? Data, let resultMessage = try? JSONDecoder().decode(type(of: self), from: data) else {
-                completion(.failure(MessageError.unexpectedValueInResult))
+                completionHandler(.failure(MessageError.unexpectedValueInResult))
                 return
             }
-            completion(.success(resultMessage))
+            completionHandler(.success(resultMessage))
         }) { error in
-            completion(.failure(error))
+            completionHandler(.failure(error))
         }
     }
 }

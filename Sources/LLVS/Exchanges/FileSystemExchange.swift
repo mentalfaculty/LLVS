@@ -15,6 +15,8 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
         case changesFileInvalid
     }
     
+    public let isPeerToPeer: Bool = false
+    
     public let store: Store
     
     private let minimumDelayBeforeNotifyingOfNewVersions = 1.0

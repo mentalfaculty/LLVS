@@ -8,7 +8,8 @@
 import Foundation
 import Combine
 
-enum ExchangeError: Swift.Error {
+public enum ExchangeError: Swift.Error {
+    case attemptToSendWithPeerToPeerExchange
     case remoteVersionsWithUnknownPredecessors
     case missingVersion
     case unknown(error: Swift.Error)
@@ -24,6 +25,8 @@ public protocol Exchange: class {
     
     var restorationState: Data? { get set }
     
+    var isPeerToPeer: Bool { get }
+    
     func retrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>)
     func prepareToRetrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>)
     func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>)
@@ -38,7 +41,7 @@ public protocol Exchange: class {
 // MARK:- Retrieving
 
 public extension Exchange {
-    
+        
     func retrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>) {
         log.trace("Retrieving")
         
@@ -156,6 +159,11 @@ public extension Exchange {
 public extension Exchange {
     
     func send(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>) {
+        guard !isPeerToPeer else {
+            completionHandler(.failure(ExchangeError.attemptToSendWithPeerToPeerExchange))
+            return
+        }
+        
         let prepare = AsynchronousTask { finish in
             self.prepareToSend { result in
                 finish(result)
