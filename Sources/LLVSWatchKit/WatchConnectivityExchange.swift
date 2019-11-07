@@ -40,7 +40,7 @@ public class WatchConnectivityExchange: NSObject, Exchange {
         set {}
     }
 
-    init(store: Store) {
+    public init(store: Store) {
         self.session = WCSession.default
         self.store = store
         super.init()

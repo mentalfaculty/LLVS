@@ -208,6 +208,10 @@ public class StoreCoordinator {
         }
         
         let send = AsynchronousTask { finish in
+            guard !exchange.isPeerToPeer else {
+                finish(.success(()))
+                return
+            }
             exchange.send { result in
                 switch result {
                 case let .failure(error):
