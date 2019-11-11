@@ -55,10 +55,15 @@ extension Version: Codable {
 
 extension Version {
     
-    public struct Identifier: StringIdentifiable, Codable, Hashable {
-        public var stringValue: String
-        public init(_ stringValue: String = UUID().uuidString) {
-            self.stringValue = stringValue
+    public struct Identifier: RawRepresentable, Codable, Hashable {
+        public var rawValue: String
+        
+        public init(rawValue: String = UUID().uuidString) {
+            self.rawValue = rawValue
+        }
+        
+        public init(_ rawValue: String) {
+            self.init(rawValue: rawValue)
         }
     }
     
@@ -94,7 +99,7 @@ public extension Collection where Element == Version {
     }
     
     var idStrings: [String] {
-        return map { $0.id.stringValue }
+        return map { $0.id.rawValue }
     }
     
 }
@@ -103,7 +108,7 @@ public extension Collection where Element == Version {
 public extension Collection where Element == Version.ID {
 
     var idStrings: [String] {
-        return map { $0.stringValue }
+        return map { $0.rawValue }
     }
     
 }

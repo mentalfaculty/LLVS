@@ -258,7 +258,7 @@ public extension CloudKitExchange {
     
     func retrieveVersions(identifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
         log.trace("Retrieving versions")
-        let recordIDs = versionIds.map { CKRecord.ID(recordName: $0.stringValue, zoneID: zoneID ?? .default) }
+        let recordIDs = versionIds.map { CKRecord.ID(recordName: $0.rawValue, zoneID: zoneID ?? .default) }
         let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
         fetchOperation.desiredKeys = [CKRecord.ExchangeKey.version.rawValue]
         fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
@@ -286,13 +286,13 @@ public extension CloudKitExchange {
     }
     
     func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>) {
-        log.verbose("Retrieved all versions: \(restoration.versionsInCloud.map({ $0.stringValue }))")
+        log.verbose("Retrieved all versions: \(restoration.versionsInCloud.map({ $0.rawValue }))")
         completionHandler(.success(Array(restoration.versionsInCloud)))
     }
     
     func retrieveValueChanges(forVersionsIdentifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID:[Value.Change]]>) {
         log.trace("Retrieving value changes for versions: \(versionIds)")
-        let recordIDs = versionIds.map { CKRecord.ID(recordName: $0.stringValue, zoneID: zoneID ?? .default) }
+        let recordIDs = versionIds.map { CKRecord.ID(recordName: $0.rawValue, zoneID: zoneID ?? .default) }
         let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
         fetchOperation.desiredKeys = [CKRecord.ExchangeKey.valueChanges.rawValue, CKRecord.ExchangeKey.valueChangesAsset.rawValue]
         fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
@@ -370,7 +370,7 @@ public extension CloudKitExchange {
             let records: [CKRecord] = try versionChanges.map { t in
                 let version = t.version
                 let valueChanges = t.valueChanges
-                let recordID = CKRecord.ID(recordName: version.id.stringValue, zoneID: zoneID ?? .default)
+                let recordID = CKRecord.ID(recordName: version.id.rawValue, zoneID: zoneID ?? .default)
                 let record = CKRecord(recordType: .init(CKRecord.ExchangeType.Version.rawValue), recordID: recordID)
                 let versionData = try JSONEncoder().encode([version]) // Use an array, because JSON needs root dict or array
                 let changesData = try JSONEncoder().encode(valueChanges)

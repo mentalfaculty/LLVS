@@ -65,7 +65,7 @@ public class History {
     /// have been loaded.
     internal func add(_ version: Version, updatingPredecessorVersions: Bool) throws {
         guard versionsByIdentifier[version.id] == nil else {
-            throw Error.attemptToAddPreexistingVersion(id: version.id.stringValue)
+            throw Error.attemptToAddPreexistingVersion(id: version.id.rawValue)
         }
         
         versionsByIdentifier[version.id] = version
@@ -81,7 +81,7 @@ public class History {
     internal func updateSuccessors(inPredecessorsOf version: Version) throws {
         for predecessorIdentifier in version.predecessors?.ids ?? [] {
             guard let predecessor = self.version(identifiedBy: predecessorIdentifier) else {
-                throw Error.nonExistentVersionEncountered(identifier: predecessorIdentifier.stringValue)
+                throw Error.nonExistentVersionEncountered(identifier: predecessorIdentifier.rawValue)
             }
             
             referencedVersionIdentifiers.insert(predecessorIdentifier)
@@ -104,7 +104,7 @@ public class History {
             var newFront = Set<Version.ID>()
             for identifier in front {
                 guard let frontVersion = self.version(identifiedBy: identifier) else {
-                    throw Error.nonExistentVersionEncountered(identifier: identifier.stringValue)
+                    throw Error.nonExistentVersionEncountered(identifier: identifier.rawValue)
                 }
                 newFront.formUnion(frontVersion.predecessors?.ids ?? [])
             }

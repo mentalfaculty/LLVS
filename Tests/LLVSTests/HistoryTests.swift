@@ -29,8 +29,8 @@ class HistoryTests: XCTestCase {
         let version = Version(id: .init("ABCD"), predecessors: nil)
         try! history.add(version, updatingPredecessorVersions: true)
         XCTAssertEqual(history.headIdentifiers.count, 1)
-        XCTAssertEqual(history.headIdentifiers.first?.stringValue, "ABCD")
-        XCTAssertEqual(history.mostRecentHead?.id.stringValue, "ABCD")
+        XCTAssertEqual(history.headIdentifiers.first?.rawValue, "ABCD")
+        XCTAssertEqual(history.mostRecentHead?.id.rawValue, "ABCD")
 
         let versions: (Version.ID, Version.ID) = (.init("ABCD"), .init("CDEF"))
         XCTAssertThrowsError(try history.greatestCommonAncestor(ofVersionsIdentifiedBy: versions))
@@ -49,11 +49,11 @@ class HistoryTests: XCTestCase {
         let version2 = Version(id: .init("CDEF"), predecessors: nil)
         try! history.add(version2, updatingPredecessorVersions: true)
         
-        let sortedHeads = history.headIdentifiers.sorted { $0.stringValue < $1.stringValue }
+        let sortedHeads = history.headIdentifiers.sorted { $0.rawValue < $1.rawValue }
         XCTAssertEqual(sortedHeads.count, 2)
-        XCTAssertEqual(sortedHeads.first?.stringValue, "ABCD")
-        XCTAssertEqual(sortedHeads.last?.stringValue, "CDEF")
-        XCTAssertEqual(history.mostRecentHead?.id.stringValue, "CDEF")
+        XCTAssertEqual(sortedHeads.first?.rawValue, "ABCD")
+        XCTAssertEqual(sortedHeads.last?.rawValue, "CDEF")
+        XCTAssertEqual(history.mostRecentHead?.id.rawValue, "CDEF")
         
         let versions: (Version.ID, Version.ID) = (.init("ABCD"), .init("CDEF"))
         XCTAssertNil(try history.greatestCommonAncestor(ofVersionsIdentifiedBy: versions))
@@ -67,10 +67,10 @@ class HistoryTests: XCTestCase {
         let version2 = Version(id: .init("CDEF"), predecessors: predecessors)
         try! history.add(version2, updatingPredecessorVersions: true)
         
-        let sortedHeads = history.headIdentifiers.sorted { $0.stringValue < $1.stringValue }
+        let sortedHeads = history.headIdentifiers.sorted { $0.rawValue < $1.rawValue }
         XCTAssertEqual(sortedHeads.count, 1)
-        XCTAssertEqual(sortedHeads.first?.stringValue, "CDEF")
-        XCTAssertEqual(history.mostRecentHead?.id.stringValue, "CDEF")
+        XCTAssertEqual(sortedHeads.first?.rawValue, "CDEF")
+        XCTAssertEqual(history.mostRecentHead?.id.rawValue, "CDEF")
         
         let versions: (Version.ID, Version.ID) = (.init("ABCD"), .init("CDEF"))
         let common = try! history.greatestCommonAncestor(ofVersionsIdentifiedBy: versions)
@@ -89,10 +89,10 @@ class HistoryTests: XCTestCase {
         let version3 = Version(id: .init("GHIJ"), predecessors: predecessors3)
         try! history.add(version3, updatingPredecessorVersions: true)
         
-        let sortedHeads = history.headIdentifiers.sorted { $0.stringValue < $1.stringValue }
+        let sortedHeads = history.headIdentifiers.sorted { $0.rawValue < $1.rawValue }
         XCTAssertEqual(sortedHeads.count, 1)
-        XCTAssertEqual(sortedHeads.first?.stringValue, "GHIJ")
-        XCTAssertEqual(history.mostRecentHead?.id.stringValue, "GHIJ")
+        XCTAssertEqual(sortedHeads.first?.rawValue, "GHIJ")
+        XCTAssertEqual(history.mostRecentHead?.id.rawValue, "GHIJ")
         
         let versions: (Version.ID, Version.ID) = (.init("ABCD"), .init("GHIJ"))
         let common = try! history.greatestCommonAncestor(ofVersionsIdentifiedBy: versions)
@@ -111,10 +111,10 @@ class HistoryTests: XCTestCase {
         let version3 = Version(id: .init("GHIJ"), predecessors: predecessors3)
         try! history.add(version3, updatingPredecessorVersions: true)
         
-        let sortedHeads = history.headIdentifiers.sorted { $0.stringValue < $1.stringValue }
+        let sortedHeads = history.headIdentifiers.sorted { $0.rawValue < $1.rawValue }
         XCTAssertEqual(sortedHeads.count, 2)
-        XCTAssertEqual(sortedHeads.first?.stringValue, "CDEF")
-        XCTAssertEqual(history.mostRecentHead?.id.stringValue, "GHIJ")
+        XCTAssertEqual(sortedHeads.first?.rawValue, "CDEF")
+        XCTAssertEqual(history.mostRecentHead?.id.rawValue, "GHIJ")
         
         let versions: (Version.ID, Version.ID) = (.init("CDEF"), .init("GHIJ"))
         let common = try! history.greatestCommonAncestor(ofVersionsIdentifiedBy: versions)
@@ -137,10 +137,10 @@ class HistoryTests: XCTestCase {
         let version4 = Version(id: .init("KLMN"), predecessors: predecessors4)
         try! history.add(version4, updatingPredecessorVersions: true)
         
-        let sortedHeads = history.headIdentifiers.sorted { $0.stringValue < $1.stringValue }
+        let sortedHeads = history.headIdentifiers.sorted { $0.rawValue < $1.rawValue }
         XCTAssertEqual(sortedHeads.count, 1)
-        XCTAssertEqual(sortedHeads.first?.stringValue, "KLMN")
-        XCTAssertEqual(history.mostRecentHead?.id.stringValue, "KLMN")
+        XCTAssertEqual(sortedHeads.first?.rawValue, "KLMN")
+        XCTAssertEqual(history.mostRecentHead?.id.rawValue, "KLMN")
         
         let versions: (Version.ID, Version.ID) = (.init("KLMN"), .init("GHIJ"))
         let common = try! history.greatestCommonAncestor(ofVersionsIdentifiedBy: versions)

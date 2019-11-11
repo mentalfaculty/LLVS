@@ -90,7 +90,7 @@ struct Contact: Equatable, Faultable {
         case friends
         
         func key(forIdentifier identifier: Value.Identifier) -> String {
-            return "\(identifier.stringValue).Contact.\(self)"
+            return "\(identifier.rawValue).Contact.\(self)"
         }
     }
 }

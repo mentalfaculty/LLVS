@@ -7,10 +7,6 @@
 
 import Foundation
 
-public protocol StringIdentifiable {
-    var stringValue: String { get }
-}
-
 public extension Result {
     var value: Success? {
         guard case let .success(value) = self else { return nil }

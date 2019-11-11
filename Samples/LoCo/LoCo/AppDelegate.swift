@@ -48,7 +48,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDele
             book = try! ContactBook(creatingIn: store)
             versionId = book.currentVersion
         }
-        userDefaults.set(book.currentVersion.stringValue, forKey: self.storeVersionKey)
+        userDefaults.set(book.currentVersion.rawValue, forKey: self.storeVersionKey)
         userDefaults.synchronize()
         return book
     }()
@@ -120,7 +120,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UISplitViewControllerDele
     }
     
     func storeCurrentVersion() {
-        userDefaults.set(self.contactBook.currentVersion.stringValue, forKey: self.storeVersionKey)
+        userDefaults.set(self.contactBook.currentVersion.rawValue, forKey: self.storeVersionKey)
         userDefaults.synchronize()
     }
 

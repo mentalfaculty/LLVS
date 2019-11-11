@@ -37,7 +37,7 @@ final class ContactBook {
     var currentVersion: Version.Identifier {
         didSet {
             guard self.currentVersion != oldValue else { return }
-            log.trace("Current version of ContactBook changed to \(self.currentVersion.stringValue)")
+            log.trace("Current version of ContactBook changed to \(self.currentVersion.rawValue)")
             try! fetchContacts()
             if !isSyncing {
                 NotificationCenter.default.post(name: .contactBookDidSaveLocalChanges, object: self)
@@ -114,7 +114,7 @@ final class ContactBook {
     }
     
     fileprivate func updateContactsChange(withContactIdentifiers valueIds: [Value.Identifier]) throws -> Value.Change {
-        let stringValues = valueIds.map { $0.stringValue }
+        let stringValues = valueIds.map { $0.rawValue }
         let data = try JSONSerialization.data(withJSONObject: stringValues, options: [])
         let newValue = Value(id: ContactBook.sharedContactBookIdentifier, data: data)
         let update: Value.Change = .update(newValue)

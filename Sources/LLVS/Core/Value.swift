@@ -19,7 +19,7 @@ public struct Value: Codable, Identifiable {
     
     internal var zoneReference: ZoneReference? {
         guard let version = storedVersionId else { return nil }
-        return ZoneReference(key: id.stringValue, version: version)
+        return ZoneReference(key: id.rawValue, version: version)
     }
     
     public var reference: Reference? {
@@ -54,11 +54,15 @@ public extension Value {
         public var storedVersionId: Version.ID
     }
     
-    struct Identifier: StringIdentifiable, Hashable, Codable {
-        public var stringValue: String
+    struct Identifier: RawRepresentable, Hashable, Codable {
+        public var rawValue: String
         
-        public init(_ stringValue: String = UUID().uuidString) {
-            self.stringValue = stringValue
+        public init(rawValue: String = UUID().uuidString) {
+            self.rawValue = rawValue
+        }
+        
+        public init(_ rawValue: String) {
+            self.init(rawValue: rawValue)
         }
     }
     

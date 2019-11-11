@@ -29,7 +29,7 @@ final class ValueTests: XCTestCase {
     }
     
     func testSavingValueCreatesSubDirectoriesAndFile() {
-        let v = version.id.stringValue
+        let v = version.id.rawValue
         let map = v.index(v.startIndex, offsetBy: 1)
         let versionSubDir = String(v[..<map])
         let versionFile = String(v[map...])
@@ -40,7 +40,7 @@ final class ValueTests: XCTestCase {
     }
     
     func testSavedFileContainsValue() {
-        let v = version.id.stringValue
+        let v = version.id.rawValue
         let map = v.index(v.startIndex, offsetBy: 1)
         let versionSubDir = String(v[..<map])
         let versionFile = String(v[map...])
@@ -58,7 +58,7 @@ final class ValueTests: XCTestCase {
     func testFetchingSavedVersionOfValue() {
         let value = try! store.value(id: originalValue.id, storedAt: version.id)
         XCTAssertNotNil(value)
-        XCTAssertEqual(value!.id.stringValue, originalValue.id.stringValue)
+        XCTAssertEqual(value!.id.rawValue, originalValue.id.rawValue)
         XCTAssertEqual(value!.storedVersionId!, version.id)
         XCTAssertEqual(value!.data, "Bob".data(using: .utf8)!)
     }

@@ -68,7 +68,7 @@ internal final class FileZone: Zone {
     func fileSystemLocation(for reference: ZoneReference) throws -> (directoryURL: URL, fileURL: URL) {
         let safeKey = reference.key.replacingOccurrences(of: "/", with: "LLVSSLASH").replacingOccurrences(of: ":", with: "LLVSCOLON")
         let valueDirectoryURL = rootDirectory.appendingSplitPathComponent(safeKey)
-        let versionName = reference.version.stringValue + "." + fileExtension
+        let versionName = reference.version.rawValue + "." + fileExtension
         let fileURL = valueDirectoryURL.appendingSplitPathComponent(versionName, prefixLength: 1)
         let directoryURL = fileURL.deletingLastPathComponent()
         return (directoryURL: directoryURL, fileURL: fileURL)

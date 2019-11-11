@@ -32,7 +32,7 @@ final class VersionTests: XCTestCase {
     }
     
     func testCreationOfVersionFile() {
-        let v = version.id.stringValue + ".json"
+        let v = version.id.rawValue + ".json"
         let prefix = String(v.prefix(2))
         let postfix = String(v.dropFirst(2))
         XCTAssert(fm.fileExists(atPath: versionsURL.appendingPathComponent(prefix).appendingPathComponent(postfix).path))

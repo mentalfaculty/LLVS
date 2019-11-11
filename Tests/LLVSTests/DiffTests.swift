@@ -61,13 +61,13 @@ class DiffTests: XCTestCase {
         add(values: ["AB2222", "AB1166", "CD2222"], version: "2222", basedOn: "0000")
         let diffs = try! map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
         XCTAssertEqual(diffs.count, 6)
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.stringValue == "AB1111" && $0.valueFork == Value.Fork.inserted(.first) }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.stringValue == "AB1155" && $0.valueFork == Value.Fork.inserted(.first) }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.stringValue == "CD1111" && $0.valueFork == Value.Fork.inserted(.first) }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.stringValue == "AB2222" && $0.valueFork == Value.Fork.inserted(.second) }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.stringValue == "AB1166" && $0.valueFork == Value.Fork.inserted(.second) }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.stringValue == "CD2222" && $0.valueFork == Value.Fork.inserted(.second) }))
-        XCTAssertFalse(diffs.contains(where: { $0.valueId.stringValue == "CD2222" && $0.valueFork == Value.Fork.inserted(.first) }))
+        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.inserted(.first) }))
+        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1155" && $0.valueFork == Value.Fork.inserted(.first) }))
+        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "CD1111" && $0.valueFork == Value.Fork.inserted(.first) }))
+        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB2222" && $0.valueFork == Value.Fork.inserted(.second) }))
+        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1166" && $0.valueFork == Value.Fork.inserted(.second) }))
+        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "CD2222" && $0.valueFork == Value.Fork.inserted(.second) }))
+        XCTAssertFalse(diffs.contains(where: { $0.valueId.rawValue == "CD2222" && $0.valueFork == Value.Fork.inserted(.first) }))
     }
     
     func testInserts() {
@@ -76,10 +76,10 @@ class DiffTests: XCTestCase {
         add(values: ["AB1111", "AB1112", "ZZ2222"], version: "2222", basedOn: "0000")
         let diffs = try! map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
         XCTAssertEqual(diffs.count, 4)
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.stringValue == "AB1111" && $0.valueFork == Value.Fork.twiceInserted }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.stringValue == "MM1111" && $0.valueFork == Value.Fork.inserted(.first) }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.stringValue == "ZZ2222" && $0.valueFork == Value.Fork.inserted(.second) }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.stringValue == "AB1112" && $0.valueFork == Value.Fork.inserted(.second) }))
+        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.twiceInserted }))
+        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "MM1111" && $0.valueFork == Value.Fork.inserted(.first) }))
+        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "ZZ2222" && $0.valueFork == Value.Fork.inserted(.second) }))
+        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1112" && $0.valueFork == Value.Fork.inserted(.second) }))
     }
     
     func testUpdates() {
@@ -88,9 +88,9 @@ class DiffTests: XCTestCase {
         add(values: ["AB1111", "MM1111", "ZZ2222"], version: "2222", basedOn: "0000")
         let diffs = try! map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
         XCTAssertEqual(diffs.count, 3)
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.stringValue == "AB1111" && $0.valueFork == Value.Fork.twiceUpdated }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.stringValue == "MM1111" && $0.valueFork == Value.Fork.updated(.second) }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.stringValue == "ZZ2222" && $0.valueFork == Value.Fork.inserted(.second) }))
+        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.twiceUpdated }))
+        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "MM1111" && $0.valueFork == Value.Fork.updated(.second) }))
+        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "ZZ2222" && $0.valueFork == Value.Fork.inserted(.second) }))
     }
     
     func testRemoves() {
@@ -99,9 +99,9 @@ class DiffTests: XCTestCase {
         remove(values: ["AB1111", "ZZ2222"], version: "2222", basedOn: "0000")
         let diffs = try! map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
         XCTAssertEqual(diffs.count, 3)
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.stringValue == "AB1111" && $0.valueFork == Value.Fork.twiceRemoved }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.stringValue == "MM1111" && $0.valueFork == Value.Fork.removed(.first) }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.stringValue == "ZZ2222" && $0.valueFork == Value.Fork.removed(.second) }))
+        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.twiceRemoved }))
+        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "MM1111" && $0.valueFork == Value.Fork.removed(.first) }))
+        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "ZZ2222" && $0.valueFork == Value.Fork.removed(.second) }))
     }
     
     func testUpdateRemove() {
@@ -110,7 +110,7 @@ class DiffTests: XCTestCase {
         add(values: ["AB1111"], version: "2222", basedOn: "0000")
         let diffs = try! map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
         XCTAssertEqual(diffs.count, 1)
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.stringValue == "AB1111" && $0.valueFork == Value.Fork.removedAndUpdated(removedOn: .first) }))
+        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.removedAndUpdated(removedOn: .first) }))
     }
 
     static var allTests = [

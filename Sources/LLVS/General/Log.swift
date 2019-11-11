@@ -63,7 +63,7 @@ public class Log {
     
     @inline(__always) public final class func append(_ messageClosure: @autoclosure () -> String, level: Level, path: StaticString, function: StaticString, line: Int = #line) {
         let filename = (String(describing: path) as NSString).lastPathComponent
-        let text = "\(level.stringValue) \(filename)(\(line)) : \(function) : \(messageClosure())"
+        let text = "\(level.rawValue) \(filename)(\(line)) : \(function) : \(messageClosure())"
         if #available(macOS 10.12, iOS 10.0, *) {
                 os_log("%{public}@", text)
         } else {

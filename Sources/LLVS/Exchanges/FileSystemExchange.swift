@@ -77,7 +77,7 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
     public func retrieveVersions(identifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
         coordinateFileAccess(.read, completionHandler: completionHandler) {
             let versions: [Version] = try versionIds.map { versionId in
-                let url = self.versionsDirectory.appendingPathComponent(versionId.stringValue)
+                let url = self.versionsDirectory.appendingPathComponent(versionId.rawValue)
                 let data = try Data(contentsOf: url)
                 if let version = try JSONDecoder().decode([String:Version].self, from: data)["version"] {
                     return version
@@ -92,7 +92,7 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
     public func retrieveValueChanges(forVersionsIdentifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID:[Value.Change]]>) {
         coordinateFileAccess(.read, completionHandler: completionHandler) {
             let result: [Version.ID:[Value.Change]] = try versionIds.reduce(into: [:]) { result, versionId in
-                let url = self.changesDirectory.appendingPathComponent(versionId.stringValue)
+                let url = self.changesDirectory.appendingPathComponent(versionId.rawValue)
                 let data = try Data(contentsOf: url)
                 let changes = try JSONDecoder().decode([Value.Change].self, from: data)
                 result[versionId] = changes
@@ -108,11 +108,11 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
     public func send(versionChanges: [VersionChanges], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         coordinateFileAccess(.write, completionHandler: completionHandler) {
              for (version, valueChanges) in versionChanges {
-                 let changesURL = self.changesDirectory.appendingPathComponent(version.id.stringValue)
+                 let changesURL = self.changesDirectory.appendingPathComponent(version.id.rawValue)
                  let changesData = try JSONEncoder().encode(valueChanges)
                  try changesData.write(to: changesURL)
                  
-                 let versionURL = self.versionsDirectory.appendingPathComponent(version.id.stringValue)
+                 let versionURL = self.versionsDirectory.appendingPathComponent(version.id.rawValue)
                  let versionData = try JSONEncoder().encode(["version":version])
                  try versionData.write(to: versionURL)
              }

@@ -121,8 +121,8 @@ public extension Exchange {
             completionHandler(.success(()))
         } else if let version = appendableVersion(from: versions) {
             let valueChanges = versionsWithValueChanges[version]!
-            log.trace("Adding version to store: \(version.id.stringValue)")
-            log.verbose("Value changes for \(version.id.stringValue): \(valueChanges)")
+            log.trace("Adding version to store: \(version.id.rawValue)")
+            log.verbose("Value changes for \(version.id.rawValue): \(valueChanges)")
             
             do {
                 try self.store.addVersion(version, storing: valueChanges)

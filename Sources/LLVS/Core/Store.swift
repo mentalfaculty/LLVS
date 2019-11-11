@@ -153,15 +153,15 @@ extension Store {
             switch change {
             case .insert(let value), .update(let value):
                 let valueRef = Value.Reference(valueId: value.id, storedVersionId: version.id)
-                var delta = Map.Delta(key: Map.Key(value.id.stringValue))
+                var delta = Map.Delta(key: Map.Key(value.id.rawValue))
                 delta.addedValueReferences = [valueRef]
                 return delta
             case .remove(let valueId), .preserveRemoval(let valueId):
-                var delta = Map.Delta(key: Map.Key(valueId.stringValue))
+                var delta = Map.Delta(key: Map.Key(valueId.rawValue))
                 delta.removedValueIdentifiers = [valueId]
                 return delta
             case .preserve(let valueRef):
-                var delta = Map.Delta(key: Map.Key(valueRef.valueId.stringValue))
+                var delta = Map.Delta(key: Map.Key(valueRef.valueId.rawValue))
                 delta.addedValueReferences = [valueRef]
                 return delta
             }
@@ -189,7 +189,7 @@ extension Store {
 extension Store {
     
     public func valueReference(id valueId: Value.ID, at versionId: Version.ID) throws -> Value.Reference? {
-        return try valuesMap.valueReferences(matching: .init(valueId.stringValue), at: versionId).first
+        return try valuesMap.valueReferences(matching: .init(valueId.rawValue), at: versionId).first
     }
     
     /// Convenient method to avoid having to create id types
@@ -203,7 +203,7 @@ extension Store {
     }
     
     public func value(id valueId: Value.ID, storedAt versionId: Version.ID) throws -> Value? {
-        guard let data = try valuesZone.data(for: .init(key: valueId.stringValue, version: versionId)) else { return nil }
+        guard let data = try valuesZone.data(for: .init(key: valueId.rawValue, version: versionId)) else { return nil }
         let value = Value(id: valueId, storedVersionId: versionId, data: data)
         return value
     }
@@ -471,7 +471,7 @@ extension Store {
     
     /// Version ids found in store. This makes no use of the loaded history.
     internal func storedVersionIds(for valueId: Value.ID) throws -> [Version.ID] {
-        let valueDirectoryURL = valuesDirectoryURL.appendingSplitPathComponent(valueId.stringValue)
+        let valueDirectoryURL = valuesDirectoryURL.appendingSplitPathComponent(valueId.rawValue)
         let enumerator = fileManager.enumerator(at: valueDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
         let valueDirComponents = valueDirectoryURL.standardizedFileURL.pathComponents
         var versionIds: [Version.ID] = []
@@ -528,7 +528,7 @@ extension Store {
 fileprivate extension Store {
     
     func fileSystemLocation(forVersionIdentifiedBy identifier: Version.ID) -> (directoryURL: URL, fileURL: URL) {
-        let fileURL = versionsDirectoryURL.appendingSplitPathComponent(identifier.stringValue).appendingPathExtension("json")
+        let fileURL = versionsDirectoryURL.appendingSplitPathComponent(identifier.rawValue).appendingPathExtension("json")
         let directoryURL = fileURL.deletingLastPathComponent()
         return (directoryURL: directoryURL, fileURL: fileURL)
     }
