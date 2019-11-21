@@ -197,15 +197,18 @@ fileprivate extension CloudKitExchange {
             switch result {
             case .failure(let error as CKError) where error.code == .unknownItem:
                 // Probably don't have data in cloud yet. Ignore error
-                self.restoration.lastQueryDate = Date.distantPast
+//                self.restoration.lastQueryDate = Date.distantPast
+                self.restoration.lastQueryDate = nil
                 completionHandler(.success(()))
             case .success(let records):
                 let versionIds = records.map { Version.ID($0.recordID.recordName) }
                 self.restoration.versionsInCloud.formUnion(versionIds)
                 let modificationDates = records.map { $0.modificationDate! }
-                self.restoration.lastQueryDate = max(self.restoration.lastQueryDate ?? Date.distantPast, modificationDates.max() ?? Date.distantPast )
+//                self.restoration.lastQueryDate = max(self.restoration.lastQueryDate ?? Date.distantPast, modificationDates.max() ?? Date.distantPast )
+                self.restoration.lastQueryDate = nil
                 completionHandler(.success(()))
             case .failure(let error):
+                self.restoration.lastQueryDate = nil
                 completionHandler(.failure(error))
             }
         }
@@ -470,6 +473,8 @@ extension CloudKitExchange {
         var fetchRecordChangesToken: CKServerChangeToken?
         
         /// Used when there is no custom zone
+        /// TODO: For now, we are not using this, because it seems it can lead to losing some
+        /// versions somehow. Not sure exactly how. Maybe there is a race on the modificationDate.
         var lastQueryDate: Date?
         
         init() {}
@@ -480,7 +485,8 @@ extension CloudKitExchange {
             if let tokenData = try container.decodeIfPresent(Data.self, forKey: .fetchRecordChangesToken) {
                 fetchRecordChangesToken = try NSKeyedUnarchiver.unarchivedObject(ofClass: CKServerChangeToken.self, from: tokenData)
             }
-            lastQueryDate = try container.decodeIfPresent(Date.self, forKey: .lastQueryDate)
+//            lastQueryDate = try container.decodeIfPresent(Date.self, forKey: .lastQueryDate)
+            lastQueryDate = nil
         }
         
         func encode(to encoder: Encoder) throws {
