@@ -115,7 +115,7 @@ public extension Exchange {
     }
     
     private func addToHistory(versionsWithValueChanges: [Version:[Value.Change]], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        let versions = Array(versionsWithValueChanges.keys)
+        let versions = Array(versionsWithValueChanges.keys).sorted { $0.timestamp < $1.timestamp }
         if versions.isEmpty {
             log.trace("No versions. Finished adding to history")
             completionHandler(.success(()))
@@ -136,7 +136,11 @@ public extension Exchange {
             
             var reducedVersions = versionsWithValueChanges
             reducedVersions[version] = nil
-            self.addToHistory(versionsWithValueChanges: reducedVersions, executingUponCompletion: completionHandler)
+            
+            // Dispatch so that we don't end up with a huge recursive call stack
+            DispatchQueue.global(qos: .userInitiated).async {
+                self.addToHistory(versionsWithValueChanges: reducedVersions, executingUponCompletion: completionHandler)
+            }
         } else {
             log.error("Failed to add to history due to missing predecessors")
             completionHandler(.failure(ExchangeError.remoteVersionsWithUnknownPredecessors))
