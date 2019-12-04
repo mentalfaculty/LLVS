@@ -85,6 +85,9 @@ public class CloudKitExchange: Exchange {
     /// Restoration state
     private var restoration: Restoration = .init()
     
+    /// Limit to use for CloudKit fetches. Should be less than actual limit (ie 400)
+    private let cloudKitFetchLimit = 200
+    
     /// For single user syncing, it is best to use a zone. In that case, pass in the private database and a zone identifier.
     /// Otherwise, you will be using the default  zone in whichever database you pass.
     public init(with store: Store, storeIdentifier: String, cloudDatabaseDescription: CloudDatabaseDescription) {
@@ -257,6 +260,42 @@ public extension CloudKitExchange {
     }
     
     func retrieveVersions(identifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
+        log.trace("Retrieving versions: \(versionIds)")
+        
+        guard !versionIds.isEmpty else {
+            completionHandler(.success([]))
+            return
+        }
+    
+        // Use batches of length 200, because CloudKit will give limit error at 400 records
+        let batchRanges = (0...versionIds.count-1).split(intoRangesOfLength: cloudKitFetchLimit)
+        var versions: [Version] = []
+        let tasks = batchRanges.map { range in
+            AsynchronousTask { finish in
+                let batchVersionIds = Array(versionIds[range])
+                self.retrieve(batchOfVersionsIdentifiedBy: batchVersionIds) { result in
+                    switch result {
+                    case .success(let batchVersions):
+                        versions.append(contentsOf: batchVersions)
+                        finish(.success(()))
+                    case .failure(let error):
+                        finish(.failure(error))
+                    }
+                }
+            }
+        }
+        tasks.executeInOrder { result in
+            switch result {
+            case .success:
+                completionHandler(.success(versions))
+            case .failure(let error):
+                completionHandler(.failure(error))
+            }
+        }
+    }
+    
+    /// Assumes that the batch size is less than the limits imposed by CloudKit (ie 400)
+    private func retrieve(batchOfVersionsIdentifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
         log.trace("Retrieving versions")
         let recordIDs = versionIds.map { CKRecord.ID(recordName: $0.rawValue, zoneID: zoneID ?? .default) }
         let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
@@ -291,6 +330,42 @@ public extension CloudKitExchange {
     }
     
     func retrieveValueChanges(forVersionsIdentifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID:[Value.Change]]>) {
+        log.trace("Retrieving value changes for versions: \(versionIds)")
+        
+        guard !versionIds.isEmpty else {
+            completionHandler(.success([:]))
+            return
+        }
+    
+        // Use batches of length 200, because CloudKit will give limit error at 400 records
+        let batchRanges = (0...versionIds.count-1).split(intoRangesOfLength: cloudKitFetchLimit)
+        var changesByVersionId: [Version.ID:[Value.Change]] = [:]
+        let tasks = batchRanges.map { range in
+            AsynchronousTask { finish in
+                let batchVersionIds = Array(versionIds[range])
+                self.retrieve(batchOfValueChangesForVersionsIdentifiedBy: batchVersionIds) { result in
+                    switch result {
+                    case .success(let newChangesByVersionId):
+                        changesByVersionId.merge(newChangesByVersionId) { current, _ in current }
+                        finish(.success(()))
+                    case .failure(let error):
+                        finish(.failure(error))
+                    }
+                }
+            }
+        }
+        tasks.executeInOrder { result in
+            switch result {
+            case .success:
+                completionHandler(.success(changesByVersionId))
+            case .failure(let error):
+                completionHandler(.failure(error))
+            }
+        }
+    }
+    
+    /// Retrieves a batch of value changes, assuming batch is smaller than the CloudKit limit
+    private func retrieve(batchOfValueChangesForVersionsIdentifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID:[Value.Change]]>) {
         log.trace("Retrieving value changes for versions: \(versionIds)")
         let recordIDs = versionIds.map { CKRecord.ID(recordName: $0.rawValue, zoneID: zoneID ?? .default) }
         let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
@@ -352,7 +427,7 @@ public extension CloudKitExchange {
         }
     
         // Use batches of length 200, because CloudKit will give limit error at 400 records
-        let batchRanges = (0...versionChanges.count-1).split(intoRangesOfLength: 200)
+        let batchRanges = (0...versionChanges.count-1).split(intoRangesOfLength: cloudKitFetchLimit)
         let tasks = batchRanges.map { range in
             AsynchronousTask { finish in
                 let batchChanges = versionChanges[range]
