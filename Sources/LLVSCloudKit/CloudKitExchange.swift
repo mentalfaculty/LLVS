@@ -83,7 +83,7 @@ public class CloudKitExchange: Exchange {
     }
 
     /// Restoration state
-    private var restoration: Restoration = .init()
+    @Atomic private var restoration: Restoration = .init()
     
     /// Limit to use for CloudKit fetches. Should be less than actual limit (ie 400)
     private let cloudKitFetchLimit = 200
