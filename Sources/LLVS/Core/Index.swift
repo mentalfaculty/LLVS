@@ -42,7 +42,8 @@ final class Index {
         }
         rootNode.reference.version = version
         guard case let .nodes(rootChildRefs) = rootNode.children else { throw Error.unexpectedNodeContent }
-        
+        let rootChildRefsByKey: [String:ZoneReference] = .init(withValues: rootChildRefs, generatingUniqueKeysWith: \.key)
+
         var subNodesByKey: [Key:Node] = [:]
         for delta in deltas {
             let key = delta.key
@@ -53,7 +54,7 @@ final class Index {
             if let n = subNodesByKey[subNodeKey] {
                 subNode = n
             }
-            else if let existingSubNodeRef = rootChildRefs.first(where: { $0.key == subNodeKey.keyString }) {
+            else if let existingSubNodeRef = rootChildRefsByKey[subNodeKey.keyString] {
                 guard let existingSubNode = try node(for: existingSubNodeRef) else { throw Error.missingNode }
                 subNode = existingSubNode
                 subNode.reference = subNodeRef
@@ -65,7 +66,7 @@ final class Index {
             guard case let .values(keyValuePairs) = subNode.children else { throw Error.unexpectedNodeContent }
             
             let valueRefs = keyValuePairs.filter({ $0.key == key }).map({ $0.valueReference })
-            var valueRefsByIdentifier: [Value.ID:Value.Reference] = Dictionary(uniqueKeysWithValues: valueRefs.map({ ($0.valueId, $0) }) )
+            var valueRefsByIdentifier: [Value.ID:Value.Reference] = Dictionary(withValues: valueRefs, generatingUniqueKeysWith: \.valueId) 
             for valueRef in delta.addedValueReferences {
                 valueRefsByIdentifier[valueRef.valueId] = valueRef
             }
