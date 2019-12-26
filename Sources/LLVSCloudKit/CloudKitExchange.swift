@@ -377,7 +377,7 @@ public extension CloudKitExchange {
             }
             
             do {
-                let changesByVersion: [(Version.ID, [Value.Change])] = try recordsByRecordID.map { keyValue in
+                let changesByVersionId: [(Version.ID, [Value.Change])] = try recordsByRecordID.map { keyValue in
                     let record = keyValue.value
                     let recordID = keyValue.key
                     let data: Data
@@ -393,7 +393,7 @@ public extension CloudKitExchange {
                     return (Version.ID(recordID.recordName), valueChanges)
                 }
                 
-                completionHandler(.success(.init(uniqueKeysWithValues: changesByVersion)))
+                completionHandler(.success(.init(uniqueKeysWithValues: changesByVersionId)))
             } catch {
                 log.error("Failed to retrieve: \(error)")
                 completionHandler(.failure(error))

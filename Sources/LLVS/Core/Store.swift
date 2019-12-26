@@ -25,7 +25,7 @@ public final class Store {
     public let rootDirectoryURL: URL
     public let valuesDirectoryURL: URL
     public let versionsDirectoryURL: URL
-    public let mapsDirectoryURL: URL
+    public let indexesDirectoryURL: URL
     public let valuesMapDirectoryURL: URL
     
     public let storage: Storage
@@ -35,9 +35,9 @@ public final class Store {
     }()
     
     private let valuesMapName = "__llvs_values"
-    private lazy var valuesMap: Map = {
+    private lazy var valuesMap: Index = {
         let valuesMapZone = self.storage.makeMapZone(for: .valuesByVersion, in: self)
-        return Map(zone: valuesMapZone)
+        return Index(zone: valuesMapZone)
     }()
     
     private let history = History()
@@ -53,13 +53,19 @@ public final class Store {
         self.rootDirectoryURL = rootDirectoryURL.resolvingSymlinksInPath()
         self.valuesDirectoryURL = rootDirectoryURL.appendingPathComponent("values")
         self.versionsDirectoryURL = rootDirectoryURL.appendingPathComponent("versions")
-        self.mapsDirectoryURL = rootDirectoryURL.appendingPathComponent("maps")
-        self.valuesMapDirectoryURL = self.mapsDirectoryURL.appendingPathComponent(valuesMapName)
+        self.indexesDirectoryURL = rootDirectoryURL.appendingPathComponent("indexes")
+        self.valuesMapDirectoryURL = self.indexesDirectoryURL.appendingPathComponent(valuesMapName)
 
         try? fileManager.createDirectory(at: self.rootDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.valuesDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.versionsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
-        try? fileManager.createDirectory(at: self.mapsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
+        
+        // Index dir used to be 'maps'. Copy it over if needed
+        let legacyMapsDir = rootDirectoryURL.appendingPathComponent("maps")
+        if fileManager.fileExists(atPath: legacyMapsDir.path), !fileManager.fileExists(atPath: self.indexesDirectoryURL.path) {
+            try fileManager.moveItem(at: legacyMapsDir, to: self.indexesDirectoryURL)
+        }
+        try? fileManager.createDirectory(at: self.indexesDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         
         try reloadHistory()
     }
@@ -125,8 +131,8 @@ extension Store {
         return version
     }
     
-    /// This method does not check consistency, and does not automatically update the map.
-    /// It is assumed that any changes to the first predecessor that are needed in the map
+    /// This method does not check consistency, and does not automatically update the index.
+    /// It is assumed that any changes to the first predecessor that are needed in the index
     /// are present as preserves from the second predecessor.
     internal func addVersion(_ version: Version, storing changes: [Value.Change]) throws {
         guard !historyIncludesVersions(identifiedBy: [version.id]) else {
@@ -148,20 +154,20 @@ extension Store {
             }
         }
         
-        // Update values map
-        let deltas: [Map.Delta] = changes.map { change in
+        // Update values index
+        let deltas: [Index.Delta] = changes.map { change in
             switch change {
             case .insert(let value), .update(let value):
                 let valueRef = Value.Reference(valueId: value.id, storedVersionId: version.id)
-                var delta = Map.Delta(key: Map.Key(value.id.rawValue))
+                var delta = Index.Delta(key: Index.Key(value.id.rawValue))
                 delta.addedValueReferences = [valueRef]
                 return delta
             case .remove(let valueId), .preserveRemoval(let valueId):
-                var delta = Map.Delta(key: Map.Key(valueId.rawValue))
+                var delta = Index.Delta(key: Index.Key(valueId.rawValue))
                 delta.removedValueIdentifiers = [valueId]
                 return delta
             case .preserve(let valueRef):
-                var delta = Map.Delta(key: Map.Key(valueRef.valueId.rawValue))
+                var delta = Index.Delta(key: Index.Key(valueRef.valueId.rawValue))
                 delta.addedValueReferences = [valueRef]
                 return delta
             }
@@ -343,7 +349,7 @@ extension Store {
         
         // Must make sure any change that was made in the second predecessor is included,
         // via a 'preserve' if necessary.
-        // This is so the map of the first predecessor is updated properly.
+        // This is so the values index of the first predecessor is updated properly.
         for diff in diffs where !idsInChanges.contains(diff.valueId) {
             switch diff.valueFork {
             case .inserted(let branch) where branch == .second:

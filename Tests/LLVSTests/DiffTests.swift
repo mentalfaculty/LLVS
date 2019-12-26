@@ -15,31 +15,31 @@ class DiffTests: XCTestCase {
     
     var zone: Zone!
     var rootURL: URL!
-    var map: Map!
+    var index: Index!
     
     func add(values: [String], version: String, basedOn: String?) {
         let basedOnVersionId = basedOn.flatMap { Version.ID($0) }
         let versionId = Version.ID(version)
-        var deltas: [Map.Delta] = []
+        var deltas: [Index.Delta] = []
         for valueKey in values {
             let valueRef = Value.Reference(valueId: .init(valueKey), storedVersionId: versionId)
-            var delta: Map.Delta = .init(key: .init(valueKey))
+            var delta: Index.Delta = .init(key: .init(valueKey))
             delta.addedValueReferences = [valueRef]
             deltas.append(delta)
         }
-        try! map.addVersion(versionId, basedOn: basedOnVersionId, applying: deltas)
+        try! index.addVersion(versionId, basedOn: basedOnVersionId, applying: deltas)
     }
     
     func remove(values: [String], version: String, basedOn: String?) {
         let basedOnVersionId = basedOn.flatMap { Version.ID($0) }
         let versionId = Version.ID(version)
-        var deltas: [Map.Delta] = []
+        var deltas: [Index.Delta] = []
         for valueKey in values {
-            var delta: Map.Delta = .init(key: .init(valueKey))
+            var delta: Index.Delta = .init(key: .init(valueKey))
             delta.removedValueIdentifiers = [.init(valueKey)]
             deltas.append(delta)
         }
-        try! map.addVersion(versionId, basedOn: basedOnVersionId, applying: deltas)
+        try! index.addVersion(versionId, basedOn: basedOnVersionId, applying: deltas)
     }
     
     override func setUp() {
@@ -47,7 +47,7 @@ class DiffTests: XCTestCase {
         
         rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         zone = FileZone(rootDirectory: rootURL, fileExtension: ".txt")
-        map = Map(zone: zone)
+        index = Index(zone: zone)
     }
     
     override func tearDown() {
@@ -59,7 +59,7 @@ class DiffTests: XCTestCase {
         add(values: ["AB0000"], version: "0000", basedOn: nil)
         add(values: ["AB1111", "AB1155", "CD1111"], version: "1111", basedOn: "0000")
         add(values: ["AB2222", "AB1166", "CD2222"], version: "2222", basedOn: "0000")
-        let diffs = try! map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
+        let diffs = try! index.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
         XCTAssertEqual(diffs.count, 6)
         XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.inserted(.first) }))
         XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1155" && $0.valueFork == Value.Fork.inserted(.first) }))
@@ -74,7 +74,7 @@ class DiffTests: XCTestCase {
         add(values: [], version: "0000", basedOn: nil)
         add(values: ["AB1111", "MM1111"], version: "1111", basedOn: "0000")
         add(values: ["AB1111", "AB1112", "ZZ2222"], version: "2222", basedOn: "0000")
-        let diffs = try! map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
+        let diffs = try! index.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
         XCTAssertEqual(diffs.count, 4)
         XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.twiceInserted }))
         XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "MM1111" && $0.valueFork == Value.Fork.inserted(.first) }))
@@ -86,7 +86,7 @@ class DiffTests: XCTestCase {
         add(values: ["AB1111", "MM1111"], version: "0000", basedOn: nil)
         add(values: ["AB1111"], version: "1111", basedOn: "0000")
         add(values: ["AB1111", "MM1111", "ZZ2222"], version: "2222", basedOn: "0000")
-        let diffs = try! map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
+        let diffs = try! index.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
         XCTAssertEqual(diffs.count, 3)
         XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.twiceUpdated }))
         XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "MM1111" && $0.valueFork == Value.Fork.updated(.second) }))
@@ -97,7 +97,7 @@ class DiffTests: XCTestCase {
         add(values: ["AB1111", "MM1111", "ZZ2222"], version: "0000", basedOn: nil)
         remove(values: ["AB1111", "MM1111"], version: "1111", basedOn: "0000")
         remove(values: ["AB1111", "ZZ2222"], version: "2222", basedOn: "0000")
-        let diffs = try! map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
+        let diffs = try! index.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
         XCTAssertEqual(diffs.count, 3)
         XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.twiceRemoved }))
         XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "MM1111" && $0.valueFork == Value.Fork.removed(.first) }))
@@ -108,7 +108,7 @@ class DiffTests: XCTestCase {
         add(values: ["AB1111"], version: "0000", basedOn: nil)
         remove(values: ["AB1111"], version: "1111", basedOn: "0000")
         add(values: ["AB1111"], version: "2222", basedOn: "0000")
-        let diffs = try! map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
+        let diffs = try! index.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
         XCTAssertEqual(diffs.count, 1)
         XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.removedAndUpdated(removedOn: .first) }))
     }

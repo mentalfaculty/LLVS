@@ -1,5 +1,5 @@
 //
-//  Map.swift
+//  Index.swift
 //  LLVS
 //
 //  Created by Drew McCormack on 30/11/2018.
@@ -8,7 +8,7 @@
 import Foundation
 
 
-final class Map {
+final class Index {
     
     enum Error: Swift.Error {
         case encodingFailure(String)
@@ -264,7 +264,7 @@ final class Map {
         }
     }
     
-    func valueReferences(matching key: Map.Key, at version: Version.ID) throws -> [Value.Reference] {
+    func valueReferences(matching key: Index.Key, at version: Version.ID) throws -> [Value.Reference] {
         let rootRef = ZoneReference(key: rootKey, version: version)
         guard let rootNode = try node(for: rootRef) else { throw Error.missingVersionRoot }
         guard case let .nodes(subNodeRefs) = rootNode.children else { throw Error.missingNode }
@@ -303,7 +303,7 @@ final class Map {
 
 // MARK:- Subtypes
 
-extension Map {
+extension Index {
     
     struct Key: Codable, Hashable {
         var keyString: String

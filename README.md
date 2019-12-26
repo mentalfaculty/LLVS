@@ -349,7 +349,7 @@ The most recent head is a convenient version to use when starting up an extensio
 
 ### Merging
 
-One of the strengths of LLVS is that it gives you a systematic way to resolve discrepancies between versions. If two devices each edit a particular value at about the same time, you can not only identify the _conflict_, but can merge the two disparate data values together into a new consistent version.
+One of the strengths of LLVS is that it gives you a systematic way to resolve discrepancies between versions. If two devices each edit a particular value at about the same time, you can not only identify the _conflict_, but also merge the two disparate data values together into a new consistent version.
 
 There are two types of merges in LLVS: two-way and three-way. Most of the time you will deal with three-way merges. A three way merge involves two versions — usually heads — and one so-called _common ancestor_. A common ancestor is a version that exists in the ancestry of each of the two versions being merged; it is a point in the history where the two versions were in agreement, before they diverged.
 
