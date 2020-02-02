@@ -12,7 +12,7 @@ import Foundation
 
 public final class Store {
     
-    enum Error: Swift.Error {
+    public enum Error: Swift.Error {
         case missingVersion
         case attemptToLocateUnversionedValue
         case attemptToStoreValueWithNoVersion
@@ -20,6 +20,7 @@ public final class Store {
         case unresolvedConflict(valueId: Value.ID, valueFork: Value.Fork)
         case attemptToAddExistingVersion(Version.ID)
         case attemptToAddVersionWithNonexistingPredecessors(Version)
+        case attemptToRegisterKeyGeneratorForNonexistentIndex(Index.Name)
     }
     
     public let rootDirectoryURL: URL
@@ -39,6 +40,18 @@ public final class Store {
         let valuesIndexZone = self.storage.makeIndexZone(ofType: .valuesByVersion, for: self)
         return Index(zone: valuesIndexZone)
     }()
+    
+    public typealias IndexKeyGenerator = (Value)->String?
+
+    fileprivate final class CustomIndex {
+        var index: Index
+        var keyGenerator: IndexKeyGenerator?
+        init(index: Index, keyGenerator: IndexKeyGenerator?) {
+            self.index = index
+            self.keyGenerator = keyGenerator
+        }
+    }
+    fileprivate var customIndexesByName: [Index.Name:CustomIndex] = [:]
     
     private let history = History()
     private let historyAccessQueue = DispatchQueue(label: "llvs.dispatchQueue.historyaccess")
@@ -222,6 +235,59 @@ extension Store {
         try valuesIndex.enumerateValueReferences(forVersionIdentifiedBy: versionId, executingForEach: block)
     }
     
+}
+
+
+// MARK:- Indexes
+
+extension Store {
+    
+    public func addIndex(named indexName: Index.Name, atVersion versionId: Version.ID) throws {
+        
+    }
+    
+    public func removeIndex(named indexName: Index.Name, atVersion versionId: Version.ID) throws {
+        let customIndex = try self.customIndex(for: indexName)!
+        // Q: Do we require that people add a new version to do either of these?
+        // If we don't require that, we have a problem, because we can't change a zone that already
+        // has a version. Or should we just allow that?
+    }
+    
+    public func allIndexNames() throws -> [Index.Name] {
+        let indexDirs = try fileManager.contentsOfDirectory(at: indexesDirectoryURL, includingPropertiesForKeys: nil, options: [])
+        return indexDirs
+            .map { $0.lastPathComponent }
+            .filter { $0 != valuesIndexName }
+            .map { Index.Name(rawValue: $0) }
+    }
+    
+    public func indexNames(atVersion versionId: Version.ID) throws -> [Index.Name] {
+        let names = try allIndexNames()
+        return try names.filter { indexName in
+            let customIndex = try self.customIndex(for: indexName)!
+            let index = customIndex.index
+            let ref = try index.valueReferences(matching: index.rootKey, at: versionId).first
+            return ref != nil
+        }
+    }
+    
+    public func register(forIndexNamed indexName: Index.Name, indexKeyGenerator: @escaping IndexKeyGenerator) throws {
+        guard let customIndex = try customIndex(for: indexName) else {
+            throw Error.attemptToRegisterKeyGeneratorForNonexistentIndex(indexName)
+        }
+        customIndex.keyGenerator = indexKeyGenerator
+    }
+    
+    fileprivate func customIndex(for name: Index.Name) throws -> CustomIndex? {
+        if let index = customIndexesByName[name] { return index }
+        let indexNames = try allIndexNames()
+        if indexNames.contains(name) {
+            let zone = storage.makeIndexZone(ofType: .userDefined(name: name), for: self)
+            let newIndex = Index(zone: zone)
+            customIndexesByName[name] = CustomIndex(index: newIndex, keyGenerator: nil)
+        }
+        return customIndexesByName[name]
+    }
 }
 
 

@@ -9,7 +9,7 @@ import Foundation
 
 public enum IndexType {
     case valuesByVersion // Main map for identifying which values are in each version
-    case userDefined(label: String)
+    case userDefined(name: Index.Name)
 }
 
 public protocol Storage {

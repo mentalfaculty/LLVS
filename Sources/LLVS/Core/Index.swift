@@ -8,7 +8,14 @@
 import Foundation
 
 
-final class Index {
+public final class Index {
+    
+    public struct Name: RawRepresentable, Hashable {
+        public var rawValue: String
+        public init(rawValue: String) {
+            self.rawValue = rawValue
+        }
+    }
     
     enum Error: Swift.Error {
         case encodingFailure(String)
@@ -23,17 +30,18 @@ final class Index {
     fileprivate let encoder = JSONEncoder()
     fileprivate let decoder = JSONDecoder()
     
-    private let rootKey = "__llvs_root"
+    private let rootKeyString = "__llvs_root"
+    internal var rootKey: Key { Key(rootKeyString) }
     
     init(zone: Zone) {
         self.zone = zone
     }
-    
+        
     func addVersion(_ version: Version.ID, basedOn baseVersion: Version.ID?, applying deltas: [Delta]) throws {
         var rootNode: Node
-        let rootRef = ZoneReference(key: rootKey, version: version)
+        let rootRef = ZoneReference(key: rootKeyString, version: version)
         if let baseVersion = baseVersion {
-            let oldRootRef = ZoneReference(key: rootKey, version: baseVersion)
+            let oldRootRef = ZoneReference(key: rootKeyString, version: baseVersion)
             guard let oldRoot = try node(for: oldRootRef) else { throw Error.missingNode }
             rootNode = oldRoot
         }
@@ -95,9 +103,9 @@ final class Index {
     }
     
     func differences(between firstVersion: Version.ID, and secondVersion: Version.ID, withCommonAncestor commonAncestor: Version.ID?) throws -> [Diff] {
-        let originRef = commonAncestor.flatMap { ZoneReference(key: rootKey, version: $0) }
-        let rootRef1 = ZoneReference(key: rootKey, version: firstVersion)
-        let rootRef2 = ZoneReference(key: rootKey, version: secondVersion)
+        let originRef = commonAncestor.flatMap { ZoneReference(key: rootKeyString, version: $0) }
+        let rootRef1 = ZoneReference(key: rootKeyString, version: firstVersion)
+        let rootRef2 = ZoneReference(key: rootKeyString, version: secondVersion)
         
         let originNode = try originRef.flatMap { try node(for: $0) }
         guard
@@ -253,7 +261,7 @@ final class Index {
     }
     
     func enumerateValueReferences(forVersionIdentifiedBy versionId: Version.ID, executingForEach block: (Value.Reference) throws -> Void) throws {
-        let rootRef = ZoneReference(key: rootKey, version: versionId)
+        let rootRef = ZoneReference(key: rootKeyString, version: versionId)
         guard let rootNode = try node(for: rootRef) else { throw Error.missingVersionRoot }
         guard case let .nodes(subNodeRefs) = rootNode.children else { throw Error.missingNode }
         for subNodeRef in subNodeRefs {
@@ -266,7 +274,7 @@ final class Index {
     }
     
     func valueReferences(matching key: Index.Key, at version: Version.ID) throws -> [Value.Reference] {
-        let rootRef = ZoneReference(key: rootKey, version: version)
+        let rootRef = ZoneReference(key: rootKeyString, version: version)
         guard let rootNode = try node(for: rootRef) else { throw Error.missingVersionRoot }
         guard case let .nodes(subNodeRefs) = rootNode.children else { throw Error.missingNode }
         let subNodeKey = String(key.keyString.prefix(2))
