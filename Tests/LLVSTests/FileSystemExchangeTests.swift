@@ -153,13 +153,15 @@ class FileSystemExchangeTests: XCTestCase {
         wait(for: [expectMerge], timeout: 1.0)
     }
     
+    var publisher: Any?
+    
     @available(macOS 10.15, iOS 13, watchOS 6, *)
     func testNewVersionAvailableNotification() {
         exchange1 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store1, usesFileCoordination: true)
         exchange2 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store2, usesFileCoordination: true)
     
         let expect = self.expectation(description: "Send")
-        _ = exchange2.newVersionsAvailable.first().sink {
+        publisher = exchange2.newVersionsAvailable.first().sink {
             expect.fulfill()
         }
         
