@@ -12,9 +12,9 @@ public enum IndexType {
     case userDefined(label: String)
 }
 
-public protocol ZoneStorage {
+public protocol Storage {
     
-    func makeValuesZone(in store: Store) -> Zone
-    func makeIndexZone(for type: IndexType, in store: Store) -> Zone
+    func makeValuesZone(for store: Store) -> Zone
+    func makeIndexZone(ofType type: IndexType, for store: Store) -> Zone
     
 }

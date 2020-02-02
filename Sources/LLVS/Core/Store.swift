@@ -28,15 +28,15 @@ public final class Store {
     public let indexesDirectoryURL: URL
     public let valuesIndexDirectoryURL: URL
     
-    public let storage: ZoneStorage
+    public let storage: Storage
 
     private lazy var valuesZone: Zone = {
-        return storage.makeValuesZone(in: self)
+        return storage.makeValuesZone(for: self)
     }()
     
     private let valuesIndexName = "__llvs_values"
     private lazy var valuesIndex: Index = {
-        let valuesIndexZone = self.storage.makeIndexZone(for: .valuesByVersion, in: self)
+        let valuesIndexZone = self.storage.makeIndexZone(ofType: .valuesByVersion, for: self)
         return Index(zone: valuesIndexZone)
     }()
     
@@ -47,7 +47,7 @@ public final class Store {
     fileprivate let encoder = JSONEncoder()
     fileprivate let decoder = JSONDecoder()
     
-    public init(rootDirectoryURL: URL, storage: ZoneStorage = FileStorage()) throws {
+    public init(rootDirectoryURL: URL, storage: Storage = FileStorage()) throws {
         self.storage = storage
         
         self.rootDirectoryURL = rootDirectoryURL.resolvingSymlinksInPath()

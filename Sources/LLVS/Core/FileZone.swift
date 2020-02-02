@@ -7,13 +7,13 @@
 
 import Foundation
 
-public class FileStorage: ZoneStorage {
+public class FileStorage: Storage {
     
     private let fileExtension = "json"
     
     public init() {}
 
-    public func makeIndexZone(for type: IndexType, in store: Store) -> Zone {
+    public func makeIndexZone(ofType type: IndexType, for store: Store) -> Zone {
         switch type {
         case .valuesByVersion:
             return FileZone(rootDirectory: store.valuesIndexDirectoryURL, fileExtension: fileExtension)
@@ -22,7 +22,7 @@ public class FileStorage: ZoneStorage {
         }
     }
     
-    public func makeValuesZone(in store: Store) -> Zone {
+    public func makeValuesZone(for store: Store) -> Zone {
         return FileZone(rootDirectory: store.valuesDirectoryURL, fileExtension: fileExtension)
     }
     
