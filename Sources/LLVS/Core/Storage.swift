@@ -7,14 +7,14 @@
 
 import Foundation
 
-public enum MapType {
+public enum IndexType {
     case valuesByVersion // Main map for identifying which values are in each version
     case userDefined(label: String)
 }
 
-public protocol Storage {
+public protocol ZoneStorage {
     
     func makeValuesZone(in store: Store) -> Zone
-    func makeMapZone(for type: MapType, in store: Store) -> Zone
+    func makeIndexZone(for type: IndexType, in store: Store) -> Zone
     
 }

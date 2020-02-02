@@ -23,11 +23,11 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
     private lazy var newVersionsSubject: PassthroughSubject<Void, Never> = .init()
     
     @available(macOS 10.15, iOS 13, watchOS 6, *)
-    public var newVersionsAvailable: AnyPublisher<Void, Never> {
+    public lazy var newVersionsAvailable: AnyPublisher<Void, Never> =
         newVersionsSubject
-            .debounce(for: .seconds(minimumDelayBeforeNotifyingOfNewVersions), scheduler: RunLoop.main)
+            .debounce(for: .seconds(minimumDelayBeforeNotifyingOfNewVersions), scheduler: DispatchQueue.main)
             .eraseToAnyPublisher()
-    }
+
     
     public let rootDirectoryURL: URL
     public var versionsDirectory: URL { return rootDirectoryURL.appendingPathComponent("versions") }

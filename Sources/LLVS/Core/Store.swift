@@ -26,18 +26,18 @@ public final class Store {
     public let valuesDirectoryURL: URL
     public let versionsDirectoryURL: URL
     public let indexesDirectoryURL: URL
-    public let valuesMapDirectoryURL: URL
+    public let valuesIndexDirectoryURL: URL
     
-    public let storage: Storage
+    public let storage: ZoneStorage
 
     private lazy var valuesZone: Zone = {
         return storage.makeValuesZone(in: self)
     }()
     
-    private let valuesMapName = "__llvs_values"
-    private lazy var valuesMap: Index = {
-        let valuesMapZone = self.storage.makeMapZone(for: .valuesByVersion, in: self)
-        return Index(zone: valuesMapZone)
+    private let valuesIndexName = "__llvs_values"
+    private lazy var valuesIndex: Index = {
+        let valuesIndexZone = self.storage.makeIndexZone(for: .valuesByVersion, in: self)
+        return Index(zone: valuesIndexZone)
     }()
     
     private let history = History()
@@ -47,14 +47,14 @@ public final class Store {
     fileprivate let encoder = JSONEncoder()
     fileprivate let decoder = JSONDecoder()
     
-    public init(rootDirectoryURL: URL, storage: Storage = FileStorage()) throws {
+    public init(rootDirectoryURL: URL, storage: ZoneStorage = FileStorage()) throws {
         self.storage = storage
         
         self.rootDirectoryURL = rootDirectoryURL.resolvingSymlinksInPath()
         self.valuesDirectoryURL = rootDirectoryURL.appendingPathComponent("values")
         self.versionsDirectoryURL = rootDirectoryURL.appendingPathComponent("versions")
         self.indexesDirectoryURL = rootDirectoryURL.appendingPathComponent("indexes")
-        self.valuesMapDirectoryURL = self.indexesDirectoryURL.appendingPathComponent(valuesMapName)
+        self.valuesIndexDirectoryURL = self.indexesDirectoryURL.appendingPathComponent(valuesIndexName)
 
         try? fileManager.createDirectory(at: self.rootDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.valuesDirectoryURL, withIntermediateDirectories: true, attributes: nil)
@@ -172,7 +172,7 @@ extension Store {
                 return delta
             }
         }
-        try valuesMap.addVersion(version.id, basedOn: version.predecessors?.idOfFirst, applying: deltas)
+        try valuesIndex.addVersion(version.id, basedOn: version.predecessors?.idOfFirst, applying: deltas)
         
         // Store version
         try store(version)
@@ -195,7 +195,7 @@ extension Store {
 extension Store {
     
     public func valueReference(id valueId: Value.ID, at versionId: Version.ID) throws -> Value.Reference? {
-        return try valuesMap.valueReferences(matching: .init(valueId.rawValue), at: versionId).first
+        return try valuesIndex.valueReferences(matching: .init(valueId.rawValue), at: versionId).first
     }
     
     /// Convenient method to avoid having to create id types
@@ -219,7 +219,7 @@ extension Store {
     }
     
     public func enumerate(version versionId: Version.ID, executingForEach block: (Value.Reference) throws -> Void) throws {
-        try valuesMap.enumerateValueReferences(forVersionIdentifiedBy: versionId, executingForEach: block)
+        try valuesIndex.enumerateValueReferences(forVersionIdentifiedBy: versionId, executingForEach: block)
     }
     
 }
@@ -331,7 +331,7 @@ extension Store {
     private func merge(_ firstVersion: Version, and secondVersion: Version, withCommonAncestor commonAncestor: Version?, resolvingWith arbiter: MergeArbiter, metadata: Data? = nil) throws -> Version {
         // Prepare merge
         let predecessors = Version.Predecessors(idOfFirst: firstVersion.id, idOfSecond: secondVersion.id)
-        let diffs = try valuesMap.differences(between: firstVersion.id, and: secondVersion.id, withCommonAncestor: commonAncestor?.id)
+        let diffs = try valuesIndex.differences(between: firstVersion.id, and: secondVersion.id, withCommonAncestor: commonAncestor?.id)
         var merge = Merge(versions: (firstVersion, secondVersion), commonAncestor: commonAncestor)
         let forkTuples = diffs.map({ ($0.valueId, $0.valueFork) })
         merge.forksByValueIdentifier = .init(uniqueKeysWithValues: forkTuples)
@@ -383,7 +383,7 @@ extension Store {
         
         guard let predecessors = version.predecessors else {
             var changes: [Value.Change] = []
-            try valuesMap.enumerateValueReferences(forVersionIdentifiedBy: versionId) { ref in
+            try valuesIndex.enumerateValueReferences(forVersionIdentifiedBy: versionId) { ref in
                 let v = try value(id: ref.valueId, storedAt: ref.storedVersionId)!
                 changes.append(.insert(v))
             }
@@ -394,7 +394,7 @@ extension Store {
         let p1 = predecessors.idOfFirst
         if let p2 = predecessors.idOfSecond {
             // Do a reverse-in-time fork, and negate the outcome
-            let diffs = try valuesMap.differences(between: p1, and: p2, withCommonAncestor: versionId)
+            let diffs = try valuesIndex.differences(between: p1, and: p2, withCommonAncestor: versionId)
             for diff in diffs {
                 switch diff.valueFork {
                 case .twiceInserted:
@@ -424,7 +424,7 @@ extension Store {
         guard let _ = try version(identifiedBy: versionId1), let _ = try version(identifiedBy: versionId2) else { throw Error.missingVersion }
         
         var changes: [Value.Change] = []
-        let diffs = try valuesMap.differences(between: versionId2, and: versionId1, withCommonAncestor: versionId1)
+        let diffs = try valuesIndex.differences(between: versionId2, and: versionId1, withCommonAncestor: versionId1)
         for diff in diffs {
             switch diff.valueFork {
             case .inserted:

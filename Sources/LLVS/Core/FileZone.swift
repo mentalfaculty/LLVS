@@ -7,16 +7,16 @@
 
 import Foundation
 
-public class FileStorage: Storage {
+public class FileStorage: ZoneStorage {
     
     private let fileExtension = "json"
     
     public init() {}
 
-    public func makeMapZone(for type: MapType, in store: Store) -> Zone {
+    public func makeIndexZone(for type: IndexType, in store: Store) -> Zone {
         switch type {
         case .valuesByVersion:
-            return FileZone(rootDirectory: store.valuesMapDirectoryURL, fileExtension: fileExtension)
+            return FileZone(rootDirectory: store.valuesIndexDirectoryURL, fileExtension: fileExtension)
         case .userDefined:
             fatalError("User defined maps not yet supported")
         }
