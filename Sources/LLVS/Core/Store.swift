@@ -20,7 +20,8 @@ public final class Store {
         case unresolvedConflict(valueId: Value.ID, valueFork: Value.Fork)
         case attemptToAddExistingVersion(Version.ID)
         case attemptToAddVersionWithNonexistingPredecessors(Version)
-        case attemptToRegisterKeyGeneratorForNonexistentIndex(Index.Name)
+        case attemptToAddAnExistingIndex(Index.Name)
+        case attemptToAddIndexWithNoKeyGenerator(Index.Name)
     }
     
     public let rootDirectoryURL: URL
@@ -44,9 +45,10 @@ public final class Store {
     public typealias IndexKeyGenerator = (Value)->String?
 
     fileprivate final class CustomIndex {
-        var index: Index
+        var index: Index?
         var keyGenerator: IndexKeyGenerator?
-        init(index: Index, keyGenerator: IndexKeyGenerator?) {
+        
+        init(index: Index?, keyGenerator: IndexKeyGenerator?) {
             self.index = index
             self.keyGenerator = keyGenerator
         }
@@ -243,17 +245,39 @@ extension Store {
 extension Store {
     
     public func addIndex(named indexName: Index.Name, atVersion versionId: Version.ID) throws {
+        let customIndex = try self.customIndex(for: indexName)
+        guard let keyGenerator = customIndex.keyGenerator else {
+            throw Error.attemptToAddIndexWithNoKeyGenerator(indexName)
+        }
+                
+        // Make sure we have a zone and index
+        let zone: Zone
+        if let index = customIndex.index {
+            guard try index.valueReferences(matching: index.rootKey, at: versionId).isEmpty else {
+                throw Error.attemptToAddAnExistingIndex(indexName)
+            }
+            zone = index.zone
+        } else {
+            // No index with this name at all. Create from scratch.
+            zone = storage.makeIndexZone(ofType: .userDefined(name: indexName), for: self)
+            customIndex.index = Index(zone: zone)
+        }
+
+        // Add changes
+        var deltasByKey: [Index.Key:Index.Delta] = [:]
+        try enumerate(version: versionId) { valueRef in
+            let value = try self.value(storedAt: valueRef)!
+            if let keyString = keyGenerator(value) {
+                let key = Index.Key(keyString)
+                deltasByKey[key, default: Index.Delta(key: key)].addedValueReferences.append(valueRef)
+            }
+        }
         
+        try customIndex.index!.addVersion(versionId, basedOn: nil, applying: Array(deltasByKey.values))
     }
     
-    public func removeIndex(named indexName: Index.Name, atVersion versionId: Version.ID) throws {
-        let customIndex = try self.customIndex(for: indexName)!
-        // Q: Do we require that people add a new version to do either of these?
-        // If we don't require that, we have a problem, because we can't change a zone that already
-        // has a version. Or should we just allow that?
-    }
-    
-    public func allIndexNames() throws -> [Index.Name] {
+    /// All existing names of indexes created by the user at any version.
+    public func namesOfStoredIndexes() throws -> [Index.Name] {
         let indexDirs = try fileManager.contentsOfDirectory(at: indexesDirectoryURL, includingPropertiesForKeys: nil, options: [])
         return indexDirs
             .map { $0.lastPathComponent }
@@ -262,31 +286,28 @@ extension Store {
     }
     
     public func indexNames(atVersion versionId: Version.ID) throws -> [Index.Name] {
-        let names = try allIndexNames()
+        let names = try namesOfStoredIndexes()
         return try names.filter { indexName in
-            let customIndex = try self.customIndex(for: indexName)!
-            let index = customIndex.index
+            let customIndex = try self.customIndex(for: indexName)
+            let index = customIndex.index!
             let ref = try index.valueReferences(matching: index.rootKey, at: versionId).first
             return ref != nil
         }
     }
     
     public func register(forIndexNamed indexName: Index.Name, indexKeyGenerator: @escaping IndexKeyGenerator) throws {
-        guard let customIndex = try customIndex(for: indexName) else {
-            throw Error.attemptToRegisterKeyGeneratorForNonexistentIndex(indexName)
-        }
+        let customIndex = try self.customIndex(for: indexName)
         customIndex.keyGenerator = indexKeyGenerator
     }
     
-    fileprivate func customIndex(for name: Index.Name) throws -> CustomIndex? {
-        if let index = customIndexesByName[name] { return index }
-        let indexNames = try allIndexNames()
-        if indexNames.contains(name) {
+    /// We get an existing CustomIndex, or create a new one. Will also load the index, if it exists in storage.
+    fileprivate func customIndex(for name: Index.Name) throws -> CustomIndex {
+        let customIndex = customIndexesByName[name] ?? CustomIndex(index: nil, keyGenerator: nil)
+        if customIndex.index == nil, try namesOfStoredIndexes().contains(name) {
             let zone = storage.makeIndexZone(ofType: .userDefined(name: name), for: self)
-            let newIndex = Index(zone: zone)
-            customIndexesByName[name] = CustomIndex(index: newIndex, keyGenerator: nil)
+            customIndex.index = Index(zone: zone)
         }
-        return customIndexesByName[name]
+        return customIndex
     }
 }
 

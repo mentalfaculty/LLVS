@@ -102,6 +102,11 @@ public final class Index {
         try zone.store(data, for: rootNode.reference)
     }
     
+    func removeVersion(_ versionId: Version.ID) {
+        let rootRef = ZoneReference(key: rootKeyString, version: versionId)
+        
+    }
+    
     func differences(between firstVersion: Version.ID, and secondVersion: Version.ID, withCommonAncestor commonAncestor: Version.ID?) throws -> [Diff] {
         let originRef = commonAncestor.flatMap { ZoneReference(key: rootKeyString, version: $0) }
         let rootRef1 = ZoneReference(key: rootKeyString, version: firstVersion)
