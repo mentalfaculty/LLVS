@@ -180,8 +180,11 @@ public class StoreCoordinator {
     /// This transfers data between cloud and local store, but does not alter the current branch or do any merging.
     /// It's a bit like a two-way version of Git's fetch. Completion is on the main thread.
     public func exchange(executingUponCompletion completionHandler: ((Swift.Error?) -> Void)? = nil) {
-        exchangeQueue.addOperation {
-            self.performExchangeOnQueue(executingUponCompletion: completionHandler)
+        exchangeQueue.addAsynchronousOperation { finish in
+            self.performExchangeOnQueue { error in
+                completionHandler?(error)
+                finish()
+            }
         }
     }
     
