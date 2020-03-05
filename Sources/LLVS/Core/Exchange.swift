@@ -150,26 +150,29 @@ public extension Exchange {
 
             let batchVersions = remainingVersions[0..<currentBatchSize]
             retrieveValueChanges(forVersionsIdentifiedBy: batchVersions.ids) { result in
-                switch result {
-                case let .failure(error):
-                    log.error("Failed adding to history: \(error)")
-                    completionHandler(.failure(error))
-                case let .success(valueChangesByVersionIdentifier):
-                    let valueChangesByVersion: [Version:[Value.Change]] = valueChangesByVersionIdentifier.reduce(into: [:]) { result, keyValue in
-                        let version = versionsByIdentifier[keyValue.key]!
-                        result[version] = keyValue.value
-                    }
-                    self.addToHistory(valueChangesByVersion: valueChangesByVersion) { result in
-                        switch result {
-                        case .success:
-                            remainingVersions.removeFirst(currentBatchSize)
-                            DispatchQueue.global(qos: .userInitiated).async { retrieveNextBatch() }
-                        case .failure(let error):
-                            if let exchangeError = error as? ExchangeError, case .remoteVersionsWithUnknownPredecessors = exchangeError {
-                                // Maybe we just need a bigger batch size, so try again
+                autoreleasepool {
+                    switch result {
+                    case let .failure(error):
+                        log.error("Failed adding to history: \(error)")
+                        completionHandler(.failure(error))
+                    case let .success(valueChangesByVersionIdentifier):
+                        let valueChangesByVersion: [Version:[Value.Change]] = valueChangesByVersionIdentifier.reduce(into: [:]) { result, keyValue in
+                            var version = versionsByIdentifier[keyValue.key]!
+                            if version.valueDataSize == nil { version.valueDataSize = keyValue.value.valueDataSize }
+                            result[version] = keyValue.value
+                        }
+                        self.addToHistory(valueChangesByVersion: valueChangesByVersion) { result in
+                            switch result {
+                            case .success:
+                                remainingVersions.removeFirst(currentBatchSize)
                                 DispatchQueue.global(qos: .userInitiated).async { retrieveNextBatch() }
-                            } else {
-                                completionHandler(.failure(error))
+                            case .failure(let error):
+                                if let exchangeError = error as? ExchangeError, case .remoteVersionsWithUnknownPredecessors = exchangeError {
+                                    // Maybe we just need a bigger batch size, so try again
+                                    DispatchQueue.global(qos: .userInitiated).async { retrieveNextBatch() }
+                                } else {
+                                    completionHandler(.failure(error))
+                                }
                             }
                         }
                     }
@@ -186,15 +189,12 @@ public extension Exchange {
         if versions.isEmpty {
             log.trace("No versions. Finished adding to history")
             completionHandler(.success(()))
-        } else if var version = appendableVersion(from: versions) {
+        } else if let version = appendableVersion(from: versions) {
             let valueChanges = valueChangesByVersion[version]!
             log.trace("Adding version to store: \(version.id.rawValue)")
             log.verbose("Value changes for \(version.id.rawValue): \(valueChanges)")
-            
+
             do {
-                if version.valueDataSize == nil {
-                    version.valueDataSize = valueChanges.valueDataSize
-                }
                 try self.store.addVersion(version, storing: valueChanges)
             } catch Store.Error.attemptToAddExistingVersion {
                 log.error("Failed adding to history because version already exists. Ignoring error")
@@ -209,7 +209,9 @@ public extension Exchange {
             
             // Dispatch so that we don't end up with a huge recursive call stack
             DispatchQueue.global(qos: .userInitiated).async {
-                self.addToHistory(valueChangesByVersion: reducedVersions, executingUponCompletion: completionHandler)
+                autoreleasepool {
+                    self.addToHistory(valueChangesByVersion: reducedVersions, executingUponCompletion: completionHandler)
+                }
             }
         } else {
             log.error("Failed to add to history due to missing predecessors")
