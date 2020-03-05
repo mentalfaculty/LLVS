@@ -267,19 +267,21 @@ public extension CloudKitExchange {
             return
         }
     
-        // Use batches of length 200, because CloudKit will give limit error at 400 records
+        // Use batches, because CloudKit will give limit error at 400 records
         let batchRanges = (0...versionIds.count-1).split(intoRangesOfLength: cloudKitFetchLimit)
         var versions: [Version] = []
         let tasks = batchRanges.map { range in
             AsynchronousTask { finish in
-                let batchVersionIds = Array(versionIds[range])
-                self.retrieve(batchOfVersionsIdentifiedBy: batchVersionIds) { result in
-                    switch result {
-                    case .success(let batchVersions):
-                        versions.append(contentsOf: batchVersions)
-                        finish(.success(()))
-                    case .failure(let error):
-                        finish(.failure(error))
+                autoreleasepool {
+                    let batchVersionIds = Array(versionIds[range])
+                    self.retrieve(batchOfVersionsIdentifiedBy: batchVersionIds) { result in
+                        switch result {
+                        case .success(let batchVersions):
+                            versions.append(contentsOf: batchVersions)
+                            finish(.success(()))
+                        case .failure(let error):
+                            finish(.failure(error))
+                        }
                     }
                 }
             }
@@ -307,16 +309,20 @@ public extension CloudKitExchange {
             }
             
             do {
-                var versions: [Version] = []
-                for record in recordsByRecordID!.values {
-                    if let data = record.exchangeValue(forKey: .version) as? Data, let version = try JSONDecoder().decode([Version].self, from: data).first {
-                        versions.append(version)
-                    } else {
-                        throw Error.couldNotGetVersionFromRecord
+                try autoreleasepool {
+                    var versions: [Version] = []
+                    for record in recordsByRecordID!.values {
+                        try autoreleasepool {
+                            if let data = record.exchangeValue(forKey: .version) as? Data, let version = try JSONDecoder().decode([Version].self, from: data).first {
+                                versions.append(version)
+                            } else {
+                                throw Error.couldNotGetVersionFromRecord
+                            }
+                        }
                     }
+                    log.verbose("Retrieved versions: \(versions)")
+                    completionHandler(.success(versions))
                 }
-                log.verbose("Retrieved versions: \(versions)")
-                completionHandler(.success(versions))
             } catch {
                 completionHandler(.failure(error))
             }
@@ -342,24 +348,30 @@ public extension CloudKitExchange {
         var changesByVersionId: [Version.ID:[Value.Change]] = [:]
         let tasks = batchRanges.map { range in
             AsynchronousTask { finish in
-                let batchVersionIds = Array(versionIds[range])
-                self.retrieve(batchOfValueChangesForVersionsIdentifiedBy: batchVersionIds) { result in
-                    switch result {
-                    case .success(let newChangesByVersionId):
-                        changesByVersionId.merge(newChangesByVersionId) { current, _ in current }
-                        finish(.success(()))
-                    case .failure(let error):
-                        finish(.failure(error))
+                autoreleasepool {
+                    let batchVersionIds = Array(versionIds[range])
+                    self.retrieve(batchOfValueChangesForVersionsIdentifiedBy: batchVersionIds) { result in
+                        autoreleasepool {
+                            switch result {
+                            case .success(let newChangesByVersionId):
+                                changesByVersionId.merge(newChangesByVersionId) { current, _ in current }
+                                finish(.success(()))
+                            case .failure(let error):
+                                finish(.failure(error))
+                            }
+                        }
                     }
                 }
             }
         }
         tasks.executeInOrder { result in
-            switch result {
-            case .success:
-                completionHandler(.success(changesByVersionId))
-            case .failure(let error):
-                completionHandler(.failure(error))
+            autoreleasepool {
+                switch result {
+                case .success:
+                    completionHandler(.success(changesByVersionId))
+                case .failure(let error):
+                    completionHandler(.failure(error))
+                }
             }
         }
     }
@@ -377,22 +389,24 @@ public extension CloudKitExchange {
             }
             
             do {
-                let changesByVersion: [(Version.ID, [Value.Change])] = try recordsByRecordID.map { keyValue in
-                    let record = keyValue.value
-                    let recordID = keyValue.key
-                    let data: Data
-                    if let d = record.exchangeValue(forKey: .valueChanges) as? Data {
-                        data = d
-                    } else if let asset = record.exchangeValue(forKey: .valueChangesAsset) as? CKAsset, let url = asset.fileURL {
-                        data = try Data(contentsOf: url)
-                    } else {
-                        throw Error.invalidValueChangesDataInRecord
+                var changesByVersion: [(Version.ID, [Value.Change])]!
+                changesByVersion = try recordsByRecordID.map { keyValue in
+                    try autoreleasepool {
+                        let record = keyValue.value
+                        let recordID = keyValue.key
+                        let data: Data
+                        if let d = record.exchangeValue(forKey: .valueChanges) as? Data {
+                            data = d
+                        } else if let asset = record.exchangeValue(forKey: .valueChangesAsset) as? CKAsset, let url = asset.fileURL {
+                            data = try Data(contentsOf: url)
+                        } else {
+                            throw Error.invalidValueChangesDataInRecord
+                        }
+                        let valueChanges: [Value.Change] = try JSONDecoder().decode([Value.Change].self, from: data)
+                        log.verbose("Retrieved value changes for \(recordID.recordName): \(valueChanges)")
+                        return (Version.ID(recordID.recordName), valueChanges)
                     }
-                    let valueChanges: [Value.Change] = try JSONDecoder().decode([Value.Change].self, from: data)
-                    log.verbose("Retrieved value changes for \(recordID.recordName): \(valueChanges)")
-                    return (Version.ID(recordID.recordName), valueChanges)
                 }
-                
                 completionHandler(.success(.init(uniqueKeysWithValues: changesByVersion)))
             } catch {
                 log.error("Failed to retrieve: \(error)")
@@ -441,45 +455,47 @@ public extension CloudKitExchange {
     
     private func send(batchOfVersionChanges versionChanges: ArraySlice<VersionChanges>, executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         do {
-            var tempFileURLs: [URL] = []
-            let records: [CKRecord] = try versionChanges.map { t in
-                let version = t.version
-                let valueChanges = t.valueChanges
-                let recordID = CKRecord.ID(recordName: version.id.rawValue, zoneID: zoneID ?? .default)
-                let record = CKRecord(recordType: .init(CKRecord.ExchangeType.Version.rawValue), recordID: recordID)
-                let versionData = try JSONEncoder().encode([version]) // Use an array, because JSON needs root dict or array
-                let changesData = try JSONEncoder().encode(valueChanges)
-                record.setExchangeValue(versionData, forKey: .version)
-                record.setExchangeValue(storeIdentifier, forKey: .storeIdentifier)
+            try autoreleasepool {
+                var tempFileURLs: [URL] = []
+                let records: [CKRecord] = try versionChanges.map { t in
+                    let version = t.version
+                    let valueChanges = t.valueChanges
+                    let recordID = CKRecord.ID(recordName: version.id.rawValue, zoneID: zoneID ?? .default)
+                    let record = CKRecord(recordType: .init(CKRecord.ExchangeType.Version.rawValue), recordID: recordID)
+                    let versionData = try JSONEncoder().encode([version]) // Use an array, because JSON needs root dict or array
+                    let changesData = try JSONEncoder().encode(valueChanges)
+                    record.setExchangeValue(versionData, forKey: .version)
+                    record.setExchangeValue(storeIdentifier, forKey: .storeIdentifier)
 
-                // Use an asset for bigger values (>10Kb)
-                if changesData.count <= 10000 {
-                    record.setExchangeValue(changesData, forKey: .valueChanges)
-                } else {
-                    let tempFileURL = temporaryDirectory.appendingPathComponent(UUID().uuidString)
-                    try changesData.write(to: tempFileURL)
-                    let asset = CKAsset(fileURL: tempFileURL)
-                    record.setExchangeValue(asset, forKey: .valueChangesAsset)
-                    tempFileURLs.append(tempFileURL)
+                    // Use an asset for bigger values (>10Kb)
+                    if changesData.count <= 10000 {
+                        record.setExchangeValue(changesData, forKey: .valueChanges)
+                    } else {
+                        let tempFileURL = temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                        try changesData.write(to: tempFileURL)
+                        let asset = CKAsset(fileURL: tempFileURL)
+                        record.setExchangeValue(asset, forKey: .valueChangesAsset)
+                        tempFileURLs.append(tempFileURL)
+                    }
+                    
+                    return record
                 }
                 
-                return record
-            }
-            
-            let modifyOperation = CKModifyRecordsOperation(recordsToSave: records, recordIDsToDelete: nil)
-            modifyOperation.isAtomic = true
-            modifyOperation.savePolicy = .allKeys
-            modifyOperation.modifyRecordsCompletionBlock = { _, _, error in
-                tempFileURLs.forEach { try? FileManager.default.removeItem(at: $0) }
-                if let error = error {
-                    log.error("Failed to send: \(error)")
-                    completionHandler(.failure(error))
-                } else {
-                    log.trace("Succeeded in sending")
-                    completionHandler(.success(()))
+                let modifyOperation = CKModifyRecordsOperation(recordsToSave: records, recordIDsToDelete: nil)
+                modifyOperation.isAtomic = true
+                modifyOperation.savePolicy = .allKeys
+                modifyOperation.modifyRecordsCompletionBlock = { _, _, error in
+                    tempFileURLs.forEach { try? FileManager.default.removeItem(at: $0) }
+                    if let error = error {
+                        log.error("Failed to send: \(error)")
+                        completionHandler(.failure(error))
+                    } else {
+                        log.trace("Succeeded in sending")
+                        completionHandler(.success(()))
+                    }
                 }
+                self.database.add(modifyOperation)
             }
-            self.database.add(modifyOperation)
         } catch {
             log.error("Failed to send: \(error)")
             completionHandler(.failure(error))

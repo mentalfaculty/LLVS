@@ -14,20 +14,23 @@ public struct Version: Hashable, Identifiable {
     public var predecessors: Predecessors?
     public var successors: Successors = .init()
     public var timestamp: TimeInterval
+    public var valueDataSize: Int64?
     public var metadata: Data?
     
     private enum CodingKeys: String, CodingKey {
         case identifier
         case predecessors
         case timestamp
+        case valueDataSize
         case metadata
     }
     
-    public init(id: ID = .init(), predecessors: Predecessors? = nil, metadata: Data? = nil) {
+    public init(id: ID = .init(), predecessors: Predecessors? = nil, valueDataSize: Int64, metadata: Data? = nil) {
         self.id = id
         self.predecessors = predecessors
         self.timestamp = Date().timeIntervalSinceReferenceDate
         self.metadata = metadata
+        self.valueDataSize = valueDataSize
     }
 }
 
@@ -40,6 +43,7 @@ extension Version: Codable {
         predecessors = try container.decodeIfPresent(Predecessors.self, forKey: .predecessors)
         timestamp = try container.decode(TimeInterval.self, forKey: .timestamp)
         metadata = try container.decodeIfPresent(Data.self, forKey: .metadata)
+        valueDataSize = try container.decodeIfPresent(Int64.self, forKey: .valueDataSize)
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -47,6 +51,7 @@ extension Version: Codable {
         try container.encode(id, forKey: .identifier)
         try container.encodeIfPresent(predecessors, forKey: .predecessors)
         try container.encode(timestamp, forKey: .timestamp)
+        try container.encodeIfPresent(valueDataSize, forKey: .valueDataSize)
         try container.encode(metadata, forKey: .metadata)
     }
     

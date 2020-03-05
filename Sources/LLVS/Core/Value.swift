@@ -163,4 +163,15 @@ extension Array where Element == Value.Change {
         }
     }
     
+    var valueDataSize: Int64 {
+        return self.reduce(0) { result, change in
+            switch change {
+            case .insert(let value), .update(let value):
+                return result + Int64(value.data.count)
+            case .remove, .preserveRemoval, .preserve:
+                return result
+            }
+        }
+    }
+    
 }

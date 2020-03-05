@@ -40,8 +40,10 @@ public class AsynchronousTask {
     }
     
     public func execute() {
-        executionBlock { result in
-            self.result = result
+        autoreleasepool {
+            executionBlock { result in
+                self.result = result
+            }
         }
     }
 }

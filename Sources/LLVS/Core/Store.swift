@@ -44,8 +44,6 @@ public final class Store {
     private let historyAccessQueue = DispatchQueue(label: "llvs.dispatchQueue.historyaccess")
     
     fileprivate let fileManager = FileManager()
-    fileprivate let encoder = JSONEncoder()
-    fileprivate let decoder = JSONDecoder()
     
     public init(rootDirectoryURL: URL, storage: Storage = FileStorage()) throws {
         self.storage = storage
@@ -120,7 +118,7 @@ extension Store {
     /// Changes must include all updates to the map of the first predecessor. If necessary, preserves should be included to bring values
     /// from the second predecessor into the first predecessor map.
     @discardableResult internal func makeVersion(basedOn predecessors: Version.Predecessors?, storing changes: [Value.Change], metadata: Data? = nil) throws -> Version {
-        let version = Version(predecessors: predecessors, metadata: metadata)
+        let version = Version(predecessors: predecessors, valueDataSize: changes.valueDataSize, metadata: metadata)
         try addVersion(version, storing: changes)
         return version
     }
@@ -137,12 +135,14 @@ extension Store {
         }
         
         // Store values
+        var valueDataSize: Int64 = 0
         for change in changes {
             switch change {
             case .insert(let value), .update(let value):
                 var newValue = value
                 newValue.storedVersionId = version.id
                 try self.store(newValue)
+                valueDataSize += Int64(newValue.data.count)
             case .remove, .preserve, .preserveRemoval:
                 continue
             }
@@ -169,7 +169,9 @@ extension Store {
         try valuesMap.addVersion(version.id, basedOn: version.predecessors?.idOfFirst, applying: deltas)
         
         // Store version
-        try store(version)
+        var versionWithDataSize = version
+        versionWithDataSize.valueDataSize = valueDataSize
+        try store(versionWithDataSize)
         
         // Add to history
         try historyAccessQueue.sync {
@@ -445,10 +447,12 @@ extension Store {
 extension Store {
     
     fileprivate func store(_ version: Version) throws {
-        let (dir, file) = fileSystemLocation(forVersionIdentifiedBy: version.id)
-        try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
-        let data = try encoder.encode(version)
-        try data.write(to: file)
+        try autoreleasepool {
+            let (dir, file) = fileSystemLocation(forVersionIdentifiedBy: version.id)
+            try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
+            let data = try JSONEncoder().encode(version)
+            try data.write(to: file)
+        }
     }
     
     /// Returns all versions of a value with the given identifier in the history.
@@ -490,18 +494,21 @@ extension Store {
     
     /// Versions found in store. This makes no use of the loaded history.
     fileprivate func storedVersions() throws -> [Version] {
-        let enumerator = fileManager.enumerator(at: versionsDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
-        var versions: [Version] = []
-        for any in enumerator {
-            var isDirectory: ObjCBool = true
-            guard let url = any as? URL else { continue }
-            guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) && !isDirectory.boolValue else { continue }
-            guard url.pathExtension == "json" else { continue }
-            let data = try Data(contentsOf: url)
-            let version = try decoder.decode(Version.self, from: data)
-            versions.append(version)
+        try autoreleasepool {
+            let enumerator = fileManager.enumerator(at: versionsDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
+            var versions: [Version] = []
+            let decoder = JSONDecoder()
+            for any in enumerator {
+                var isDirectory: ObjCBool = true
+                guard let url = any as? URL else { continue }
+                guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) && !isDirectory.boolValue else { continue }
+                guard url.pathExtension == "json" else { continue }
+                let data = try Data(contentsOf: url)
+                let version = try decoder.decode(Version.self, from: data)
+                versions.append(version)
+            }
+            return versions
         }
-        return versions
     }
     
     public func version(identifiedBy versionId: Version.ID) throws -> Version? {

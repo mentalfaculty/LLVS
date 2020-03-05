@@ -20,9 +20,6 @@ final class Map {
     let zone: Zone
     private let nodeCache: Cache<Node> = .init()
     
-    fileprivate let encoder = JSONEncoder()
-    fileprivate let decoder = JSONDecoder()
-    
     private let rootKey = "__llvs_root"
     
     init(zone: Zone) {
@@ -30,67 +27,70 @@ final class Map {
     }
     
     func addVersion(_ version: Version.ID, basedOn baseVersion: Version.ID?, applying deltas: [Delta]) throws {
-        var rootNode: Node
-        let rootRef = ZoneReference(key: rootKey, version: version)
-        if let baseVersion = baseVersion {
-            let oldRootRef = ZoneReference(key: rootKey, version: baseVersion)
-            guard let oldRoot = try node(for: oldRootRef) else { throw Error.missingNode }
-            rootNode = oldRoot
-        }
-        else {
-            rootNode = Node(reference: rootRef, children: .nodes([]))
-        }
-        rootNode.reference.version = version
-        guard case let .nodes(rootChildRefs) = rootNode.children else { throw Error.unexpectedNodeContent }
-        
-        var subNodesByKey: [Key:Node] = [:]
-        for delta in deltas {
-            let key = delta.key
-            
-            let subNodeKey = Key(String(key.keyString.prefix(2)))
-            let subNodeRef = ZoneReference(key: subNodeKey.keyString, version: version)
-            var subNode: Node
-            if let n = subNodesByKey[subNodeKey] {
-                subNode = n
-            }
-            else if let existingSubNodeRef = rootChildRefs.first(where: { $0.key == subNodeKey.keyString }) {
-                guard let existingSubNode = try node(for: existingSubNodeRef) else { throw Error.missingNode }
-                subNode = existingSubNode
-                subNode.reference = subNodeRef
+        try autoreleasepool {
+            let encoder = JSONEncoder()
+            var rootNode: Node
+            let rootRef = ZoneReference(key: rootKey, version: version)
+            if let baseVersion = baseVersion {
+                let oldRootRef = ZoneReference(key: rootKey, version: baseVersion)
+                guard let oldRoot = try node(for: oldRootRef) else { throw Error.missingNode }
+                rootNode = oldRoot
             }
             else {
-                subNode = Node(reference: subNodeRef, children: .values([]))
+                rootNode = Node(reference: rootRef, children: .nodes([]))
+            }
+            rootNode.reference.version = version
+            guard case let .nodes(rootChildRefs) = rootNode.children else { throw Error.unexpectedNodeContent }
+            
+            var subNodesByKey: [Key:Node] = [:]
+            for delta in deltas {
+                let key = delta.key
+                
+                let subNodeKey = Key(String(key.keyString.prefix(2)))
+                let subNodeRef = ZoneReference(key: subNodeKey.keyString, version: version)
+                var subNode: Node
+                if let n = subNodesByKey[subNodeKey] {
+                    subNode = n
+                }
+                else if let existingSubNodeRef = rootChildRefs.first(where: { $0.key == subNodeKey.keyString }) {
+                    guard let existingSubNode = try node(for: existingSubNodeRef) else { throw Error.missingNode }
+                    subNode = existingSubNode
+                    subNode.reference = subNodeRef
+                }
+                else {
+                    subNode = Node(reference: subNodeRef, children: .values([]))
+                }
+                
+                guard case let .values(keyValuePairs) = subNode.children else { throw Error.unexpectedNodeContent }
+                
+                let valueRefs = keyValuePairs.filter({ $0.key == key }).map({ $0.valueReference })
+                var valueRefsByIdentifier: [Value.ID:Value.Reference] = Dictionary(uniqueKeysWithValues: valueRefs.map({ ($0.valueId, $0) }) )
+                for valueRef in delta.addedValueReferences {
+                    valueRefsByIdentifier[valueRef.valueId] = valueRef
+                }
+                for valueId in delta.removedValueIdentifiers {
+                    valueRefsByIdentifier[valueId] = nil
+                }
+                let newValueRefs = Array(valueRefsByIdentifier.values)
+                var newPairs = keyValuePairs.filter { $0.key != key }
+                newPairs += newValueRefs.map { KeyValuePair(key: key, valueReference: $0) }
+                subNode.children = .values(newPairs)
+                
+                subNodesByKey[subNodeKey] = subNode
             }
             
-            guard case let .values(keyValuePairs) = subNode.children else { throw Error.unexpectedNodeContent }
-            
-            let valueRefs = keyValuePairs.filter({ $0.key == key }).map({ $0.valueReference })
-            var valueRefsByIdentifier: [Value.ID:Value.Reference] = Dictionary(uniqueKeysWithValues: valueRefs.map({ ($0.valueId, $0) }) )
-            for valueRef in delta.addedValueReferences {
-                valueRefsByIdentifier[valueRef.valueId] = valueRef
+            // Update and save subnodes and rootnode
+            var rootRefsByIdentifier: [String:ZoneReference] = Dictionary(uniqueKeysWithValues: rootChildRefs.map({ ($0.key, $0) }) )
+            for subNode in subNodesByKey.values {
+                let key = subNode.reference.key
+                let data = try encoder.encode(subNode)
+                try zone.store(data, for: subNode.reference)
+                rootRefsByIdentifier[key] = subNode.reference
             }
-            for valueId in delta.removedValueIdentifiers {
-                valueRefsByIdentifier[valueId] = nil
-            }
-            let newValueRefs = Array(valueRefsByIdentifier.values)
-            var newPairs = keyValuePairs.filter { $0.key != key }
-            newPairs += newValueRefs.map { KeyValuePair(key: key, valueReference: $0) }
-            subNode.children = .values(newPairs)
-            
-            subNodesByKey[subNodeKey] = subNode
+            rootNode.children = .nodes(Array(rootRefsByIdentifier.values))
+            let data = try encoder.encode(rootNode)
+            try zone.store(data, for: rootNode.reference)
         }
-        
-        // Update and save subnodes and rootnode
-        var rootRefsByIdentifier: [String:ZoneReference] = Dictionary(uniqueKeysWithValues: rootChildRefs.map({ ($0.key, $0) }) )
-        for subNode in subNodesByKey.values {
-            let key = subNode.reference.key
-            let data = try encoder.encode(subNode)
-            try zone.store(data, for: subNode.reference)
-            rootRefsByIdentifier[key] = subNode.reference
-        }
-        rootNode.children = .nodes(Array(rootRefsByIdentifier.values))
-        let data = try encoder.encode(rootNode)
-        try zone.store(data, for: rootNode.reference)
     }
     
     func differences(between firstVersion: Version.ID, and secondVersion: Version.ID, withCommonAncestor commonAncestor: Version.ID?) throws -> [Diff] {
@@ -281,14 +281,16 @@ final class Map {
     }
     
     fileprivate func node(for reference: ZoneReference) throws -> Node? {
-        if let node = nodeCache.value(for: reference) {
-            return node
-        } else if let data = try zone.data(for: reference) {
-            let node = try decoder.decode(Node.self, from: data)
-            nodeCache.setValue(node, for: reference)
-            return node
-        } else {
-            return nil
+        try autoreleasepool {
+            if let node = nodeCache.value(for: reference) {
+                return node
+            } else if let data = try zone.data(for: reference) {
+                let node = try JSONDecoder().decode(Node.self, from: data)
+                nodeCache.setValue(node, for: reference)
+                return node
+            } else {
+                return nil
+            }
         }
     }
     

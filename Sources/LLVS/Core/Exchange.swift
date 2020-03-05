@@ -99,32 +99,102 @@ public extension Exchange {
         let versionsByIdentifier = versions.reduce(into: [:]) { result, version in
             result[version.id] = version
         }
-        retrieveValueChanges(forVersionsIdentifiedBy: versions.ids) { result in
-            switch result {
-            case let .failure(error):
-                log.error("Failed adding to history: \(error)")
-                completionHandler(.failure(error))
-            case let .success(valueChangesByVersionIdentifier):
-                let valueChangesByVersion: [Version:[Value.Change]] = valueChangesByVersionIdentifier.reduce(into: [:]) { result, keyValue in
-                    let version = versionsByIdentifier[keyValue.key]!
-                    result[version] = keyValue.value
+        
+        var remainingVersions = versions.sorted { $0.timestamp < $1.timestamp }
+        var previousRemainingCount = -1
+        let totalCount = remainingVersions.count
+        var batchCount: Int = 0
+        var currentBatchSize: Int = -1
+        
+        func determineNextBatchSize() -> Int {
+            let batchDataSizeLimit = 5000000 // 5MB
+            var dataSizeCount: Int64 = 0
+            var versionIndex = 0
+            while dataSizeCount <= batchDataSizeLimit, versionIndex < remainingVersions.count {
+                let version = remainingVersions[versionIndex]
+                dataSizeCount += version.valueDataSize ?? 100000 // Default to 100KB if we don't know size
+                versionIndex += 1
+            }
+            
+            // Note that the count is 1 more than index, and we already added one in loop.
+            // So versionIndex is count at this point.
+            var newBatchSize = versionIndex
+            
+            // If the previous
+            if previousRemainingCount == remainingVersions.count {
+                // Last batch size did not add any versions. Increase batch size
+                // to see if that breaks the impasse.
+                newBatchSize = max(newBatchSize, currentBatchSize+1)
+            }
+
+            return newBatchSize
+        }
+
+        // Setup a type of asynchronous while loop, that processes each dynamically formed batch
+        // one at a time.
+        func retrieveNextBatch() {
+            guard !remainingVersions.isEmpty else {
+                completionHandler(.success(()))
+                return
+            }
+            guard batchCount <= 2*totalCount else {
+                // Check that the batchCount is not bigger than twice the original length.
+                // We allow for a failure at each batch size, which explains the factor 2
+                completionHandler(.failure(ExchangeError.remoteVersionsWithUnknownPredecessors))
+                return
+            }
+            
+            batchCount += 1
+            currentBatchSize = determineNextBatchSize()
+            previousRemainingCount = remainingVersions.count
+
+            let batchVersions = remainingVersions[0..<currentBatchSize]
+            retrieveValueChanges(forVersionsIdentifiedBy: batchVersions.ids) { result in
+                switch result {
+                case let .failure(error):
+                    log.error("Failed adding to history: \(error)")
+                    completionHandler(.failure(error))
+                case let .success(valueChangesByVersionIdentifier):
+                    let valueChangesByVersion: [Version:[Value.Change]] = valueChangesByVersionIdentifier.reduce(into: [:]) { result, keyValue in
+                        let version = versionsByIdentifier[keyValue.key]!
+                        result[version] = keyValue.value
+                    }
+                    self.addToHistory(valueChangesByVersion: valueChangesByVersion) { result in
+                        switch result {
+                        case .success:
+                            remainingVersions.removeFirst(currentBatchSize)
+                            DispatchQueue.global(qos: .userInitiated).async { retrieveNextBatch() }
+                        case .failure(let error):
+                            if let exchangeError = error as? ExchangeError, case .remoteVersionsWithUnknownPredecessors = exchangeError {
+                                // Maybe we just need a bigger batch size, so try again
+                                DispatchQueue.global(qos: .userInitiated).async { retrieveNextBatch() }
+                            } else {
+                                completionHandler(.failure(error))
+                            }
+                        }
+                    }
                 }
-                self.addToHistory(versionsWithValueChanges: valueChangesByVersion, executingUponCompletion: completionHandler)
             }
         }
+        
+        // Call the function for first time. It then recursive calls itself for other iterations
+        retrieveNextBatch()
     }
     
-    private func addToHistory(versionsWithValueChanges: [Version:[Value.Change]], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        let versions = Array(versionsWithValueChanges.keys).sorted { $0.timestamp < $1.timestamp }
+    private func addToHistory(valueChangesByVersion: [Version:[Value.Change]], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
+        let versions = Array(valueChangesByVersion.keys).sorted { $0.timestamp < $1.timestamp }
         if versions.isEmpty {
             log.trace("No versions. Finished adding to history")
             completionHandler(.success(()))
-        } else if let version = appendableVersion(from: versions) {
-            let valueChanges = versionsWithValueChanges[version]!
+        } else if var version = appendableVersion(from: versions) {
+            let valueChanges = valueChangesByVersion[version]!
             log.trace("Adding version to store: \(version.id.rawValue)")
             log.verbose("Value changes for \(version.id.rawValue): \(valueChanges)")
             
             do {
+                if version.valueDataSize == nil {
+                    version.valueDataSize = valueChanges.valueDataSize
+                }
                 try self.store.addVersion(version, storing: valueChanges)
             } catch Store.Error.attemptToAddExistingVersion {
                 log.error("Failed adding to history because version already exists. Ignoring error")
@@ -134,12 +204,12 @@ public extension Exchange {
                 return
             }
             
-            var reducedVersions = versionsWithValueChanges
+            var reducedVersions = valueChangesByVersion
             reducedVersions[version] = nil
             
             // Dispatch so that we don't end up with a huge recursive call stack
             DispatchQueue.global(qos: .userInitiated).async {
-                self.addToHistory(versionsWithValueChanges: reducedVersions, executingUponCompletion: completionHandler)
+                self.addToHistory(valueChangesByVersion: reducedVersions, executingUponCompletion: completionHandler)
             }
         } else {
             log.error("Failed to add to history due to missing predecessors")
