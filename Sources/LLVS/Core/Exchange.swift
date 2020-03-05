@@ -120,14 +120,15 @@ public extension Exchange {
             // So versionIndex is count at this point.
             var newBatchSize = versionIndex
             
-            // If the previous
+            // If the previous batch was just as big as now, we didn't manage
+            // to add any version. So we need to add some more versions to break deadlock.
             if previousRemainingCount == remainingVersions.count {
                 // Last batch size did not add any versions. Increase batch size
                 // to see if that breaks the impasse.
                 newBatchSize = max(newBatchSize, currentBatchSize+1)
             }
 
-            return newBatchSize
+            return min(newBatchSize, remainingVersions.count)
         }
 
         // Setup a type of asynchronous while loop, that processes each dynamically formed batch
@@ -169,7 +170,11 @@ public extension Exchange {
                             case .failure(let error):
                                 if let exchangeError = error as? ExchangeError, case .remoteVersionsWithUnknownPredecessors = exchangeError {
                                     // Maybe we just need a bigger batch size, so try again
-                                    DispatchQueue.global(qos: .userInitiated).async { retrieveNextBatch() }
+                                    DispatchQueue.global(qos: .userInitiated).async {
+                                        autoreleasepool {
+                                            retrieveNextBatch()
+                                        }
+                                    }
                                 } else {
                                     completionHandler(.failure(error))
                                 }
