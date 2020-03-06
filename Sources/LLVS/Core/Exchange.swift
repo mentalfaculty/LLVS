@@ -149,7 +149,7 @@ public extension Exchange {
             currentBatchSize = determineNextBatchSize()
             previousRemainingCount = remainingVersions.count
 
-            let batchVersions = remainingVersions[0..<currentBatchSize]
+            let batchVersions = Array(remainingVersions[0..<currentBatchSize])
             retrieveValueChanges(forVersionsIdentifiedBy: batchVersions.ids) { result in
                 autoreleasepool {
                     switch result {
@@ -157,12 +157,12 @@ public extension Exchange {
                         log.error("Failed adding to history: \(error)")
                         completionHandler(.failure(error))
                     case let .success(valueChangesByVersionIdentifier):
-                        let valueChangesByVersion: [Version:[Value.Change]] = valueChangesByVersionIdentifier.reduce(into: [:]) { result, keyValue in
+                        let valueChangesByVersionID: [Version.ID:[Value.Change]] = valueChangesByVersionIdentifier.reduce(into: [:]) { result, keyValue in
                             var version = versionsByIdentifier[keyValue.key]!
                             if version.valueDataSize == nil { version.valueDataSize = keyValue.value.valueDataSize }
-                            result[version] = keyValue.value
+                            result[version.id] = keyValue.value
                         }
-                        self.addToHistory(valueChangesByVersion: valueChangesByVersion) { result in
+                        self.addToHistory(sortedVersions: batchVersions, valueChangesByVersionID: valueChangesByVersionID) { result in
                             switch result {
                             case .success:
                                 remainingVersions.removeFirst(currentBatchSize)
@@ -189,33 +189,35 @@ public extension Exchange {
         retrieveNextBatch()
     }
     
-    private func addToHistory(valueChangesByVersion: [Version:[Value.Change]], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        let versions = Array(valueChangesByVersion.keys).sorted { $0.timestamp < $1.timestamp }
-        if versions.isEmpty {
+    /// Note that we don't mutate the dictionary, because that results in a large memory copy.
+    private func addToHistory(sortedVersions: [Version], valueChangesByVersionID: [Version.ID:[Value.Change]], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
+        if sortedVersions.isEmpty {
             log.trace("No versions. Finished adding to history")
             completionHandler(.success(()))
-        } else if let version = appendableVersion(from: versions) {
-            let valueChanges = valueChangesByVersion[version]!
-            log.trace("Adding version to store: \(version.id.rawValue)")
-            log.verbose("Value changes for \(version.id.rawValue): \(valueChanges)")
+        } else if let version = appendableVersion(from: sortedVersions) {
+            autoreleasepool {
+                let valueChanges = valueChangesByVersionID[version.id]!
+                log.trace("Adding version to store: \(version.id.rawValue)")
+                log.verbose("Value changes for \(version.id.rawValue): \(valueChanges)")
 
-            do {
-                try self.store.addVersion(version, storing: valueChanges)
-            } catch Store.Error.attemptToAddExistingVersion {
-                log.error("Failed adding to history because version already exists. Ignoring error")
-            } catch {
-                log.error("Failed adding to history: \(error)")
-                completionHandler(.failure(error))
-                return
-            }
-            
-            var reducedVersions = valueChangesByVersion
-            reducedVersions[version] = nil
-            
-            // Dispatch so that we don't end up with a huge recursive call stack
-            DispatchQueue.global(qos: .userInitiated).async {
-                autoreleasepool {
-                    self.addToHistory(valueChangesByVersion: reducedVersions, executingUponCompletion: completionHandler)
+                do {
+                    try self.store.addVersion(version, storing: valueChanges)
+                } catch Store.Error.attemptToAddExistingVersion {
+                    log.error("Failed adding to history because version already exists. Ignoring error")
+                } catch {
+                    log.error("Failed adding to history: \(error)")
+                    completionHandler(.failure(error))
+                    return
+                }
+                
+                let reducedVersions = sortedVersions.filter { $0.id != version.id }
+                
+                // Dispatch so that we don't end up with a huge recursive call stack
+                DispatchQueue.global(qos: .userInitiated).async {
+                    autoreleasepool {
+                        // Note that we just pass along all value changes, because any modification of the dictionary will result in a large copy
+                        self.addToHistory(sortedVersions: reducedVersions, valueChangesByVersionID: valueChangesByVersionID, executingUponCompletion: completionHandler)
+                    }
                 }
             }
         } else {

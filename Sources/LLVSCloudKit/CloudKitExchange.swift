@@ -383,15 +383,15 @@ public extension CloudKitExchange {
         let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
         fetchOperation.desiredKeys = [CKRecord.ExchangeKey.valueChanges.rawValue, CKRecord.ExchangeKey.valueChangesAsset.rawValue]
         fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
-            guard error == nil, let recordsByRecordID = recordsByRecordID else {
-                completionHandler(.failure(error!))
-                return
-            }
-            
-            do {
-                var changesByVersion: [(Version.ID, [Value.Change])]!
-                changesByVersion = try recordsByRecordID.map { keyValue in
-                    try autoreleasepool {
+            autoreleasepool {
+                guard error == nil, let recordsByRecordID = recordsByRecordID else {
+                    completionHandler(.failure(error!))
+                    return
+                }
+                
+                do {
+                    var changesByVersion: [(Version.ID, [Value.Change])]!
+                    changesByVersion = try recordsByRecordID.map { keyValue in
                         let record = keyValue.value
                         let recordID = keyValue.key
                         let data: Data
@@ -406,11 +406,11 @@ public extension CloudKitExchange {
                         log.verbose("Retrieved value changes for \(recordID.recordName): \(valueChanges)")
                         return (Version.ID(recordID.recordName), valueChanges)
                     }
+                    completionHandler(.success(.init(uniqueKeysWithValues: changesByVersion)))
+                } catch {
+                    log.error("Failed to retrieve: \(error)")
+                    completionHandler(.failure(error))
                 }
-                completionHandler(.success(.init(uniqueKeysWithValues: changesByVersion)))
-            } catch {
-                log.error("Failed to retrieve: \(error)")
-                completionHandler(.failure(error))
             }
         }
         database.add(fetchOperation)
