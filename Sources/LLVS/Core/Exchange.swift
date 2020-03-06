@@ -100,62 +100,22 @@ public extension Exchange {
             result[version.id] = version
         }
         
-        var remainingVersions = versions.sorted { $0.timestamp < $1.timestamp }
-        var previousRemainingCount = -1
-        let totalCount = remainingVersions.count
-        var batchCount: Int = 0
-        var currentBatchSize: Int = -1
-        
-        func determineNextBatchSize() -> Int {
-            let batchDataSizeLimit = 5000000 // 5MB
-            var dataSizeCount: Int64 = 0
-            var versionIndex = 0
-            while dataSizeCount <= batchDataSizeLimit, versionIndex < remainingVersions.count {
-                let version = remainingVersions[versionIndex]
-                dataSizeCount += version.valueDataSize ?? 100000 // Default to 100KB if we don't know size
-                versionIndex += 1
-            }
-            
-            // Note that the count is 1 more than index, and we already added one in loop.
-            // So versionIndex is count at this point.
-            var newBatchSize = versionIndex
-            
-            // If the previous batch was just as big as now, we didn't manage
-            // to add any version. So we need to add some more versions to break deadlock.
-            if previousRemainingCount == remainingVersions.count {
-                // Last batch size did not add any versions. Increase batch size
-                // to see if that breaks the impasse.
-                newBatchSize = max(newBatchSize, currentBatchSize+1)
-            }
+        let sortedVersions = versions.sorted { $0.timestamp < $1.timestamp }
 
-            return min(newBatchSize, remainingVersions.count)
+        func batchSizeCostEvaluator(index: Int) -> Float {
+            let batchDataSizeLimit = 5000000 // 5MB
+            let version = sortedVersions[index]
+            return Float(version.valueDataSize ?? 100000) / Float(batchDataSizeLimit) // Default to 100KB if we don't know size
         }
 
-        // Setup a type of asynchronous while loop, that processes each dynamically formed batch
-        // one at a time.
-        func retrieveNextBatch() {
-            guard !remainingVersions.isEmpty else {
-                completionHandler(.success(()))
-                return
-            }
-            guard batchCount <= 2*totalCount else {
-                // Check that the batchCount is not bigger than twice the original length.
-                // We allow for a failure at each batch size, which explains the factor 2
-                completionHandler(.failure(ExchangeError.remoteVersionsWithUnknownPredecessors))
-                return
-            }
-            
-            batchCount += 1
-            currentBatchSize = determineNextBatchSize()
-            previousRemainingCount = remainingVersions.count
-
-            let batchVersions = Array(remainingVersions[0..<currentBatchSize])
-            retrieveValueChanges(forVersionsIdentifiedBy: batchVersions.ids) { result in
+        let dynamicBatcher = DynamicTaskBatcher(numberOfTasks: sortedVersions.count, taskCostEvaluator: batchSizeCostEvaluator) { range, finishBatch in
+            let batchVersions = Array(sortedVersions[range])
+            self.retrieveValueChanges(forVersionsIdentifiedBy: batchVersions.ids) { result in
                 autoreleasepool {
                     switch result {
                     case let .failure(error):
                         log.error("Failed adding to history: \(error)")
-                        completionHandler(.failure(error))
+                        finishBatch(.definitive(.failure(error)))
                     case let .success(valueChangesByVersionIdentifier):
                         let valueChangesByVersionID: [Version.ID:[Value.Change]] = valueChangesByVersionIdentifier.reduce(into: [:]) { result, keyValue in
                             var version = versionsByIdentifier[keyValue.key]!
@@ -165,18 +125,12 @@ public extension Exchange {
                         self.addToHistory(sortedVersions: batchVersions, valueChangesByVersionID: valueChangesByVersionID) { result in
                             switch result {
                             case .success:
-                                remainingVersions.removeFirst(currentBatchSize)
-                                DispatchQueue.global(qos: .userInitiated).async { retrieveNextBatch() }
+                                finishBatch(.definitive(.success(())))
                             case .failure(let error):
                                 if let exchangeError = error as? ExchangeError, case .remoteVersionsWithUnknownPredecessors = exchangeError {
-                                    // Maybe we just need a bigger batch size, so try again
-                                    DispatchQueue.global(qos: .userInitiated).async {
-                                        autoreleasepool {
-                                            retrieveNextBatch()
-                                        }
-                                    }
+                                    finishBatch(.growBatchAndReexecute)
                                 } else {
-                                    completionHandler(.failure(error))
+                                    finishBatch(.definitive(.failure(error)))
                                 }
                             }
                         }
@@ -184,9 +138,7 @@ public extension Exchange {
                 }
             }
         }
-        
-        // Call the function for first time. It then recursive calls itself for other iterations
-        retrieveNextBatch()
+        dynamicBatcher.start(executingUponCompletion: completionHandler)
     }
     
     /// Note that we don't mutate the dictionary, because that results in a large memory copy.
