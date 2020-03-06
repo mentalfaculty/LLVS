@@ -206,28 +206,42 @@ public extension Exchange {
         }
         
         var toSendIds: [Version.ID]!
-        let sendVersions = AsynchronousTask { finish in
+        let sendVersions = AsynchronousTask { finishAsyncTask in
             toSendIds = self.versionIdsMissingRemotely(forRemoteIdentifiers: remoteIds)
-            do {
-                let versionChanges: [VersionChanges] = try toSendIds!.map { versionId in
-                    guard let version = try self.store.version(identifiedBy: versionId) else {
-                        throw ExchangeError.missingVersion
-                    }
-                    let changes = try self.store.valueChanges(madeInVersionIdentifiedBy: versionId)
-                    return (version, changes)
+            
+            func batchSizeCostEvaluator(index: Int) -> Float {
+                let batchDataSizeLimit: Int64 = 5000000 // 5MB
+                let defaultDataSize: Int64 = 100000 // 100KB
+                if let version = try? self.store.version(identifiedBy: toSendIds[index]) {
+                    return Float(version.valueDataSize ?? defaultDataSize) / Float(batchDataSizeLimit)
+                } else {
+                    return Float(defaultDataSize) / Float(batchDataSizeLimit)
                 }
-                
-                guard !versionChanges.isEmpty else {
-                    finish(.success(()))
-                    return
-                }
-                
-                self.send(versionChanges: versionChanges) { result in
-                    finish(result)
-                }
-            } catch {
-                finish(.failure(error))
             }
+            
+            let taskBatcher = DynamicTaskBatcher(numberOfTasks: toSendIds.count, taskCostEvaluator: batchSizeCostEvaluator) { range, finishBatch in
+                do {
+                    let versionChanges: [VersionChanges] = try toSendIds!.map { versionId in
+                        guard let version = try self.store.version(identifiedBy: versionId) else {
+                            throw ExchangeError.missingVersion
+                        }
+                        let changes = try self.store.valueChanges(madeInVersionIdentifiedBy: versionId)
+                        return (version, changes)
+                    }
+                    
+                    guard !versionChanges.isEmpty else {
+                        finishBatch(.definitive(.success(())))
+                        return
+                    }
+                    
+                    self.send(versionChanges: versionChanges) { result in
+                        finishBatch(.definitive(result))
+                    }
+                } catch {
+                    finishBatch(.definitive(.failure(error)))
+                }
+            }
+            taskBatcher.start(executingUponCompletion: finishAsyncTask)
         }
 
         [prepare, retrieveIds, sendVersions].executeInOrder { result in
