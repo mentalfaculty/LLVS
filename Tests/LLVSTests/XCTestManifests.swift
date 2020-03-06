@@ -16,6 +16,7 @@ public func allTests() -> [XCTestCaseEntry] {
         testCase(ZoneTests.allTests),
         testCase(MapTests.allTests),
         testCase(DiffTests.allTests),
+        testCase(DynamicTaskBatcherTests),
         testCase(HistoryTests.allTests),
         testCase(PrevailingValueTests.allTests),
         testCase(SerialHistoryTests.allTests),
