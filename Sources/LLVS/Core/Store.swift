@@ -194,6 +194,14 @@ extension Store {
         return try valuesMap.valueReferences(matching: .init(valueId.rawValue), at: versionId).first
     }
     
+    public func valueReferences(at version: Version.ID) throws -> [Value.Reference] {
+        var refs: [Value.Reference] = []
+        try enumerate(version: version) { ref in
+            refs.append(ref)
+        }
+        return refs
+    }
+    
     /// Convenient method to avoid having to create id types
     public func value(idString valueIdString: String, at versionId: Version.ID) throws -> Value? {
         return try value(id: .init(valueIdString), at: versionId)

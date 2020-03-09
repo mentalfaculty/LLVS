@@ -147,13 +147,7 @@ public class StoreCoordinator {
     
     /// Pass a specific version, or nil for the current version
     public func valueReferences(at version: Version.ID? = nil) throws -> [Value.Reference] {
-        try autoreleasepool {
-            var refs: [Value.Reference] = []
-            try store.enumerate(version: version ?? currentVersion) { ref in
-                refs.append(ref)
-            }
-            return refs
-        }
+        try store.valueReferences(at: version ?? currentVersion)
     }
     
     public func values(at version: Version.ID? = nil) throws -> [Value] {
