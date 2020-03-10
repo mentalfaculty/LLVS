@@ -8,11 +8,26 @@
 import Foundation
 
 
+// MARK:- Branch
+
+public struct Branch: RawRepresentable {
+    public let rawValue: String
+    
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+    
+    public init(randomizedNameBasedOn base: String) {
+        self.rawValue = base + "_\(UUID().uuidString)"
+    }
+}
+
+
 // MARK:- Store
 
 public final class Store {
     
-    enum Error: Swift.Error {
+    public enum Error: Swift.Error {
         case missingVersion
         case attemptToLocateUnversionedValue
         case attemptToStoreValueWithNoVersion
@@ -100,9 +115,9 @@ public final class Store {
 // MARK:- Storing Values and Versions
 
 extension Store {
-    
+
     /// Convenience to avoid having to create Value.Change values yourself
-    @discardableResult public func makeVersion(basedOnPredecessor versionId: Version.ID?, inserting insertedValues: [Value] = [], updating updatedValues: [Value] = [], removing removedIds: [Value.ID] = [], metadata: Data? = nil) throws -> Version {
+    @discardableResult public func makeVersion(basedOnPredecessor versionId: Version.ID?, inserting insertedValues: [Value] = [], updating updatedValues: [Value] = [], removing removedIds: [Value.ID] = [], metadata: Version.Metadata = [:]) throws -> Version {
         let predecessors = versionId.flatMap { Version.Predecessors(idOfFirst: $0, idOfSecond: nil) }
         let inserts: [Value.Change] = insertedValues.map { .insert($0) }
         let updates: [Value.Change] = updatedValues.map { .update($0) }
@@ -110,14 +125,14 @@ extension Store {
         return try makeVersion(basedOn: predecessors, storing: inserts+updates+removes, metadata: metadata)
     }
     
-    @discardableResult public func makeVersion(basedOnPredecessor version: Version.ID?, storing changes: [Value.Change], metadata: Data? = nil) throws -> Version {
+    @discardableResult public func makeVersion(basedOnPredecessor version: Version.ID?, storing changes: [Value.Change], metadata: Version.Metadata = [:]) throws -> Version {
         let predecessors = version.flatMap { Version.Predecessors(idOfFirst: $0, idOfSecond: nil) }
         return try makeVersion(basedOn: predecessors, storing: changes, metadata: metadata)
     }
     
     /// Changes must include all updates to the map of the first predecessor. If necessary, preserves should be included to bring values
     /// from the second predecessor into the first predecessor map.
-    @discardableResult internal func makeVersion(basedOn predecessors: Version.Predecessors?, storing changes: [Value.Change], metadata: Data? = nil) throws -> Version {
+    @discardableResult internal func makeVersion(basedOn predecessors: Version.Predecessors?, storing changes: [Value.Change], metadata: Version.Metadata = [:]) throws -> Version {
         let version = Version(predecessors: predecessors, valueDataSize: changes.valueDataSize, metadata: metadata)
         try addVersion(version, storing: changes)
         return version
@@ -233,6 +248,13 @@ extension Store {
 
 extension Store {
     
+    public enum MergeHeadSelection {
+        case all
+        case allExceptBranches
+        case allUnbranchedAndSpecificBranches([Branch])
+        case specificBranchesOnly([Branch])
+    }
+    
     /// Whether there is more than one head
     public var hasMultipleHeads: Bool {
         var result: Bool = false
@@ -242,21 +264,51 @@ extension Store {
         return result
     }
     
+    /// Finds any heads that have the branch in the metadata.
+    public func heads(withBranch branch: Branch) -> [Version.ID] {
+        var result: [Version.ID] = []
+        queryHistory { history in
+            let heads = history.headIdentifiers
+            result = heads.filter { id in
+                let version = history.version(identifiedBy: id)!
+                return branch.rawValue == version.metadata[.branch]?.value()
+            }
+        }
+        return result
+    }
+    
     /// Merges heads into the version passed, which is usually a head itself. This is a convenience
     /// to save looping through all heads.
     /// If the version ends up being changed by the merging, the new version is returned, otherwise nil.
-    public func mergeHeads(into version: Version.ID, resolvingWith arbiter: MergeArbiter) -> Version.ID? {
+    public func mergeHeads(into version: Version.ID, resolvingWith arbiter: MergeArbiter, headSelection: MergeHeadSelection = .allExceptBranches, metadata: Version.Metadata = [:]) -> Version.ID? {
         var heads: Set<Version.ID> = []
+        var versionsById: [Version.ID:Version] = [:]
         queryHistory { history in
             heads = history.headIdentifiers
+            versionsById = .init(uniqueKeysWithValues: heads.map({ ($0, history.version(identifiedBy: $0)!) }))
         }
         heads.remove(version)
+        
+        heads = heads.filter { id in
+            let version = versionsById[id]!
+            let branch: String? = version.metadata[.branch]?.value()
+            switch headSelection {
+            case .all:
+                return true
+            case .allExceptBranches:
+                return branch == nil
+            case .allUnbranchedAndSpecificBranches(let branches):
+                return branch == nil || branches.map({ $0.rawValue }).contains(branch)
+            case .specificBranchesOnly(let branches):
+                return branches.map({ $0.rawValue }).contains(branch)
+            }
+        }
         
         guard !heads.isEmpty else { return nil }
         
         var versionId: Version.ID = version
         for otherHead in heads {
-            let newVersion = try! merge(version: versionId, with: otherHead, resolvingWith: arbiter)
+            let newVersion = try! merge(version: versionId, with: otherHead, resolvingWith: arbiter, metadata: metadata)
             versionId = newVersion.id
         }
         
@@ -264,7 +316,7 @@ extension Store {
     }
     
     /// Will choose between a three way merge, and a two way merge, based on whether a common ancestor is found.
-    public func merge(version firstVersionIdentifier: Version.ID, with secondVersionIdentifier: Version.ID, resolvingWith arbiter: MergeArbiter, metadata: Data? = nil) throws -> Version {
+    public func merge(version firstVersionIdentifier: Version.ID, with secondVersionIdentifier: Version.ID, resolvingWith arbiter: MergeArbiter, metadata: Version.Metadata = [:]) throws -> Version {
         do {
             return try mergeRelated(version: firstVersionIdentifier, with: secondVersionIdentifier, resolvingWith: arbiter, metadata: metadata)
         } catch Error.noCommonAncestor {
@@ -274,7 +326,7 @@ extension Store {
     
     /// Two-way merge between two versions that have no common ancestry. Effectively we assume an empty common ancestor,
     /// so that all changes are inserts, or conflicting twiceInserts.
-    public func mergeUnrelated(version firstVersionIdentifier: Version.ID, with secondVersionIdentifier: Version.ID, resolvingWith arbiter: MergeArbiter, metadata: Data? = nil) throws -> Version {
+    public func mergeUnrelated(version firstVersionIdentifier: Version.ID, with secondVersionIdentifier: Version.ID, resolvingWith arbiter: MergeArbiter, metadata: Version.Metadata = [:]) throws -> Version {
         var firstVersion, secondVersion: Version?
         var fastForwardVersion: Version?
         try historyAccessQueue.sync {
@@ -302,7 +354,7 @@ extension Store {
     
     /// Three-way merge between two versions, and a common ancestor. If no common ancestor is found, a .noCommonAncestor error is thrown.
     /// Conflicts are resolved using the MergeArbiter passed in.
-    public func mergeRelated(version firstVersionIdentifier: Version.ID, with secondVersionIdentifier: Version.ID, resolvingWith arbiter: MergeArbiter, metadata: Data? = nil) throws -> Version {
+    public func mergeRelated(version firstVersionIdentifier: Version.ID, with secondVersionIdentifier: Version.ID, resolvingWith arbiter: MergeArbiter, metadata: Version.Metadata = [:]) throws -> Version {
         var firstVersion, secondVersion, commonVersion: Version?
         var commonVersionIdentifier: Version.ID?
         try historyAccessQueue.sync {
@@ -332,7 +384,7 @@ extension Store {
     
     /// Two or three-way merge. Does no check to see if fast forwarding is possible. Will carry out the merge regardless of history.
     /// If a common ancestor is supplied, it is 3-way, and otherwise 2-way.
-    private func merge(_ firstVersion: Version, and secondVersion: Version, withCommonAncestor commonAncestor: Version?, resolvingWith arbiter: MergeArbiter, metadata: Data? = nil) throws -> Version {
+    private func merge(_ firstVersion: Version, and secondVersion: Version, withCommonAncestor commonAncestor: Version?, resolvingWith arbiter: MergeArbiter, metadata: Version.Metadata = [:]) throws -> Version {
         // Prepare merge
         let predecessors = Version.Predecessors(idOfFirst: firstVersion.id, idOfSecond: secondVersion.id)
         let diffs = try valuesMap.differences(between: firstVersion.id, and: secondVersion.id, withCommonAncestor: commonAncestor?.id)

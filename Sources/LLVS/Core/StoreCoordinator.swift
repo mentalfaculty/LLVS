@@ -27,6 +27,8 @@ public class StoreCoordinator {
     }
     public var mergeArbiter: MergeArbiter = MostRecentChangeFavoringArbiter()
     
+    public var defaultMetadataForNewVersions: Version.Metadata = [:]
+        
     public let storeDirectoryURL: URL
     public let cacheDirectoryURL: URL
     
@@ -128,18 +130,35 @@ public class StoreCoordinator {
     }
     
     
+    // MARK: Heads
+    
+    public func heads(withBranch branch: Branch) -> [Version.ID] {
+        store.heads(withBranch: branch)
+    }
+    
+    /// Will attempt to get the first branch version, if one exists; if not, will return the current version.
+    /// This is just a convenient way to get a base version.
+    public func versionForBranchOrCurrentHead(for branch: Branch? = nil) -> Version.ID {
+        branch.flatMap({ heads(withBranch: $0).first }) ?? currentVersion
+    }
+    
+    
     // MARK: Saving
     
     /// You should use this to save instead of using the store directly, so that the
     /// coordinator can track versions. Otherwise you will need to merge to see the changes.
-    public func save(_ changes: [Value.Change]) throws {
-        guard !changes.isEmpty else { return }
-        currentVersion = try store.makeVersion(basedOnPredecessor: currentVersion, storing: changes).id
+    public func save(_ changes: [Value.Change], in branch: Branch? = nil, metadata: Version.Metadata? = nil) throws {
+        guard !changes.isEmpty || metadata != nil else { return }
+        var metadata = metadata ?? defaultMetadataForNewVersions
+        if let branch = branch { metadata[.branch] = .init(branch.rawValue) }
+        currentVersion = try store.makeVersion(basedOnPredecessor: versionForBranchOrCurrentHead(for: branch), storing: changes, metadata: metadata).id
     }
     
-    public func save(inserting inserts: [Value] = [], updating updates: [Value] = [], removing removals: [Value.ID] = []) throws {
-        guard !inserts.isEmpty || !updates.isEmpty || !removals.isEmpty else { return }
-        currentVersion = try store.makeVersion(basedOnPredecessor: currentVersion, inserting: inserts, updating: updates, removing: removals).id
+    public func save(inserting inserts: [Value] = [], updating updates: [Value] = [], removing removals: [Value.ID] = [], in branch: Branch? = nil, metadata: Version.Metadata? = nil) throws {
+        guard !inserts.isEmpty || !updates.isEmpty || !removals.isEmpty || metadata != nil else { return }
+        var metadata = metadata ?? defaultMetadataForNewVersions
+        if let branch = branch { metadata[.branch] = .init(branch.rawValue) }
+        currentVersion = try store.makeVersion(basedOnPredecessor: versionForBranchOrCurrentHead(for: branch), inserting: inserts, updating: updates, removing: removals, metadata: metadata).id
     }
     
     
@@ -162,6 +181,14 @@ public class StoreCoordinator {
     
     public func value(id: Value.ID) throws -> Value? {
         return try store.value(id: id, at: currentVersion)
+    }
+    
+    public func value(idString: String, on branch: Branch?) throws -> Value? {
+        return try store.value(idString: idString, at: versionForBranchOrCurrentHead(for: branch))
+    }
+    
+    public func value(id: Value.ID, on branch: Branch?) throws -> Value? {
+        return try store.value(id: id, at: versionForBranchOrCurrentHead(for: branch))
     }
     
     
@@ -237,8 +264,10 @@ public class StoreCoordinator {
     
     /// Merging any extra heads, or fast forward to latest. It's a good idea to save data just before calling this, so that
     /// in view edits are committed. Returns true if the merge changed the current version; false otherwise.
-    @discardableResult public func merge() -> Bool {
-        let newVersion = self.store.mergeHeads(into: self.currentVersion, resolvingWith: self.mergeArbiter)
+    /// Note that the default behavior is not to merge in named branches. These are usually used for background work, and need to be merged in under controlled circumstances.
+    @discardableResult public func merge(metadata: Version.Metadata? = nil, headSelection: Store.MergeHeadSelection = .allExceptBranches) -> Bool {
+        let metadata = metadata ?? defaultMetadataForNewVersions
+        let newVersion = self.store.mergeHeads(into: self.currentVersion, resolvingWith: self.mergeArbiter, headSelection: headSelection, metadata: metadata)
         if let newVersion = newVersion {
             self.currentVersion = newVersion
             return true

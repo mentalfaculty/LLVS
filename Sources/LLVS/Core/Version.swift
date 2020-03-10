@@ -8,6 +8,23 @@
 import Foundation
 
 public struct Version: Hashable, Identifiable {
+    
+    public typealias Metadata = [MetadataKey:MetadataValue]
+    
+    public struct MetadataKey: Hashable, Codable, RawRepresentable {
+        public var rawValue: String
+        public init(rawValue: String) { self.rawValue = rawValue }
+        
+        public static let branch = Self(rawValue: "__llvs_branch")
+    }
+    
+    public struct MetadataValue: Codable {
+        public let data: Data
+        public init(data: Data) { self.data = data }
+        public init<T: Codable>(_ value: T) { self.data = try! JSONEncoder().encode(value) }
+        public func value<T: Codable>() -> T { try! JSONDecoder().decode(T.self, from: self.data) }
+    }
+        
     public typealias ID = Identifier
 
     public var id: ID = .init()
@@ -15,7 +32,7 @@ public struct Version: Hashable, Identifiable {
     public var successors: Successors = .init()
     public var timestamp: TimeInterval
     public var valueDataSize: Int64?
-    public var metadata: Data?
+    public var metadata: Metadata = [:]
     
     private enum CodingKeys: String, CodingKey {
         case identifier
@@ -25,12 +42,20 @@ public struct Version: Hashable, Identifiable {
         case metadata
     }
     
-    public init(id: ID = .init(), predecessors: Predecessors? = nil, valueDataSize: Int64, metadata: Data? = nil) {
+    public init(id: ID = .init(), predecessors: Predecessors? = nil, valueDataSize: Int64, metadata: Metadata = [:]) {
         self.id = id
         self.predecessors = predecessors
         self.timestamp = Date().timeIntervalSinceReferenceDate
         self.metadata = metadata
         self.valueDataSize = valueDataSize
+    }
+    
+    public static func == (lhs: Version, rhs: Version) -> Bool {
+        lhs.id == rhs.id
+    }
+    
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 }
 
@@ -42,7 +67,7 @@ extension Version: Codable {
         id = try container.decode(ID.self, forKey: .identifier)
         predecessors = try container.decodeIfPresent(Predecessors.self, forKey: .predecessors)
         timestamp = try container.decode(TimeInterval.self, forKey: .timestamp)
-        metadata = try container.decodeIfPresent(Data.self, forKey: .metadata)
+        metadata = try container.decodeIfPresent(Metadata.self, forKey: .metadata) ?? [:]
         valueDataSize = try container.decodeIfPresent(Int64.self, forKey: .valueDataSize)
     }
     
