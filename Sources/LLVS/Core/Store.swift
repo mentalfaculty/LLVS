@@ -17,8 +17,9 @@ public struct Branch: RawRepresentable {
         self.rawValue = rawValue
     }
     
-    public init(randomizedNameBasedOn base: String) {
-        self.rawValue = base + "_\(UUID().uuidString)"
+    public init(randomizedNameBasedOn base: String = "") {
+        let separator = base.isEmpty ? "" : "_"
+        self.rawValue = "\(base)\(separator)\(UUID().uuidString)"
     }
 }
 
