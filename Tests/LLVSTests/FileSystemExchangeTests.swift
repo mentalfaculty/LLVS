@@ -177,9 +177,7 @@ class FileSystemExchangeTests: XCTestCase {
             ("testReceiveFiles", testReceiveFiles),
             ("testConcurrentChanges", testConcurrentChanges)
         ]
-        if #available(macOS 10.15, iOS 13, watchOS 6, *) {
-            result.append(("testNewVersionAvailableNotification", testNewVersionAvailableNotification))
-        }
+        result.append(("testNewVersionAvailableNotification", testNewVersionAvailableNotification))
         return result
     }
 }
