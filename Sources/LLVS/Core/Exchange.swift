@@ -16,7 +16,7 @@ enum ExchangeError: Swift.Error {
 
 public typealias VersionChanges = (version: Version, valueChanges: [Value.Change])
 
-public protocol Exchange: class {
+public protocol Exchange: AnyObject {
 
     @available(macOS 10.15, iOS 13, watchOS 6, *)
     var newVersionsAvailable: AnyPublisher<Void, Never> { get }
