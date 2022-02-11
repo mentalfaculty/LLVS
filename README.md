@@ -1,3 +1,6 @@
+[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fmentalfaculty%2FLLVS%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/mentalfaculty/LLVS)
+[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fmentalfaculty%2FLLVS%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/mentalfaculty/LLVS)
+
 # Low-Level Versioned Store (LLVS)
 
 _Author: Drew McCormack (@drewmccormack)_
