@@ -10,15 +10,24 @@ let package = Package(
     ],
     products: [
         .library(
+            name: "SQLite3",
+            targets: ["SQLite3"]),
+        .library(
             name: "LLVS",
             targets: ["LLVS"]),
         .library(
             name: "LLVSCloudKit",
             targets: ["LLVSCloudKit"]),
+        .library(
+            name: "LLVSSQLite",
+            targets: ["LLVSSQLite"]),
     ],
     dependencies: [
     ],
     targets: [
+        .systemLibrary(
+            name: "SQLite3"
+        ),
         .target(
             name: "LLVS",
             dependencies: []),
@@ -27,6 +36,9 @@ let package = Package(
             dependencies: ["LLVS"]),
         .target(
             name: "LLVSCloudKit",
-            dependencies: ["LLVS"])
+            dependencies: ["LLVS"]),
+        .target(
+            name: "LLVSSQLite",
+            dependencies: ["LLVS", "SQLite3"])
     ]
 )
