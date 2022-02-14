@@ -16,7 +16,7 @@ Here I'm going to show you how to build an app that...
 
 ## SwiftUI
 
-Even with SwiftUI in constant flux, there is already plenty of great content around for learning  the new framework. I've spent several weeks working on side projects in an effort to 'kick the tires'; the tutorials and API descriptions others have compiled have been indispensable. 
+Even with SwiftUI in constant flux, there is already plenty of great content around for learning the new framework. I've spent several weeks working on side projects in an effort to 'kick the tires'; the tutorials and API descriptions others have compiled have been indispensable. 
 
 And yet, I can't help feeling most of the code is clothed above the waist, and pantsless below. The king is only half dressed. There is an enormous, data-sized elephant in the SwiftUI room.
 
