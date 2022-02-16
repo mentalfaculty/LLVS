@@ -14,7 +14,7 @@ public enum MapType {
 
 public protocol Storage {
     
-    func makeValuesZone(in store: Store) -> Zone
-    func makeMapZone(for type: MapType, in store: Store) -> Zone
+    func makeValuesZone(in store: Store) throws -> Zone
+    func makeMapZone(for type: MapType, in store: Store) throws -> Zone
     
 }

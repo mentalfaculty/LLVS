@@ -1,19 +1,20 @@
 //
-//  ZoneTests.swift
+//  SQLiteZoneTests.swift
 //  LLVSTests
 //
-//  Created by Drew McCormack on 07/12/2018.
+//  Created by Drew McCormack on 16/02/2022.
 //
 
 import XCTest
 import Foundation
 @testable import LLVS
+@testable import LLVSSQLite
 
-class ZoneTests: XCTestCase {
+class SQLiteZoneTests: XCTestCase {
 
     let fm = FileManager.default
     
-    var zone: FileZone!
+    var zone: SQLiteZone!
     var rootURL: URL!
     var ref: ZoneReference!
     
@@ -21,34 +22,29 @@ class ZoneTests: XCTestCase {
         super.setUp()
 
         rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
-        zone = FileZone(rootDirectory: rootURL, fileExtension: "json")
+        zone = try! SQLiteZone(rootDirectory: rootURL, fileExtension: "sqlite")
         ref = ZoneReference(key: "ABCDEF", version: .init("1234"))
     }
     
     override func tearDown() {
+        try? zone.dismantle()
         try? fm.removeItem(at: rootURL)
         super.tearDown()
     }
     
     func testCreation() {
         XCTAssert(fm.fileExists(atPath: rootURL.path))
+        XCTAssert(fm.fileExists(atPath: rootURL.appendingPathComponent("zone.sqlite").path))
     }
     
-    func testAddingDataCreatesFiles() {
+    func testAddingMultipleReferencesWithSameKey() {
         XCTAssertNoThrow(try zone.store(Data(), for: ref))
-        fm.fileExists(atPath: rootURL.appendingPathComponent("AB/CDEF/1/234.json").path)
+        XCTAssertNoThrow(try zone.store(Data(), for: .init(key: ref.key, version: .init("1245"))))
     }
     
-    func testAddingMultipleReferencesInSameDiretories() {
+    func testAddingMultipleReferencesWithSameVersion() {
         XCTAssertNoThrow(try zone.store(Data(), for: ref))
-        XCTAssertNoThrow(try zone.store(Data(), for: .init(key: "ABCDEF", version: .init("1245"))))
-        fm.fileExists(atPath: rootURL.appendingPathComponent("AB/CDEF/1/245.json").path)
-    }
-    
-    func testAddingMultipleReferencesWithDifferentVersionDirectories() {
-        XCTAssertNoThrow(try zone.store(Data(), for: ref))
-        XCTAssertNoThrow(try zone.store(Data(), for: .init(key: "ABCDEF", version: .init("2222"))))
-        fm.fileExists(atPath: rootURL.appendingPathComponent("AB/CDEF/2/222.json").path)
+        XCTAssertNoThrow(try zone.store(Data(), for: .init(key: "ABCDEFG", version: ref.version)))
     }
     
     func testRetrievingNonExistentData() {
@@ -76,9 +72,8 @@ class ZoneTests: XCTestCase {
     
     static var allTests = [
         ("testCreation", testCreation),
-        ("testAddingDataCreatesFiles", testAddingDataCreatesFiles),
-        ("testAddingMultipleReferencesInSameDiretories", testAddingMultipleReferencesInSameDiretories),
-        ("testAddingMultipleReferencesWithDifferentVersionDirectories", testAddingMultipleReferencesWithDifferentVersionDirectories),
+        ("testAddingMultipleReferencesWithSameKey", testAddingMultipleReferencesWithSameKey),
+        ("testAddingMultipleReferencesWithSameVersion", testAddingMultipleReferencesWithSameVersion),
         ("testRetrievingNonExistentData", testRetrievingNonExistentData),
         ("testRetrievingData", testRetrievingData),
         ("testVersionsQuery", testVersionsQuery),

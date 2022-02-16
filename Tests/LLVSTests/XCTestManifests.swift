@@ -9,11 +9,12 @@ public func allTests() -> [XCTestCaseEntry] {
         testCase(ValueTests.allTests),
         testCase(VersionTests.allTests),
         testCase(MergeTests.allTests),
-        testCase(MostRecentBranchArbiterTests.allTests),
-        testCase(MostRecentChangeArbiterTests.allTests),
+        testCase(MostRecentBranchMergeArbiterTests.allTests),
+        testCase(MostRecentChangeMergeArbiterTests.allTests),
         testCase(ArrayDiffTests.allTests),
-        testCase(ValueChangesInVersionsTests.allTests),
-        testCase(ZoneTests.allTests),
+        testCase(ValueChangesInVersionTests.allTests),
+        testCase(FileZoneTests.allTests),
+        testCase(SQLiteZoneTests.allTests),
         testCase(MapTests.allTests),
         testCase(DiffTests.allTests),
         testCase(DynamicTaskBatcherTests),
@@ -22,7 +23,7 @@ public func allTests() -> [XCTestCaseEntry] {
         testCase(SerialHistoryTests.allTests),
         testCase(FileSystemExchangeTests.allTests),
         testCase(SharedStoreTests.allTests),
-        testCase(Performance.allTests),
+        testCase(PerformanceTests.allTests),
     ]
 }
 #endif

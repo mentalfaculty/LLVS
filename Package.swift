@@ -33,7 +33,7 @@ let package = Package(
             dependencies: []),
         .testTarget(
             name: "LLVSTests",
-            dependencies: ["LLVS"]),
+            dependencies: ["LLVS", "LLVSSQLite"]),
         .target(
             name: "LLVSCloudKit",
             dependencies: ["LLVS"]),

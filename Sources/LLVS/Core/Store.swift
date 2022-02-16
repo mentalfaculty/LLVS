@@ -47,12 +47,12 @@ public final class Store {
     public let storage: Storage
 
     private lazy var valuesZone: Zone = {
-        return storage.makeValuesZone(in: self)
+        return try! storage.makeValuesZone(in: self)
     }()
     
     private let valuesMapName = "__llvs_values"
     private lazy var valuesMap: Map = {
-        let valuesMapZone = self.storage.makeMapZone(for: .valuesByVersion, in: self)
+        let valuesMapZone = try! self.storage.makeMapZone(for: .valuesByVersion, in: self)
         return Map(zone: valuesMapZone)
     }()
     

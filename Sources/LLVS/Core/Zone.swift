@@ -8,8 +8,8 @@
 import Foundation
 
 public struct ZoneReference: Codable, Hashable {
-    var key: String
-    var version: Version.ID
+    public var key: String
+    public var version: Version.ID
 }
 
 public protocol Zone {
