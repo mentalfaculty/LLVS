@@ -24,6 +24,7 @@ public func allTests() -> [XCTestCaseEntry] {
         testCase(FileSystemExchangeTests.allTests),
         testCase(SharedStoreTests.allTests),
         testCase(PerformanceTests.allTests),
+        testCase(SQLitePerformanceTests.allTests),
     ]
 }
 #endif
