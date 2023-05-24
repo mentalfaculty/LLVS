@@ -19,8 +19,15 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
     
     private let minimumDelayBeforeNotifyingOfNewVersions = 1.0
 
-    @available(macOS 10.15, iOS 13, watchOS 6, *)
-    private lazy var newVersionsSubject: PassthroughSubject<Void, Never> = .init()
+    private var _newVersionsSubject: Any? = nil
+    @available (macOS 10.15, iOS 13, watchOS 6, *)
+    public var newVersionsSubject: PassthroughSubject<Void, Never> {
+        if _newVersionsSubject == nil {
+            _newVersionsSubject = PassthroughSubject<Void, Never>()
+        }
+        return _newVersionsSubject as! PassthroughSubject<Void, Never>
+    }
+
     
     @available(macOS 10.15, iOS 13, watchOS 6, *)
     public var newVersionsAvailable: AnyPublisher<Void, Never> {
