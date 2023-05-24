@@ -35,7 +35,7 @@ class SQLitePerformanceTests: XCTestCase {
     
     func makeChanges(_ number: Int) -> [Value.Change]  {
         return (0..<number).map { _ in
-            let data = try! JSONSerialization.data(withJSONObject: ["name":"Tom Jones", "age":18] as [String:Any], options: [])
+            let data = try! JSONSerialization.data(withJSONObject: ["name":"Tom Jones", "age":18], options: [])
             let value = Value(id: .init(UUID().uuidString), data: data)
             return .insert(value)
         }

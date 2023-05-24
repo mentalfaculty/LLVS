@@ -10,6 +10,7 @@ import CloudKit
 import LLVS
 import Combine
 
+@available(macOS 10.14, iOS 12, watchOS 5, *)
 public class CloudKitExchange: Exchange {
     
     public enum CloudDatabaseDescription {
@@ -57,6 +58,7 @@ public class CloudKitExchange: Exchange {
     public var store: Store
     
     /// Client to inform of updates
+    @available(macOS 10.15, iOS 13, watchOS 6, *)
     public lazy private(set) var newVersionsAvailable: AnyPublisher<Void, Never> = PassthroughSubject<Void, Never>().eraseToAnyPublisher()
 
     /// A store identifier identifies the store in the cloud. This allows multiple stores to use a shared zone like the public database.
@@ -124,6 +126,7 @@ public class CloudKitExchange: Exchange {
 
 // MARK:- Querying Versions in Cloud
 
+@available(macOS 10.14, iOS 12, watchOS 5, *)
 fileprivate extension CloudKitExchange {
     
     /// Uses the zone changes API. Requires a custom zone.
@@ -244,6 +247,7 @@ fileprivate extension CloudKitExchange {
 
 // MARK:- Retrieving
 
+@available(macOS 10.14, iOS 12, watchOS 5, *)
 public extension CloudKitExchange {
     
     func prepareToRetrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
@@ -416,6 +420,7 @@ public extension CloudKitExchange {
 
 // MARK:- Sending
 
+@available(macOS 10.14, iOS 12, watchOS 5, *)
 public extension CloudKitExchange {
     
     func prepareToSend(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
@@ -502,6 +507,7 @@ public extension CloudKitExchange {
 
 // MARK:- Subscriptions
 
+@available(macOS 10.14, iOS 12, watchOS 5, *)
 public extension CloudKitExchange {
     
     func subscribeForPushNotifications() {
@@ -528,6 +534,7 @@ public extension CloudKitExchange {
 
 // MARK:- Restoration
 
+@available(macOS 10.14, iOS 12, watchOS 5, *)
 extension CloudKitExchange {
     
     public var restorationState: Data? {

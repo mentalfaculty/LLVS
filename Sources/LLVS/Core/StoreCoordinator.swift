@@ -11,6 +11,7 @@ import Combine
 
 /// A `StoreCoordinator` takes care of all aspects of setting up a syncing store.
 /// It's the simplest way to get started, though you may want more control for advanced use cases.
+@available (macOS 10.14, iOS 11, watchOS 5, *)
 public class StoreCoordinator {
     
     private struct CachedData: Codable {
@@ -37,13 +38,16 @@ public class StoreCoordinator {
         return exchange?.restorationState
     }
     
+    @available (macOS 10.15, iOS 13, watchOS 6, *)
     public lazy private(set) var currentVersionSubject: CurrentValueSubject<Version.ID, Never> = .init(.init())
     
     public private(set) var currentVersion: Version.ID {
         didSet {
             guard self.currentVersion != oldValue else { return }
             persist()
-            currentVersionSubject.value = self.currentVersion
+            if #available (macOS 10.15, iOS 13, watchOS 6, *) {
+                currentVersionSubject.value = self.currentVersion
+            }
         }
     }
     
@@ -77,7 +81,9 @@ public class StoreCoordinator {
 
         self.store = try Store(rootDirectoryURL: storeURL)
         self.currentVersion = Version.ID() // Set a temporary version. Final is in cache
-        self.currentVersionSubject = .init(self.currentVersion)
+        if #available (macOS 10.15, iOS 13, watchOS 6, *) {
+            self.currentVersionSubject = .init(self.currentVersion)
+        }
         try loadCache()
     }
     
