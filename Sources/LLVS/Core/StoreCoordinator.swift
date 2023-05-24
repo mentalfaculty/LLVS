@@ -38,8 +38,19 @@ public class StoreCoordinator {
         return exchange?.restorationState
     }
     
+    private var _currentVersionSubject: Any? = nil
     @available (macOS 10.15, iOS 13, watchOS 6, *)
-    public lazy private(set) var currentVersionSubject: CurrentValueSubject<Version.ID, Never> = .init(.init())
+    public var currentVersionSubject: CurrentValueSubject<Version.ID, Never> {
+        get{
+            if _currentVersionSubject == nil {
+                _currentVersionSubject = CurrentValueSubject<Version.ID, Never>(.init())
+            }
+            return _currentVersionSubject as! CurrentValueSubject<Version.ID, Never>
+        }
+        set{
+            _currentVersionSubject = newValue
+        }
+    }
     
     public private(set) var currentVersion: Version.ID {
         didSet {

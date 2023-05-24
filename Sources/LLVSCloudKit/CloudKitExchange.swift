@@ -58,8 +58,20 @@ public class CloudKitExchange: Exchange {
     public var store: Store
     
     /// Client to inform of updates
-    @available(macOS 10.15, iOS 13, watchOS 6, *)
-    public lazy private(set) var newVersionsAvailable: AnyPublisher<Void, Never> = PassthroughSubject<Void, Never>().eraseToAnyPublisher()
+    private var _newVersionsAvailable: Any? = nil
+    @available (macOS 10.15, iOS 13, watchOS 6, *)
+    
+    public var newVersionsAvailable:AnyPublisher<Void, Never> {
+        get{
+            if _newVersionsAvailable == nil {
+                _newVersionsAvailable = PassthroughSubject<Void, Never>().eraseToAnyPublisher()
+            }
+            return _newVersionsAvailable as! AnyPublisher<Void, Never>
+        }
+        set{
+            _newVersionsAvailable = newValue
+        }
+    }
 
     /// A store identifier identifies the store in the cloud. This allows multiple stores to use a shared zone like the public database.
     public let storeIdentifier: String
