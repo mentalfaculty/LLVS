@@ -19,10 +19,8 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
     
     private let minimumDelayBeforeNotifyingOfNewVersions = 1.0
 
-    @available(macOS 10.15, iOS 13, watchOS 6, *)
     private lazy var newVersionsSubject: PassthroughSubject<Void, Never> = .init()
     
-    @available(macOS 10.15, iOS 13, watchOS 6, *)
     public var newVersionsAvailable: AnyPublisher<Void, Never> {
         newVersionsSubject
             .debounce(for: .seconds(minimumDelayBeforeNotifyingOfNewVersions), scheduler: RunLoop.main)
@@ -169,8 +167,6 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
     }
         
     public func presentedItemDidChange() {
-        if #available(macOS 10.15, iOS 13, watchOS 6, *) {
-            self.newVersionsSubject.send(())
-        }
+        self.newVersionsSubject.send(())
     }
 }

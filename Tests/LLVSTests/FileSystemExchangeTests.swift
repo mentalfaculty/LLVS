@@ -9,7 +9,6 @@ import XCTest
 import Foundation
 @testable import LLVS
 
-@available(macOS 10.14, iOS 12, watchOS 5, *)
 class FileSystemExchangeTests: XCTestCase {
 
     let fm = FileManager.default
@@ -155,7 +154,6 @@ class FileSystemExchangeTests: XCTestCase {
     
     var publisher: Any?
     
-    @available(macOS 10.15, iOS 13, watchOS 6, *)
     func testNewVersionAvailableNotification() {
         exchange1 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store1, usesFileCoordination: true)
         exchange2 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store2, usesFileCoordination: true)
