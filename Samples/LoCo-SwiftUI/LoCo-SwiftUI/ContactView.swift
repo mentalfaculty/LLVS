@@ -28,21 +28,19 @@ struct ContactView: View {
     }
 
     var body: some View {
-        NavigationView {
-            Form {
-                Section(header: Text("Name")) {
-                    TextField("First Name", text: contact.person.firstName)
-                    TextField("Last Name", text: contact.person.secondName)
-                }
-                Section(header: Text("Address")) {
-                    TextField("Street Address", text: contact.address.streetAddress)
-                    TextField("Postcode", text: contact.address.postCode)
-                    TextField("City", text: contact.address.city)
-                    TextField("Country", text: contact.address.country)
-                }
+        Form {
+            Section(header: Text("Name")) {
+                TextField("First Name", text: contact.person.firstName)
+                TextField("Last Name", text: contact.person.secondName)
             }
-            .navigationBarTitle(Text("Contact"))
+            Section(header: Text("Address")) {
+                TextField("Street Address", text: contact.address.streetAddress)
+                TextField("Postcode", text: contact.address.postCode)
+                TextField("City", text: contact.address.city)
+                TextField("Country", text: contact.address.country)
+            }
         }
+        .navigationBarTitle(Text("Contact"))
     }
 }
 

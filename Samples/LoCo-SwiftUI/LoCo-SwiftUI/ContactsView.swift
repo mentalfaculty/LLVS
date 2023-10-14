@@ -26,7 +26,6 @@ struct ContactsView : View {
             List {
                 ForEach(dataSource.contacts) { contact in
                     ContactCell(contactID: contact.id)
-                        .environmentObject(self.dataSource)
                 }.onDelete { indices in
                     indices.forEach {
                         self.dataSource.deleteContact(withID: self.dataSource.contacts[$0].id)
@@ -47,11 +46,5 @@ struct ContactsView : View {
                 }
             )
         }
-    }
-}
-
-struct ContactsViewPreview : PreviewProvider {
-    static var previews: some View {
-        ContactsView()
     }
 }

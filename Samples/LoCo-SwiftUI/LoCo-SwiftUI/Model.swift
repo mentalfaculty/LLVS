@@ -34,7 +34,7 @@ extension Model {
     /// Encode the model type as a Value for the LLVS store.
     func encodeValue() throws -> Value {
         let data = try encoder.encode(self)
-        return Value(id: type(of: self).storeValueId(for: id), data: data)
+        return Value(id: Self.storeValueId(for: id), data: data)
     }
     
     /// Decode data from LLVS to form our model type.
@@ -44,7 +44,7 @@ extension Model {
     
     /// The id used in the LLVS store. This is based on the model id, but also includes the type string.
     var storeValueId: Value.Identifier {
-        type(of: self).storeValueId(for: id)
+        Self.storeValueId(for: id)
     }
     
     /// Tests if the store id is valid for the model type.
