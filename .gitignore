@@ -16,3 +16,4 @@ xcuserdata/
 *.moved-aside
 *.xccheckout
 *.xcscmblueprint
+.claude/
