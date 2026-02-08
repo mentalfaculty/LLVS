@@ -10,15 +10,14 @@ import CloudKit
 import LLVS
 import Combine
 
-@available(macOS 10.14, iOS 12, watchOS 5, *)
 public class CloudKitExchange: Exchange {
-    
+
     public enum CloudDatabaseDescription {
         case privateDatabaseWithCustomZone(CKContainer, zoneIdentifier: String)
         case privateDatabaseWithDefaultZone(CKContainer)
         case publicDatabase(CKContainer)
         case sharedDatabase(CKContainer, zoneIdentifier: String)
-        
+
         var database: CKDatabase {
             switch self {
             case let .privateDatabaseWithCustomZone(container, _):
@@ -31,7 +30,7 @@ public class CloudKitExchange: Exchange {
                 return container.sharedCloudDatabase
             }
         }
-        
+
         var zoneIdentifier: String? {
             switch self {
             case let .privateDatabaseWithCustomZone(_, zoneIdentifier), let .sharedDatabase(_, zoneIdentifier):
@@ -41,53 +40,44 @@ public class CloudKitExchange: Exchange {
             }
         }
     }
-    
+
     public enum Error: Swift.Error {
         case couldNotGetVersionFromRecord
         case noZoneFound
         case invalidValueChangesDataInRecord
     }
-    
+
     fileprivate lazy var temporaryDirectory: URL = {
         let result = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try? FileManager.default.createDirectory(at: result, withIntermediateDirectories: true, attributes: nil)
         return result
     }()
-    
+
     /// The store the exchange is updating.
     public var store: Store
-    
+
     /// Client to inform of updates
-    private var _newVersionsAvailable: Any? = nil
-    @available (macOS 10.15, iOS 13, watchOS 6, *)
-    
-    public var newVersionsAvailable:AnyPublisher<Void, Never> {
-        get{
-            if _newVersionsAvailable == nil {
-                _newVersionsAvailable = PassthroughSubject<Void, Never>().eraseToAnyPublisher()
-            }
-            return _newVersionsAvailable as! AnyPublisher<Void, Never>
-        }
-        set{
-            _newVersionsAvailable = newValue
-        }
+    private let _newVersionsSubject = PassthroughSubject<Void, Never>()
+
+    public var newVersionsAvailable: AnyPublisher<Void, Never> {
+        _newVersionsSubject.eraseToAnyPublisher()
     }
 
     /// A store identifier identifies the store in the cloud. This allows multiple stores to use a shared zone like the public database.
     public let storeIdentifier: String
-    
+
     /// Used only for the private database, when syncing via a custom zone.
     public let zoneIdentifier: String?
-    
+
     /// Can be private, shared or public database. For private, it is best to provide a zone identifier.
     public let database: CKDatabase
-    
+
     /// The custom zone being used in the private database, if there is one.
     public let zone: CKRecordZone?
-    
+
     /// Use to make dependencies when working with a custom zone
     private let createZoneOperation: CKModifyRecordZonesOperation?
-    
+
     /// Zone identifier if we are using a custom zone
     private var zoneID: CKRecordZone.ID? {
         guard let zoneIdentifier = zoneIdentifier else { return nil }
@@ -96,10 +86,10 @@ public class CloudKitExchange: Exchange {
 
     /// Restoration state
     @Atomic private var restoration: Restoration = .init()
-    
+
     /// Limit to use for CloudKit fetches. Should be less than actual limit (ie 400)
     private let cloudKitFetchLimit = 200
-    
+
     /// For single user syncing, it is best to use a zone. In that case, pass in the private database and a zone identifier.
     /// Otherwise, you will be using the default  zone in whichever database you pass.
     public init(with store: Store, storeIdentifier: String, cloudDatabaseDescription: CloudDatabaseDescription) {
@@ -138,9 +128,8 @@ public class CloudKitExchange: Exchange {
 
 // MARK:- Querying Versions in Cloud
 
-@available(macOS 10.14, iOS 12, watchOS 5, *)
 fileprivate extension CloudKitExchange {
-    
+
     /// Uses the zone changes API. Requires a custom zone.
     func fetchCloudZoneChanges(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         log.trace("Fetching cloud changes")
@@ -148,7 +137,7 @@ fileprivate extension CloudKitExchange {
         let config = CKFetchRecordZoneChangesOperation.ZoneConfiguration()
         config.desiredKeys = []
         config.previousServerChangeToken = restoration.fetchRecordChangesToken
-        
+
         let operation = CKFetchRecordZoneChangesOperation()
         operation.recordZoneIDs = [zoneID!]
         operation.configurationsByRecordZoneID = [zoneID! : config]
@@ -176,14 +165,14 @@ fileprivate extension CloudKitExchange {
                 completionHandler(.success(()))
             }
         }
-        
+
         database.add(operation)
     }
-    
+
     enum QueryInfo {
         case query(CKQuery)
         case cursor(CKQueryOperation.Cursor)
-        
+
         func makeQueryOperation() -> CKQueryOperation {
             switch self {
             case let .cursor(cursor):
@@ -193,7 +182,7 @@ fileprivate extension CloudKitExchange {
             }
         }
     }
-    
+
     func makeRecordsQuery() -> CKQuery {
         let predicate: NSPredicate
         if let lastQueryDate = restoration.lastQueryDate {
@@ -203,7 +192,7 @@ fileprivate extension CloudKitExchange {
         }
         return CKQuery(recordType: CKRecord.ExchangeType.Version.rawValue, predicate: predicate)
     }
-    
+
     /// Get any new version identifiers in cloud
     func queryDatabaseForNewVersions(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         log.trace("Querying cloud for new versions")
@@ -225,11 +214,11 @@ fileprivate extension CloudKitExchange {
             }
         }
     }
-    
+
     /// Used when no zone is available. Eg. the public database.
     func queryDatabase(with queryInfo: QueryInfo, executingUponCompletion completionHandler: @escaping CompletionHandler<[CKRecord]>) {
         log.trace("Querying cloud changes")
-        
+
         let operation = queryInfo.makeQueryOperation()
         var records: [CKRecord] = []
         operation.recordFetchedBlock = { record in
@@ -251,7 +240,7 @@ fileprivate extension CloudKitExchange {
                 completionHandler(error != nil ? .failure(error!) : .success(records))
             }
         }
-        
+
         database.add(operation)
     }
 }
@@ -259,9 +248,8 @@ fileprivate extension CloudKitExchange {
 
 // MARK:- Retrieving
 
-@available(macOS 10.14, iOS 12, watchOS 5, *)
 public extension CloudKitExchange {
-    
+
     func prepareToRetrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         log.trace("Preparing to retrieve")
         if zone != nil {
@@ -270,15 +258,15 @@ public extension CloudKitExchange {
             queryDatabaseForNewVersions(executingUponCompletion: completionHandler)
         }
     }
-    
+
     func retrieveVersions(identifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
         log.trace("Retrieving versions: \(versionIds)")
-        
+
         guard !versionIds.isEmpty else {
             completionHandler(.success([]))
             return
         }
-    
+
         // Use batches, because CloudKit will give limit error at 400 records
         let batchRanges = (0...versionIds.count-1).split(intoRangesOfLength: cloudKitFetchLimit)
         var versions: [Version] = []
@@ -307,7 +295,7 @@ public extension CloudKitExchange {
             }
         }
     }
-    
+
     /// Assumes that the batch size is less than the limits imposed by CloudKit (ie 400)
     private func retrieve(batchOfVersionsIdentifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
         log.trace("Retrieving versions")
@@ -319,7 +307,7 @@ public extension CloudKitExchange {
                 completionHandler(.failure(error!))
                 return
             }
-            
+
             do {
                 try autoreleasepool {
                     var versions: [Version] = []
@@ -341,20 +329,20 @@ public extension CloudKitExchange {
         }
         database.add(fetchOperation)
     }
-    
+
     func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>) {
         log.verbose("Retrieved all versions: \(restoration.versionsInCloud.map({ $0.rawValue }))")
         completionHandler(.success(Array(restoration.versionsInCloud)))
     }
-    
+
     func retrieveValueChanges(forVersionsIdentifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID:[Value.Change]]>) {
         log.trace("Retrieving value changes for versions: \(versionIds)")
-        
+
         guard !versionIds.isEmpty else {
             completionHandler(.success([:]))
             return
         }
-    
+
         // Use batches of length 200, because CloudKit will give limit error at 400 records
         let batchRanges = (0...versionIds.count-1).split(intoRangesOfLength: cloudKitFetchLimit)
         var changesByVersionId: [Version.ID:[Value.Change]] = [:]
@@ -387,7 +375,7 @@ public extension CloudKitExchange {
             }
         }
     }
-    
+
     /// Retrieves a batch of value changes, assuming batch is smaller than the CloudKit limit
     private func retrieve(batchOfValueChangesForVersionsIdentifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID:[Value.Change]]>) {
         log.trace("Retrieving value changes for versions: \(versionIds)")
@@ -400,7 +388,7 @@ public extension CloudKitExchange {
                     completionHandler(.failure(error!))
                     return
                 }
-                
+
                 do {
                     var changesByVersion: [(Version.ID, [Value.Change])]!
                     changesByVersion = try recordsByRecordID.map { keyValue in
@@ -432,9 +420,8 @@ public extension CloudKitExchange {
 
 // MARK:- Sending
 
-@available(macOS 10.14, iOS 12, watchOS 5, *)
 public extension CloudKitExchange {
-    
+
     func prepareToSend(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         if zone != nil {
             fetchCloudZoneChanges(executingUponCompletion: completionHandler)
@@ -442,16 +429,16 @@ public extension CloudKitExchange {
             queryDatabaseForNewVersions(executingUponCompletion: completionHandler)
         }
     }
-    
+
     func send(versionChanges: [VersionChanges], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         log.trace("Sending versions: \(versionChanges.map({ $0.0.id }))")
         log.verbose("Value changes: \(versionChanges)")
-        
+
         guard !versionChanges.isEmpty else {
             completionHandler(.success(()))
             return
         }
-    
+
         // Use batches of length 200, because CloudKit will give limit error at 400 records
         let batchRanges = (0...versionChanges.count-1).split(intoRangesOfLength: cloudKitFetchLimit)
         let tasks = batchRanges.map { range in
@@ -464,7 +451,7 @@ public extension CloudKitExchange {
         }
         tasks.executeInOrder(completingWith: completionHandler)
     }
-    
+
     private func send(batchOfVersionChanges versionChanges: ArraySlice<VersionChanges>, executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         do {
             try autoreleasepool {
@@ -489,10 +476,10 @@ public extension CloudKitExchange {
                         record.setExchangeValue(asset, forKey: .valueChangesAsset)
                         tempFileURLs.append(tempFileURL)
                     }
-                    
+
                     return record
                 }
-                
+
                 let modifyOperation = CKModifyRecordsOperation(recordsToSave: records, recordIDsToDelete: nil)
                 modifyOperation.isAtomic = true
                 modifyOperation.savePolicy = .allKeys
@@ -513,25 +500,24 @@ public extension CloudKitExchange {
             completionHandler(.failure(error))
         }
     }
-    
+
 }
 
 
 // MARK:- Subscriptions
 
-@available(macOS 10.14, iOS 12, watchOS 5, *)
 public extension CloudKitExchange {
-    
+
     func subscribeForPushNotifications() {
         log.trace("Subscribing for CloudKit push notifications")
-        
+
         let info = CKSubscription.NotificationInfo()
         info.shouldSendContentAvailable = true
-        
+
         let predicate = NSPredicate(value: true)
         let subscription = CKQuerySubscription(recordType: .init(CKRecord.ExchangeType.Version.rawValue), predicate: predicate, subscriptionID: CKRecord.ExchangeSubscription.VersionCreated.rawValue, options: CKQuerySubscription.Options.firesOnRecordCreation)
         subscription.notificationInfo = info
-        
+
         database.save(subscription) { (_, error) in
             if let error = error {
                 log.error("Error creating subscription: \(error)")
@@ -540,15 +526,14 @@ public extension CloudKitExchange {
             }
         }
     }
-    
+
 }
 
 
 // MARK:- Restoration
 
-@available(macOS 10.14, iOS 12, watchOS 5, *)
 extension CloudKitExchange {
-    
+
     public var restorationState: Data? {
         get {
             try? JSONEncoder().encode(restoration)
@@ -559,24 +544,24 @@ extension CloudKitExchange {
             }
         }
     }
-    
+
     fileprivate struct Restoration: Codable {
-        
+
         enum CodingKeys: String, CodingKey {
             case versionsInCloud, fetchRecordChangesToken, lastQueryDate
         }
-        
+
         /// Set of all version ids in cloud
         var versionsInCloud: Set<Version.ID> = []
-        
+
         /// Used for private database with custom zone
         var fetchRecordChangesToken: CKServerChangeToken?
-        
+
         /// Used when there is no custom zone
         var lastQueryDate: Date?
-        
+
         init() {}
-        
+
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             versionsInCloud = try container.decode(type(of: versionsInCloud), forKey: .versionsInCloud)
@@ -585,7 +570,7 @@ extension CloudKitExchange {
             }
             lastQueryDate = try container.decodeIfPresent(Date.self, forKey: .lastQueryDate)
         }
-        
+
         func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(versionsInCloud, forKey: .versionsInCloud)
@@ -596,32 +581,32 @@ extension CloudKitExchange {
             try container.encodeIfPresent(lastQueryDate, forKey: .lastQueryDate)
         }
     }
-    
+
 }
 
 
 // MARK:- CKRecord
 
 fileprivate extension CKRecord {
-    
+
     enum ExchangeSubscription: String {
         case VersionCreated
     }
-    
+
     enum ExchangeType: String {
         case Version = "LLVS_Version"
     }
-    
+
     enum ExchangeKey: String {
         case version, storeIdentifier, valueChanges, valueChangesAsset
     }
-    
+
     func exchangeValue(forKey key: ExchangeKey) -> Any? {
         return value(forKey: key.rawValue)
     }
-    
+
     func setExchangeValue(_ value: Any, forKey key: ExchangeKey) {
         setValue(value, forKey: key.rawValue)
     }
-    
+
 }

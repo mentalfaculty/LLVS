@@ -11,14 +11,14 @@ import os
 public let log = Log()
 
 public class Log {
-    
+
     public enum Level : Int, Comparable {
         case none
         case error
         case warning
         case trace
         case verbose
-        
+
         public var stringValue: String {
             switch self {
             case .none:
@@ -34,41 +34,37 @@ public class Log {
             }
         }
     }
-    
+
     public var level = Level.none
-    
+
     @inline(__always) public final func verbose(_ messageClosure: @autoclosure () -> String, path: StaticString = #file, function: StaticString = #function, line: Int = #line) {
         if level >= .verbose {
             Log.append(messageClosure(), level: .verbose, path: path, function: function, line: line)
         }
     }
-    
+
     @inline(__always) public final func trace(_ messageClosure: @autoclosure () -> String, path: StaticString = #file, function: StaticString = #function, line: Int = #line) {
         if level >= .trace {
             Log.append(messageClosure(), level: .trace, path: path, function: function, line: line)
         }
     }
-    
+
     @inline(__always) public final func warning(_ messageClosure: @autoclosure () -> String, path: StaticString = #file, function: StaticString = #function, line: Int = #line) {
         if level >= .warning {
             Log.append(messageClosure(), level: .warning, path: path, function: function, line: line)
         }
     }
-    
+
     @inline(__always) public final func error(_ messageClosure: @autoclosure () -> String, path: StaticString = #file, function: StaticString = #function, line: Int = #line) {
         if level >= .error {
             Log.append(messageClosure(), level: .error, path: path, function: function, line: line)
         }
     }
-    
+
     @inline(__always) public final class func append(_ messageClosure: @autoclosure () -> String, level: Level, path: StaticString, function: StaticString, line: Int = #line) {
         let filename = (String(describing: path) as NSString).lastPathComponent
         let text = "\(level.rawValue) \(filename)(\(line)) : \(function) : \(messageClosure())"
-        if #available(macOS 10.12, iOS 10.0, *) {
-                os_log("%{public}@", text)
-        } else {
-              NSLog("%@", text)
-        }
+        os_log("%{public}@", text)
     }
 }
 

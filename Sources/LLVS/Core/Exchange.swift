@@ -18,13 +18,12 @@ public typealias VersionChanges = (version: Version, valueChanges: [Value.Change
 
 public protocol Exchange: AnyObject {
 
-    @available(macOS 10.15, iOS 13, watchOS 6, *)
     var newVersionsAvailable: AnyPublisher<Void, Never> { get }
-    
+
     var store: Store { get }
-    
+
     var restorationState: Data? { get set }
-    
+
     func retrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>)
     func prepareToRetrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>)
     func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>)
@@ -39,16 +38,16 @@ public protocol Exchange: AnyObject {
 // MARK:- Retrieving
 
 public extension Exchange {
-    
+
     func retrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>) {
         log.trace("Retrieving")
-        
+
         let prepare = AsynchronousTask { finish in
             self.prepareToRetrieve { result in
                 finish(result)
             }
         }
-        
+
         var remoteIds: [Version.ID]!
         let retrieveIds = AsynchronousTask { finish in
             self.retrieveAllVersionIdentifiers { result in
@@ -56,7 +55,7 @@ public extension Exchange {
                 finish(result.voidResult)
             }
         }
-        
+
         var remoteVersions: [Version]!
         let retrieveVersions = AsynchronousTask { finish in
             let toRetrieveIds = self.versionIdsMissingFromHistory(forRemoteIdentifiers: remoteIds)
@@ -66,14 +65,14 @@ public extension Exchange {
                 finish(result.voidResult)
             }
         }
-        
+
         let addToHistory = AsynchronousTask { finish in
             log.verbose("Adding to history versions: \(remoteVersions.idStrings)")
             self.addToHistory(remoteVersions) { result in
                 finish(result.voidResult)
             }
         }
-                    
+
         [prepare, retrieveIds, retrieveVersions, addToHistory].executeInOrder { result in
             switch result {
             case .failure(let error):
@@ -85,7 +84,7 @@ public extension Exchange {
             }
         }
     }
-    
+
     private func versionIdsMissingFromHistory(forRemoteIdentifiers remoteIdentifiers: [Version.ID]) -> [Version.ID] {
         var toRetrieveIds: [Version.ID]!
         self.store.queryHistory { history in
@@ -95,12 +94,12 @@ public extension Exchange {
         }
         return toRetrieveIds
     }
-    
+
     private func addToHistory(_ versions: [Version], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         let versionsByIdentifier = versions.reduce(into: [:]) { result, version in
             result[version.id] = version
         }
-        
+
         let sortedVersions = versions.sorted { $0.timestamp < $1.timestamp }
 
         func batchSizeCostEvaluator(index: Int) -> Float {
@@ -141,7 +140,7 @@ public extension Exchange {
         }
         dynamicBatcher.start(executingUponCompletion: completionHandler)
     }
-    
+
     /// Note that we don't mutate the dictionary, because that results in a large memory copy.
     private func addToHistory(sortedVersions: [Version], valueChangesByVersionID: [Version.ID:[Value.Change]], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
         if sortedVersions.isEmpty {
@@ -162,9 +161,9 @@ public extension Exchange {
                     completionHandler(.failure(error))
                     return
                 }
-                
+
                 let reducedVersions = sortedVersions.filter { $0.id != version.id }
-                
+
                 // Dispatch so that we don't end up with a huge recursive call stack
                 DispatchQueue.global(qos: .userInitiated).async {
                     autoreleasepool {
@@ -178,26 +177,26 @@ public extension Exchange {
             completionHandler(.failure(ExchangeError.remoteVersionsWithUnknownPredecessors))
         }
     }
-    
+
     private func appendableVersion(from versions: [Version]) -> Version? {
         return versions.first { v in
             return store.historyIncludesVersions(identifiedBy: v.predecessors?.ids ?? [])
         }
     }
-    
+
 }
 
 // MARK:- Sending
 
 public extension Exchange {
-    
+
     func send(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>) {
         let prepare = AsynchronousTask { finish in
             self.prepareToSend { result in
                 finish(result)
             }
         }
-        
+
         var remoteIds: [Version.ID]!
         let retrieveIds = AsynchronousTask { finish in
             self.retrieveAllVersionIdentifiers { result in
@@ -205,11 +204,11 @@ public extension Exchange {
                 finish(result.voidResult)
             }
         }
-        
+
         var toSendIds: [Version.ID]!
         let sendVersions = AsynchronousTask { finishAsyncTask in
             toSendIds = self.versionIdsMissingRemotely(forRemoteIdentifiers: remoteIds)
-            
+
             func batchSizeCostEvaluator(index: Int) -> Float {
                 let batchDataSizeLimit: Int64 = 5000000 // 5MB
                 let defaultDataSize: Int64 = 100000 // 100KB
@@ -219,7 +218,7 @@ public extension Exchange {
                     return Float(defaultDataSize) / Float(batchDataSizeLimit)
                 }
             }
-            
+
             let taskBatcher = DynamicTaskBatcher(numberOfTasks: toSendIds.count, taskCostEvaluator: batchSizeCostEvaluator) { range, finishBatch in
                 do {
                     let versionChanges: [VersionChanges] = try toSendIds!.map { versionId in
@@ -229,12 +228,12 @@ public extension Exchange {
                         let changes = try self.store.valueChanges(madeInVersionIdentifiedBy: versionId)
                         return (version, changes)
                     }
-                    
+
                     guard !versionChanges.isEmpty else {
                         finishBatch(.definitive(.success(())))
                         return
                     }
-                    
+
                     self.send(versionChanges: versionChanges) { result in
                         finishBatch(.definitive(result))
                     }
@@ -254,7 +253,7 @@ public extension Exchange {
             }
         }
     }
-    
+
     private func versionIdsMissingRemotely(forRemoteIdentifiers remoteIdentifiers: [Version.ID]) -> [Version.ID] {
         var toSendIds: [Version.ID]!
         self.store.queryHistory { history in

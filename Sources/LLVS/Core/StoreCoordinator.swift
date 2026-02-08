@@ -11,14 +11,13 @@ import Combine
 
 /// A `StoreCoordinator` takes care of all aspects of setting up a syncing store.
 /// It's the simplest way to get started, though you may want more control for advanced use cases.
-@available (macOS 10.14, iOS 11, watchOS 5, *)
 public class StoreCoordinator {
-    
+
     private struct CachedData: Codable {
         var exchangeRestorationData: Data?
         var currentVersionIdentifier: Version.ID
     }
-    
+
     public let store: Store
     public var exchange: Exchange? {
         didSet {
@@ -26,78 +25,62 @@ public class StoreCoordinator {
         }
     }
     public var mergeArbiter: MergeArbiter = MostRecentChangeFavoringArbiter()
-    
+
     public var defaultMetadataForNewVersions: Version.Metadata = [:]
-        
+
     public let storeDirectoryURL: URL
     public let cacheDirectoryURL: URL
-    
+
     private var cachedCoordinatorFileURL: URL
-    
+
     public var exchangeRestorationData: Data? {
         return exchange?.restorationState
     }
-    
-    private var _currentVersionSubject: Any? = nil
-    @available (macOS 10.15, iOS 13, watchOS 6, *)
-    public var currentVersionSubject: CurrentValueSubject<Version.ID, Never> {
-        get{
-            if _currentVersionSubject == nil {
-                _currentVersionSubject = CurrentValueSubject<Version.ID, Never>(.init())
-            }
-            return _currentVersionSubject as! CurrentValueSubject<Version.ID, Never>
-        }
-        set{
-            _currentVersionSubject = newValue
-        }
-    }
-    
+
+    public var currentVersionSubject: CurrentValueSubject<Version.ID, Never>
+
     public private(set) var currentVersion: Version.ID {
         didSet {
             guard self.currentVersion != oldValue else { return }
             persist()
-            if #available (macOS 10.15, iOS 13, watchOS 6, *) {
-                currentVersionSubject.value = self.currentVersion
-            }
+            currentVersionSubject.value = self.currentVersion
         }
     }
-    
+
     private class var defaultStoreDirectory: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let rootDir = appSupport.appendingPathComponent("LLVS").appendingPathComponent("DefaultStore")
         return rootDir
     }
-    
+
     private class var defaultCacheDirectory: URL {
         let cachesDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         let rootDir = cachesDir.appendingPathComponent("LLVS").appendingPathComponent("CoordinatorCache")
         return rootDir
     }
-    
+
     /// This will setup a store in the default location (Applicaton Support). If you need more than one store,
     /// use `init(withStoreDirectoryAt:,cacheDirectoryAt:)` instead.
     public convenience init() throws {
         try self.init(withStoreDirectoryAt: Self.defaultStoreDirectory, cacheDirectoryAt: Self.defaultStoreDirectory)
     }
-    
+
     /// Gives full control over where the store is (directory location), and where cached data should be kept (directory).
     /// The directories will be created if they do not exist.
     public init(withStoreDirectoryAt storeURL: URL, cacheDirectoryAt coordinatorCacheURL: URL) throws {
         self.storeDirectoryURL = storeURL
         self.cacheDirectoryURL = coordinatorCacheURL
         self.cachedCoordinatorFileURL = cacheDirectoryURL.appendingPathComponent("Coordinator.json")
-        
+
         try FileManager.default.createDirectory(at: storeURL, withIntermediateDirectories: true, attributes: nil)
         try FileManager.default.createDirectory(at: coordinatorCacheURL, withIntermediateDirectories: true, attributes: nil)
 
         self.store = try Store(rootDirectoryURL: storeURL)
         self.currentVersion = Version.ID() // Set a temporary version. Final is in cache
-        if #available (macOS 10.15, iOS 13, watchOS 6, *) {
-            self.currentVersionSubject = .init(self.currentVersion)
-        }
+        self.currentVersionSubject = .init(self.currentVersion)
         try loadCache()
     }
-    
+
     private func loadCache() throws {
         // Load state from cache
         let cachedData: CachedData
@@ -115,12 +98,12 @@ public class StoreCoordinator {
             cachedData = CachedData(currentVersionIdentifier: version)
             shouldPersist = true
         }
-        
+
         // Set properties from cache
         self.currentVersion = cachedData.currentVersionIdentifier
         if shouldPersist { persist() }
     }
-    
+
     private var cachedData: CachedData? {
         let fileManager = FileManager()
         if fileManager.fileExists(atPath: self.cachedCoordinatorFileURL.path),
@@ -131,7 +114,7 @@ public class StoreCoordinator {
             return nil
         }
     }
-    
+
     /// Store cached data
     private func persist() {
         let cachedData = CachedData(exchangeRestorationData: exchange?.restorationState, currentVersionIdentifier: currentVersion)
@@ -139,23 +122,23 @@ public class StoreCoordinator {
             try? data.write(to: cachedCoordinatorFileURL)
         }
     }
-    
-    
+
+
     // MARK: Heads
-    
+
     public func heads(withBranch branch: Branch) -> [Version.ID] {
         store.heads(withBranch: branch)
     }
-    
+
     /// Will attempt to get the first branch version, if one exists; if not, will return the current version.
     /// This is just a convenient way to get a base version.
     public func versionForBranchOrCurrentHead(for branch: Branch? = nil) -> Version.ID {
         branch.flatMap({ heads(withBranch: $0).first }) ?? currentVersion
     }
-    
-    
+
+
     // MARK: Saving
-    
+
     /// You should use this to save instead of using the store directly, so that the
     /// coordinator can track versions. Otherwise you will need to merge to see the changes.
     public func save(_ changes: [Value.Change], in branch: Branch? = nil, metadata: Version.Metadata? = nil) throws {
@@ -164,55 +147,55 @@ public class StoreCoordinator {
         if let branch = branch { metadata[.branch] = .init(branch.rawValue) }
         currentVersion = try store.makeVersion(basedOnPredecessor: versionForBranchOrCurrentHead(for: branch), storing: changes, metadata: metadata).id
     }
-    
+
     public func save(inserting inserts: [Value] = [], updating updates: [Value] = [], removing removals: [Value.ID] = [], in branch: Branch? = nil, metadata: Version.Metadata? = nil) throws {
         guard !inserts.isEmpty || !updates.isEmpty || !removals.isEmpty || metadata != nil else { return }
         var metadata = metadata ?? defaultMetadataForNewVersions
         if let branch = branch { metadata[.branch] = .init(branch.rawValue) }
         currentVersion = try store.makeVersion(basedOnPredecessor: versionForBranchOrCurrentHead(for: branch), inserting: inserts, updating: updates, removing: removals, metadata: metadata).id
     }
-    
-    
+
+
     // MARK: Fetching
-    
+
     /// Pass a specific version, or nil for the current version
     public func valueReferences(at version: Version.ID? = nil) throws -> [Value.Reference] {
         try store.valueReferences(at: version ?? currentVersion)
     }
-    
+
     public func values(at version: Version.ID? = nil) throws -> [Value] {
         try autoreleasepool {
             return try valueReferences(at: version).map { try store.value(storedAt: $0)! }
         }
     }
-    
+
     public func value(idString: String) throws -> Value? {
         return try store.value(idString: idString, at: currentVersion)
     }
-    
+
     public func value(id: Value.ID) throws -> Value? {
         return try store.value(id: id, at: currentVersion)
     }
-    
+
     public func value(idString: String, on branch: Branch?) throws -> Value? {
         return try store.value(idString: idString, at: versionForBranchOrCurrentHead(for: branch))
     }
-    
+
     public func value(id: Value.ID, on branch: Branch?) throws -> Value? {
         return try store.value(id: id, at: versionForBranchOrCurrentHead(for: branch))
     }
-    
-    
+
+
     // MARK: Sync
-    
+
     public var isExchanging = false
-    
+
     private lazy var exchangeQueue: OperationQueue = {
         let queue = OperationQueue()
         queue.maxConcurrentOperationCount = 1
         return queue
     }()
-    
+
     /// This transfers data between cloud and local store, but does not alter the current branch or do any merging.
     /// It's a bit like a two-way version of Git's fetch. Completion is on the main thread.
     public func exchange(executingUponCompletion completionHandler: ((Swift.Error?) -> Void)? = nil) {
@@ -223,7 +206,7 @@ public class StoreCoordinator {
             }
         }
     }
-    
+
     private func performExchangeOnQueue(executingUponCompletion completionHandler: ((Swift.Error?) -> Void)? = nil) {
         isExchanging = true
 
@@ -234,7 +217,7 @@ public class StoreCoordinator {
             }
             return
         }
-        
+
         let retrieve = AsynchronousTask { finish in
             exchange.retrieve { result in
                 switch result {
@@ -245,7 +228,7 @@ public class StoreCoordinator {
                 }
             }
         }
-        
+
         let send = AsynchronousTask { finish in
             exchange.send { result in
                 switch result {
@@ -256,7 +239,7 @@ public class StoreCoordinator {
                 }
             }
         }
-        
+
         [retrieve, send].executeInOrder { result in
             var returnError: Swift.Error?
             switch result {
@@ -272,7 +255,7 @@ public class StoreCoordinator {
             }
         }
     }
-    
+
     /// Merging any extra heads, or fast forward to latest. It's a good idea to save data just before calling this, so that
     /// in view edits are committed. Returns true if the merge changed the current version; false otherwise.
     /// Note that the default behavior is not to merge in named branches. These are usually used for background work, and need to be merged in under controlled circumstances.

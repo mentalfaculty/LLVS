@@ -1,4 +1,4 @@
-// swift-tools-version:5.9
+// swift-tools-version: 6.0
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "LLVS",
     platforms: [
-        .macOS(.v10_14), .iOS(.v12), .watchOS(.v5)
+        .macOS(.v10_15), .iOS(.v13), .watchOS(.v6)
     ],
     products: [
         .library(
@@ -30,15 +30,19 @@ let package = Package(
         ),
         .target(
             name: "LLVS",
-            dependencies: []),
+            dependencies: [],
+            swiftSettings: [.swiftLanguageMode(.v5)]),
         .testTarget(
             name: "LLVSTests",
-            dependencies: ["LLVS", "LLVSSQLite"]),
+            dependencies: ["LLVS", "LLVSSQLite"],
+            swiftSettings: [.swiftLanguageMode(.v5)]),
         .target(
             name: "LLVSCloudKit",
-            dependencies: ["LLVS"]),
+            dependencies: ["LLVS"],
+            swiftSettings: [.swiftLanguageMode(.v5)]),
         .target(
             name: "LLVSSQLite",
-            dependencies: ["LLVS", "SQLite3"])
+            dependencies: ["LLVS", "SQLite3"],
+            swiftSettings: [.swiftLanguageMode(.v5)])
     ]
 )
