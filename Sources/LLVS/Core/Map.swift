@@ -122,7 +122,19 @@ final class Map {
         let subNodeRefs2ByKey: [String:ZoneReference] = .init(uniqueKeysWithValues: subNodes2.map({ ($0.key, $0) }))
         var allSubNodeKeys = Set(subNodeRefs1ByKey.keys).union(subNodeRefs2ByKey.keys)
         if let r = refOriginByKey { allSubNodeKeys.formUnion(r.keys) }
-        
+
+        // Batch prefetch only subnodes that will actually be compared
+        var refsToFetch: [ZoneReference] = []
+        for subNodeKey in allSubNodeKeys {
+            let r1 = subNodeRefs1ByKey[subNodeKey]
+            let r2 = subNodeRefs2ByKey[subNodeKey]
+            if r1 == r2 { continue }
+            if let r = r1 { refsToFetch.append(r) }
+            if let r = r2 { refsToFetch.append(r) }
+            if let r = refOriginByKey?[subNodeKey] { refsToFetch.append(r) }
+        }
+        try prefetchNodes(for: refsToFetch)
+
         var diffs: [Diff] = []
         for subNodeKey in allSubNodeKeys {
             
@@ -166,6 +178,10 @@ final class Map {
             
             let ref1 = subNodeRefs1ByKey[subNodeKey]
             let ref2 = subNodeRefs2ByKey[subNodeKey]
+
+            // Skip bucket entirely if both branches reference the same subnode
+            if ref1 == ref2 { continue }
+
             let origin = refOriginByKey?[subNodeKey]
             switch (origin, ref1, ref2) {
             case let (o?, r1?, r2?):
@@ -255,6 +271,7 @@ final class Map {
         let rootRef = ZoneReference(key: rootKey, version: versionId)
         guard let rootNode = try node(for: rootRef) else { throw Error.missingVersionRoot }
         guard case let .nodes(subNodeRefs) = rootNode.children else { throw Error.missingNode }
+        try prefetchNodes(for: subNodeRefs)
         for subNodeRef in subNodeRefs {
             guard let subNode = try node(for: subNodeRef) else { throw Error.missingNode }
             guard case let .values(keyValuePairs) = subNode.children else { throw Error.unexpectedNodeContent }
@@ -294,6 +311,18 @@ final class Map {
         }
     }
     
+    private func prefetchNodes(for references: [ZoneReference]) throws {
+        let uncachedRefs = references.filter { nodeCache.value(for: $0) == nil }
+        guard !uncachedRefs.isEmpty else { return }
+        let dataArray = try zone.data(for: uncachedRefs)
+        let decoder = JSONDecoder()
+        for (ref, data) in zip(uncachedRefs, dataArray) {
+            if let data = data, let node = try? decoder.decode(Node.self, from: data) {
+                nodeCache.setValue(node, for: ref)
+            }
+        }
+    }
+
     private func valueReferences(forRootSubNode subNodeRef: ZoneReference) throws -> [Value.Reference] {
         guard let subNode = try node(for: subNodeRef) else { throw Error.missingNode }
         guard case let .values(keyValuePairs) = subNode.children else { throw Error.unexpectedNodeContent }

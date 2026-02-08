@@ -113,11 +113,32 @@ class DiffTests: XCTestCase {
         XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.removedAndUpdated(removedOn: .first) }))
     }
 
+    func testUnchangedBucketsProduceNoDiffs() {
+        add(values: ["AB0000", "ZZ0000"], version: "0000", basedOn: nil)
+        add(values: ["AB1111"], version: "1111", basedOn: "0000")
+        add(values: ["AB2222"], version: "2222", basedOn: "0000")
+        let diffs = try! map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
+        // Only "AB" bucket changed; "ZZ" bucket is identical in both branches
+        XCTAssertTrue(diffs.allSatisfy({ $0.valueId.rawValue.hasPrefix("AB") }))
+        XCTAssertFalse(diffs.contains(where: { $0.valueId.rawValue == "ZZ0000" }))
+    }
+
+    func testOneBranchUnchangedBucket() {
+        add(values: ["AB0000", "ZZ0000"], version: "0000", basedOn: nil)
+        add(values: ["AB1111"], version: "1111", basedOn: "0000")
+        add(values: ["ZZ2222"], version: "2222", basedOn: "0000")
+        let diffs = try! map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
+        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.inserted(.first) }))
+        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "ZZ2222" && $0.valueFork == Value.Fork.inserted(.second) }))
+    }
+
     static var allTests = [
         ("testDisjointInserts", testDisjointInserts),
         ("testInserts", testInserts),
         ("testUpdates", testUpdates),
         ("testRemoves", testRemoves),
         ("testUpdateRemove", testUpdateRemove),
+        ("testUnchangedBucketsProduceNoDiffs", testUnchangedBucketsProduceNoDiffs),
+        ("testOneBranchUnchangedBucket", testOneBranchUnchangedBucket),
     ]
 }
