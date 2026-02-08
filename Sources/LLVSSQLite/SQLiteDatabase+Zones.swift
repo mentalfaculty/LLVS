@@ -54,6 +54,44 @@ internal extension SQLiteDatabase {
         return result
     }
     
+    func data(forReferences references: [(key: String, version: String)]) throws -> [Int: Data] {
+        guard !references.isEmpty else { return [:] }
+
+        // Group references by version, tracking original indices
+        var indicesByVersion: [String: [(index: Int, key: String)]] = [:]
+        for (i, ref) in references.enumerated() {
+            indicesByVersion[ref.version, default: []].append((index: i, key: ref.key))
+        }
+
+        var result: [Int: Data] = [:]
+
+        // One query per distinct version
+        for (version, entries) in indicesByVersion {
+            let placeholders = entries.map { _ in "?" }.joined(separator: ", ")
+            let query = "SELECT key, data FROM Zone WHERE version = ? AND key IN (\(placeholders));"
+            var bindings: [Any?] = [version]
+            bindings.append(contentsOf: entries.map { $0.key as Any? })
+
+            // Build lookup from key to indices (multiple refs can share a key within the same version)
+            var indexByKey: [String: [Int]] = [:]
+            for entry in entries {
+                indexByKey[entry.key, default: []].append(entry.index)
+            }
+
+            try forEach(matchingQuery: query, withBindings: bindings) { row in
+                let key: String = row.value(inColumnAtIndex: 0)!
+                let data: Data = row.value(inColumnAtIndex: 1)!
+                if let indices = indexByKey[key] {
+                    for index in indices {
+                        result[index] = data
+                    }
+                }
+            }
+        }
+
+        return result
+    }
+
     func versionIds(forKey key: String) throws -> [String] {
         var versionStrings: [String] = []
         try forEach(matchingQuery:

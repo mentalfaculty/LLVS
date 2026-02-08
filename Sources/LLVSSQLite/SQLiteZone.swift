@@ -75,6 +75,34 @@ internal final class SQLiteZone: Zone {
         return data
     }
     
+    internal func data(for references: [ZoneReference]) throws -> [Data?] {
+        guard !references.isEmpty else { return [] }
+
+        // Check cache first, collect uncached references with their indices
+        var results = [Data?](repeating: nil, count: references.count)
+        var uncached: [(index: Int, key: String, version: String)] = []
+        for (i, ref) in references.enumerated() {
+            if let data = cache.value(for: ref) {
+                results[i] = data
+            } else {
+                uncached.append((index: i, key: ref.key, version: ref.version.rawValue))
+            }
+        }
+
+        if !uncached.isEmpty {
+            let tuples = uncached.map { (key: $0.key, version: $0.version) }
+            let fetched = try database.data(forReferences: tuples)
+            for (localIndex, entry) in uncached.enumerated() {
+                if let data = fetched[localIndex] {
+                    results[entry.index] = data
+                    cacheIfNeeded(data, for: references[entry.index])
+                }
+            }
+        }
+
+        return results
+    }
+
     internal func versionIds(for key: String) throws -> [Version.ID] {
         try database.versionIds(forKey: key).map { Version.ID($0) }
     }
