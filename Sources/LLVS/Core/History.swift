@@ -94,47 +94,6 @@ public class History {
         }
     }
     
-    internal func remove(_ versionId: Version.ID) {
-        guard let version = versionsByIdentifier[versionId] else { return }
-
-        // Remove from predecessor successor lists
-        for predId in version.predecessors?.ids ?? [] {
-            if var pred = versionsByIdentifier[predId] {
-                var succs = pred.successors.ids
-                succs.remove(versionId)
-                pred.successors = Version.Successors(ids: succs)
-                versionsByIdentifier[predId] = pred
-                // If predecessor now has no successors, it becomes a head
-                if succs.isEmpty {
-                    headIdentifiers.insert(predId)
-                }
-            }
-        }
-
-        // Remove from successor predecessor lists not needed — successors keep their references
-        // to predecessors that are above the compaction boundary.
-
-        versionsByIdentifier.removeValue(forKey: versionId)
-        headIdentifiers.remove(versionId)
-        referencedVersionIdentifiers.remove(versionId)
-    }
-
-    /// Returns all ancestors of a given version (not including the version itself).
-    internal func allAncestors(of versionId: Version.ID) -> Set<Version.ID> {
-        var ancestors = Set<Version.ID>()
-        var queue = [versionId]
-        while !queue.isEmpty {
-            let current = queue.removeFirst()
-            guard let version = versionsByIdentifier[current] else { continue }
-            for predId in version.predecessors?.ids ?? [] {
-                if ancestors.insert(predId).inserted {
-                    queue.append(predId)
-                }
-            }
-        }
-        return ancestors
-    }
-
     /// Finds the greatest common ancestor of all the given version IDs by pairwise reduction.
     internal func greatestCommonAncestor(ofAll versionIds: Set<Version.ID>) throws -> Version.ID? {
         guard !versionIds.isEmpty else { return nil }

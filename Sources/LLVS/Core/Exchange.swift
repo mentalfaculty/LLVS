@@ -16,6 +16,12 @@ enum ExchangeError: Swift.Error {
 
 public typealias VersionChanges = (version: Version, valueChanges: [Value.Change])
 
+public protocol SnapshotExchange {
+    func retrieveSnapshotManifest(completionHandler: @escaping CompletionHandler<SnapshotManifest?>)
+    func retrieveSnapshotChunk(index: Int, completionHandler: @escaping CompletionHandler<Data>)
+    func sendSnapshot(manifest: SnapshotManifest, chunkProvider: @escaping (Int) throws -> Data, completionHandler: @escaping CompletionHandler<Void>)
+}
+
 public protocol Exchange: AnyObject {
 
     var newVersionsAvailable: AnyPublisher<Void, Never> { get }
@@ -87,11 +93,10 @@ public extension Exchange {
 
     private func versionIdsMissingFromHistory(forRemoteIdentifiers remoteIdentifiers: [Version.ID]) -> [Version.ID] {
         var toRetrieveIds: [Version.ID]!
-        let compressed = self.store.compressedVersionIdentifiers
         self.store.queryHistory { history in
             let storeVersionIds = Set(history.allVersionIdentifiers)
             let remoteVersionIds = Set(remoteIdentifiers)
-            toRetrieveIds = Array(remoteVersionIds.subtracting(storeVersionIds).subtracting(compressed))
+            toRetrieveIds = Array(remoteVersionIds.subtracting(storeVersionIds))
         }
         return toRetrieveIds
     }
@@ -257,11 +262,10 @@ public extension Exchange {
 
     private func versionIdsMissingRemotely(forRemoteIdentifiers remoteIdentifiers: [Version.ID]) -> [Version.ID] {
         var toSendIds: [Version.ID]!
-        let compressed = self.store.compressedVersionIdentifiers
         self.store.queryHistory { history in
             let storeVersionIds = Set(history.allVersionIdentifiers)
             let remoteVersionIds = Set(remoteIdentifiers)
-            toSendIds = Array(storeVersionIds.subtracting(remoteVersionIds).subtracting(compressed))
+            toSendIds = Array(storeVersionIds.subtracting(remoteVersionIds))
         }
         return toSendIds
     }

@@ -25,7 +25,6 @@ LLVS handles this the way Git handles divergent branches: it tracks the full anc
 - **Multi-process safe** -- Share a store between your main app, extensions, and widgets using an app group container. LLVS handles concurrent access.
 - **Pluggable storage** -- File-based storage by default, SQLite via `LLVSSQLite`, or bring your own backend.
 - **Encryption-friendly** -- LLVS stores opaque `Data` blobs. Encrypt them however you want; the framework never inspects your data.
-- **Compaction** -- Collapse old history into a baseline snapshot to reclaim disk space, without affecting recent versions.
 
 
 ## Quick Start
@@ -245,55 +244,44 @@ LLVS stores opaque `Data` blobs keyed by string identifiers. How you map your mo
 **One entity per Value** is a good default. It gives you per-entity conflict resolution while keeping read performance reasonable. Use `Codable`, JSON, flatbuffers, or whatever serialization you prefer -- LLVS never inspects the bytes.
 
 
-## Compaction
+## Snapshots
 
-Every version, its map nodes, and its value data persist indefinitely. For long-lived stores, _compaction_ collapses old history into a single baseline snapshot, reclaiming storage while keeping recent versions fully functional.
+When a new device joins your sync group, it normally replays every version from the beginning -- downloading each change and rebuilding the store's history. For stores with thousands of versions, this can be slow.
 
-### How it works
+**Cloud snapshots** solve this by periodically uploading a chunked dump of the entire store. A new device downloads the snapshot, restores it locally, and then uses normal incremental sync to catch up with any versions added since the snapshot. Existing devices are completely unaffected.
 
-Compaction uses a three-phase, crash-safe algorithm:
-
-1. **Prepare** -- A baseline snapshot is created at a bottleneck point in the version graph. All new data is written; nothing is deleted yet.
-2. **Commit** -- A `compaction.json` file is atomically written, activating the baseline. Predecessor pointers of versions just above the boundary are relinked.
-3. **Cleanup** -- Version files for compressed versions are deleted. Unreferenced value data is removed. This phase is idempotent and resumes automatically if interrupted.
-
-### Usage
+### Bootstrapping a new device
 
 ```swift
-// Via Store: compact versions older than 7 days, keeping at least 50 recent
-let baselineId = try store.compact(
-    beforeDate: Date(timeIntervalSinceNow: -7*24*3600),
-    minRetainedVersions: 50
+let coordinator = try StoreCoordinator(
+    withStoreDirectoryAt: storeURL,
+    cacheDirectoryAt: cacheURL,
+    snapshotPolicy: .auto
 )
+coordinator.exchange = myExchange
 
-// Via StoreCoordinator (uses the same defaults)
-let baselineId = try storeCoordinator.compact()
+// On first launch, try to restore from a snapshot before syncing
+coordinator.bootstrapFromSnapshot { error in
+    coordinator.exchange { _ in
+        coordinator.merge()
+    }
+}
 ```
 
-### Compaction policy
+`bootstrapFromSnapshot()` checks whether the exchange supports snapshots, whether one exists, and whether the local store is empty. If all conditions are met, it downloads and restores the snapshot. If not, it completes immediately -- the app falls back to a full sync with no extra code.
 
-`StoreCoordinator` supports a `CompactionPolicy` that controls when compaction runs:
+### Automatic snapshot uploads
 
-| Policy | Behavior |
-|---|---|
-| `.auto` (default) | Compacts automatically on startup when the existing heuristics determine it is worthwhile. |
-| `.manual` | Compaction only runs when you explicitly call `compact()`. |
-| `.none` | Compaction is disabled on the coordinator entirely. (`Store.compact()` still works directly.) |
+With `SnapshotPolicy.auto`, the coordinator uploads a new snapshot after each exchange when enough time has passed (`minimumInterval`, default 7 days) and enough new versions have accumulated (`minimumNewVersions`, default 20). Use `.disabled` (the default) to opt out.
 
-```swift
-let coordinator = try StoreCoordinator()                            // .auto (default)
-let coordinator = try StoreCoordinator(compactionPolicy: .manual)   // explicit only
-let coordinator = try StoreCoordinator(compactionPolicy: .none)     // disabled
-```
+### Custom storage and exchange support
 
-### Boundary selection
+Snapshot support requires both the storage backend and the exchange to opt in:
 
-The compaction boundary is always a _bottleneck_ -- a single version through which the entire graph converges. This ensures no active branch needs a compressed version as a merge ancestor.
+- **Storage**: Conform to `SnapshotCapable` (both `FileStorage` and `SQLiteStorage` already do).
+- **Exchange**: Conform to `SnapshotExchange` (`FileSystemExchange` already does).
 
-- If there are multiple heads, the greatest common ancestor is used.
-- For a single head, the algorithm walks backward, skipping at least `minRetainedVersions` versions, until finding a suitable bottleneck older than the cutoff date.
-
-After compaction, compressed versions are tracked in a persistent set. Reading values at a compressed version throws an error. Exchanges automatically filter them out. Compaction can be run repeatedly; each pass builds on the previous baseline.
+If either side doesn't conform, snapshot operations are silently skipped.
 
 
 ## Architecture
@@ -332,7 +320,7 @@ The `Storage` protocol creates `Zone` instances. `Zone` is the raw read/write in
 
 The Map is a two-level trie. The root node for each version points to subnodes keyed by the first two characters of value identifiers. Each subnode maps value IDs to `Value.Reference` (which records the version where the data is physically stored).
 
-Subnodes are shared across versions -- if a version doesn't modify any values in a particular bucket, it reuses the parent's subnode. This makes versioning space-efficient but means care is needed when deleting old data (see Compaction).
+Subnodes are shared across versions -- if a version doesn't modify any values in a particular bucket, it reuses the parent's subnode. This makes versioning space-efficient.
 
 
 ## Samples

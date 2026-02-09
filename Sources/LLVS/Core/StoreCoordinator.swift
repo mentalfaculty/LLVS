@@ -19,7 +19,7 @@ public class StoreCoordinator {
     }
 
     public let store: Store
-    public let compactionPolicy: CompactionPolicy
+    public let snapshotPolicy: SnapshotPolicy
     public var exchange: Exchange? {
         didSet {
             exchange?.restorationState = cachedData?.exchangeRestorationData
@@ -62,14 +62,14 @@ public class StoreCoordinator {
 
     /// This will setup a store in the default location (Applicaton Support). If you need more than one store,
     /// use `init(withStoreDirectoryAt:,cacheDirectoryAt:)` instead.
-    public convenience init(compactionPolicy: CompactionPolicy = .auto) throws {
-        try self.init(withStoreDirectoryAt: Self.defaultStoreDirectory, cacheDirectoryAt: Self.defaultStoreDirectory, compactionPolicy: compactionPolicy)
+    public convenience init(snapshotPolicy: SnapshotPolicy = .disabled) throws {
+        try self.init(withStoreDirectoryAt: Self.defaultStoreDirectory, cacheDirectoryAt: Self.defaultStoreDirectory, snapshotPolicy: snapshotPolicy)
     }
 
     /// Gives full control over where the store is (directory location), and where cached data should be kept (directory).
     /// The directories will be created if they do not exist.
-    public init(withStoreDirectoryAt storeURL: URL, cacheDirectoryAt coordinatorCacheURL: URL, compactionPolicy: CompactionPolicy = .auto) throws {
-        self.compactionPolicy = compactionPolicy
+    public init(withStoreDirectoryAt storeURL: URL, cacheDirectoryAt coordinatorCacheURL: URL, snapshotPolicy: SnapshotPolicy = .disabled) throws {
+        self.snapshotPolicy = snapshotPolicy
         self.storeDirectoryURL = storeURL
         self.cacheDirectoryURL = coordinatorCacheURL
         self.cachedCoordinatorFileURL = cacheDirectoryURL.appendingPathComponent("Coordinator.json")
@@ -104,11 +104,6 @@ public class StoreCoordinator {
         // Set properties from cache
         self.currentVersion = cachedData.currentVersionIdentifier
         if shouldPersist { persist() }
-
-        // Auto-compact on startup if policy allows
-        if compactionPolicy == .auto {
-            _ = try? store.compact()
-        }
     }
 
     private var cachedData: CachedData? {
@@ -193,14 +188,6 @@ public class StoreCoordinator {
     }
 
 
-    // MARK: Compaction
-
-    @discardableResult public func compact(beforeDate: Date = Date(timeIntervalSinceNow: -7*24*3600), minRetainedVersions: Int = 50) throws -> Version.ID? {
-        guard compactionPolicy != .none else { return nil }
-        return try store.compact(beforeDate: beforeDate, minRetainedVersions: minRetainedVersions)
-    }
-
-
     // MARK: Sync
 
     public var isExchanging = false
@@ -264,6 +251,10 @@ public class StoreCoordinator {
             case .success:
                 log.trace("Sync successful")
             }
+
+            // Upload snapshot if policy allows (fire and forget — don't block completion)
+            self.uploadSnapshotIfNeeded { _ in }
+
             OperationQueue.main.addOperation {
                 completionHandler?(returnError)
                 self.isExchanging = false
@@ -282,6 +273,168 @@ public class StoreCoordinator {
             return true
         } else {
             return false
+        }
+    }
+
+
+    // MARK: Snapshots
+
+    /// Download and restore a cloud snapshot if available and compatible.
+    /// Call before the first exchange on a new device.
+    public func bootstrapFromSnapshot(completionHandler: @escaping (Swift.Error?) -> Void) {
+        guard let snapshotExchange = exchange as? SnapshotExchange,
+              let snapshotStorage = store.storage as? SnapshotCapable else {
+            completionHandler(nil)
+            return
+        }
+
+        // Check store has minimal history (≤ 1 version) — skip if already populated
+        var versionCount = 0
+        store.queryHistory { history in
+            versionCount = history.allVersionIdentifiers.count
+        }
+        guard versionCount <= 1 else {
+            completionHandler(nil)
+            return
+        }
+
+        snapshotExchange.retrieveSnapshotManifest { result in
+            switch result {
+            case .failure(let error):
+                completionHandler(error)
+            case .success(let manifest):
+                guard let manifest = manifest else {
+                    completionHandler(nil)
+                    return
+                }
+
+                // Check format matches
+                guard manifest.format == snapshotStorage.snapshotFormat else {
+                    completionHandler(nil)
+                    return
+                }
+
+                // Download chunks to temp directory
+                let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                do {
+                    try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true, attributes: nil)
+                } catch {
+                    completionHandler(error)
+                    return
+                }
+
+                self.downloadChunks(from: snapshotExchange, manifest: manifest, to: tempDir, currentIndex: 0) { downloadError in
+                    defer { try? FileManager.default.removeItem(at: tempDir) }
+
+                    guard downloadError == nil else {
+                        completionHandler(downloadError)
+                        return
+                    }
+
+                    do {
+                        try snapshotStorage.restoreFromSnapshotChunks(
+                            storeRootURL: self.store.rootDirectoryURL,
+                            from: tempDir,
+                            manifest: manifest
+                        )
+                        try self.store.reloadHistory()
+
+                        // Update currentVersion to the latest head
+                        if let head = self.store.mostRecentHead {
+                            self.currentVersion = head.id
+                        }
+
+                        completionHandler(nil)
+                    } catch {
+                        completionHandler(error)
+                    }
+                }
+            }
+        }
+    }
+
+    private func downloadChunks(from exchange: SnapshotExchange, manifest: SnapshotManifest, to directory: URL, currentIndex: Int, completionHandler: @escaping (Swift.Error?) -> Void) {
+        guard currentIndex < manifest.chunkCount else {
+            completionHandler(nil)
+            return
+        }
+
+        exchange.retrieveSnapshotChunk(index: currentIndex) { result in
+            switch result {
+            case .failure(let error):
+                completionHandler(error)
+            case .success(let data):
+                let chunkFile = directory.appendingPathComponent(String(format: "chunk-%03d", currentIndex))
+                do {
+                    try data.write(to: chunkFile)
+                } catch {
+                    completionHandler(error)
+                    return
+                }
+                self.downloadChunks(from: exchange, manifest: manifest, to: directory, currentIndex: currentIndex + 1, completionHandler: completionHandler)
+            }
+        }
+    }
+
+    internal func uploadSnapshotIfNeeded(completionHandler: @escaping (Swift.Error?) -> Void) {
+        guard snapshotPolicy.enabled,
+              let snapshotExchange = exchange as? SnapshotExchange,
+              let snapshotStorage = store.storage as? SnapshotCapable else {
+            completionHandler(nil)
+            return
+        }
+
+        // Check current version count
+        var currentVersionCount = 0
+        store.queryHistory { history in
+            currentVersionCount = history.allVersionIdentifiers.count
+        }
+
+        snapshotExchange.retrieveSnapshotManifest { result in
+            switch result {
+            case .failure(let error):
+                completionHandler(error)
+            case .success(let existingManifest):
+                if let manifest = existingManifest {
+                    // Skip if recent enough
+                    if manifest.createdAt.timeIntervalSinceNow > -self.snapshotPolicy.minimumInterval {
+                        completionHandler(nil)
+                        return
+                    }
+                    // Skip if not enough new versions
+                    if currentVersionCount - manifest.versionCount < self.snapshotPolicy.minimumNewVersions {
+                        completionHandler(nil)
+                        return
+                    }
+                }
+
+                // Write snapshot to temp directory
+                let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                do {
+                    try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true, attributes: nil)
+                    let manifest = try snapshotStorage.writeSnapshotChunks(
+                        storeRootURL: self.store.rootDirectoryURL,
+                        to: tempDir,
+                        maxChunkSize: 5_000_000
+                    )
+
+                    snapshotExchange.sendSnapshot(manifest: manifest, chunkProvider: { index in
+                        let chunkFile = tempDir.appendingPathComponent(String(format: "chunk-%03d", index))
+                        return try Data(contentsOf: chunkFile)
+                    }) { uploadResult in
+                        try? FileManager.default.removeItem(at: tempDir)
+                        switch uploadResult {
+                        case .failure(let error):
+                            completionHandler(error)
+                        case .success:
+                            completionHandler(nil)
+                        }
+                    }
+                } catch {
+                    try? FileManager.default.removeItem(at: tempDir)
+                    completionHandler(error)
+                }
+            }
         }
     }
 }

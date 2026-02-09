@@ -8,11 +8,12 @@
 import Foundation
 import Combine
 
-public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
+public class FileSystemExchange: NSObject, Exchange, NSFilePresenter, SnapshotExchange {
 
     public enum Error: Swift.Error {
         case versionFileInvalid
         case changesFileInvalid
+        case snapshotChunkMissing(Int)
     }
 
     public let store: Store
@@ -30,6 +31,7 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
     public let rootDirectoryURL: URL
     public var versionsDirectory: URL { return rootDirectoryURL.appendingPathComponent("versions") }
     public var changesDirectory: URL { return rootDirectoryURL.appendingPathComponent("changes") }
+    public var snapshotsDirectory: URL { return rootDirectoryURL.appendingPathComponent("snapshots") }
 
     public let usesFileCoordination: Bool
 
@@ -152,6 +154,69 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter {
                 } catch {
                     completionHandler(.failure(error))
                 }
+            }
+        }
+    }
+
+    // MARK:- Snapshot Exchange
+
+    public func retrieveSnapshotManifest(completionHandler: @escaping CompletionHandler<SnapshotManifest?>) {
+        queue.addOperation {
+            let manifestURL = self.snapshotsDirectory.appendingPathComponent("manifest.json")
+            guard self.fileManager.fileExists(atPath: manifestURL.path) else {
+                completionHandler(.success(nil))
+                return
+            }
+            do {
+                let data = try Data(contentsOf: manifestURL)
+                let manifest = try JSONDecoder().decode(SnapshotManifest.self, from: data)
+                completionHandler(.success(manifest))
+            } catch {
+                completionHandler(.failure(error))
+            }
+        }
+    }
+
+    public func retrieveSnapshotChunk(index: Int, completionHandler: @escaping CompletionHandler<Data>) {
+        queue.addOperation {
+            let chunkURL = self.snapshotsDirectory.appendingPathComponent(String(format: "chunk-%03d", index))
+            guard self.fileManager.fileExists(atPath: chunkURL.path) else {
+                completionHandler(.failure(Error.snapshotChunkMissing(index)))
+                return
+            }
+            do {
+                let data = try Data(contentsOf: chunkURL)
+                completionHandler(.success(data))
+            } catch {
+                completionHandler(.failure(error))
+            }
+        }
+    }
+
+    public func sendSnapshot(manifest: SnapshotManifest, chunkProvider: @escaping (Int) throws -> Data, completionHandler: @escaping CompletionHandler<Void>) {
+        queue.addOperation {
+            do {
+                // Remove previous snapshot if any
+                if self.fileManager.fileExists(atPath: self.snapshotsDirectory.path) {
+                    try self.fileManager.removeItem(at: self.snapshotsDirectory)
+                }
+                try self.fileManager.createDirectory(at: self.snapshotsDirectory, withIntermediateDirectories: true, attributes: nil)
+
+                // Write chunks
+                for i in 0..<manifest.chunkCount {
+                    let chunkData = try chunkProvider(i)
+                    let chunkURL = self.snapshotsDirectory.appendingPathComponent(String(format: "chunk-%03d", i))
+                    try chunkData.write(to: chunkURL)
+                }
+
+                // Write manifest
+                let manifestData = try JSONEncoder().encode(manifest)
+                let manifestURL = self.snapshotsDirectory.appendingPathComponent("manifest.json")
+                try manifestData.write(to: manifestURL)
+
+                completionHandler(.success(()))
+            } catch {
+                completionHandler(.failure(error))
             }
         }
     }

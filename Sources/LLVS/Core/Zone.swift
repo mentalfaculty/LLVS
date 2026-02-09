@@ -19,12 +19,9 @@ public protocol Zone {
     func store(_ data: [Data], for references: [ZoneReference]) throws
 
     func data(for reference: ZoneReference) throws -> Data?
-    
+
     // Default provided, but zone implementations can optimize this.
     func data(for references: [ZoneReference]) throws -> [Data?]
-
-    func delete(for reference: ZoneReference) throws
-    func deleteAll(forVersionIdentifiedBy version: Version.ID) throws
 }
 
 public extension Zone {
@@ -38,7 +35,4 @@ public extension Zone {
     func data(for references: [ZoneReference]) throws -> [Data?] {
         return try references.map { try data(for: $0) }
     }
-
-    func delete(for reference: ZoneReference) throws {}
-    func deleteAll(forVersionIdentifiedBy version: Version.ID) throws {}
 }
