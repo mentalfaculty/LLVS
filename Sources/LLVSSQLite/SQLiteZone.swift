@@ -103,6 +103,16 @@ internal final class SQLiteZone: Zone {
         return results
     }
 
+    internal func delete(for reference: ZoneReference) throws {
+        cache.removeValue(for: reference)
+        try database.delete(for: reference)
+    }
+
+    internal func deleteAll(forVersionIdentifiedBy version: Version.ID) throws {
+        cache.purgeAllValues()
+        try database.deleteAll(forVersionIdentifiedBy: version.rawValue)
+    }
+
     internal func versionIds(for key: String) throws -> [Version.ID] {
         try database.versionIds(forKey: key).map { Version.ID($0) }
     }

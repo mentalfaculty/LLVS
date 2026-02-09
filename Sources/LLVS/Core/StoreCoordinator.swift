@@ -19,6 +19,7 @@ public class StoreCoordinator {
     }
 
     public let store: Store
+    public let compactionPolicy: CompactionPolicy
     public var exchange: Exchange? {
         didSet {
             exchange?.restorationState = cachedData?.exchangeRestorationData
@@ -61,13 +62,14 @@ public class StoreCoordinator {
 
     /// This will setup a store in the default location (Applicaton Support). If you need more than one store,
     /// use `init(withStoreDirectoryAt:,cacheDirectoryAt:)` instead.
-    public convenience init() throws {
-        try self.init(withStoreDirectoryAt: Self.defaultStoreDirectory, cacheDirectoryAt: Self.defaultStoreDirectory)
+    public convenience init(compactionPolicy: CompactionPolicy = .auto) throws {
+        try self.init(withStoreDirectoryAt: Self.defaultStoreDirectory, cacheDirectoryAt: Self.defaultStoreDirectory, compactionPolicy: compactionPolicy)
     }
 
     /// Gives full control over where the store is (directory location), and where cached data should be kept (directory).
     /// The directories will be created if they do not exist.
-    public init(withStoreDirectoryAt storeURL: URL, cacheDirectoryAt coordinatorCacheURL: URL) throws {
+    public init(withStoreDirectoryAt storeURL: URL, cacheDirectoryAt coordinatorCacheURL: URL, compactionPolicy: CompactionPolicy = .auto) throws {
+        self.compactionPolicy = compactionPolicy
         self.storeDirectoryURL = storeURL
         self.cacheDirectoryURL = coordinatorCacheURL
         self.cachedCoordinatorFileURL = cacheDirectoryURL.appendingPathComponent("Coordinator.json")
@@ -102,6 +104,11 @@ public class StoreCoordinator {
         // Set properties from cache
         self.currentVersion = cachedData.currentVersionIdentifier
         if shouldPersist { persist() }
+
+        // Auto-compact on startup if policy allows
+        if compactionPolicy == .auto {
+            _ = try? store.compact()
+        }
     }
 
     private var cachedData: CachedData? {
@@ -183,6 +190,14 @@ public class StoreCoordinator {
 
     public func value(id: Value.ID, on branch: Branch?) throws -> Value? {
         return try store.value(id: id, at: versionForBranchOrCurrentHead(for: branch))
+    }
+
+
+    // MARK: Compaction
+
+    @discardableResult public func compact(beforeDate: Date = Date(timeIntervalSinceNow: -7*24*3600), minRetainedVersions: Int = 50) throws -> Version.ID? {
+        guard compactionPolicy != .none else { return nil }
+        return try store.compact(beforeDate: beforeDate, minRetainedVersions: minRetainedVersions)
     }
 
 

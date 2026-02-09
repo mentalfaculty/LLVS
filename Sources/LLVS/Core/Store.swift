@@ -36,6 +36,8 @@ public final class Store {
         case unresolvedConflict(valueId: Value.ID, valueFork: Value.Fork)
         case attemptToAddExistingVersion(Version.ID)
         case attemptToAddVersionWithNonexistingPredecessors(Version)
+        case accessToCompressedVersion(Version.ID)
+        case mergeWithCompressedAncestor(versionId: Version.ID, compressedAncestorId: Version.ID)
     }
     
     public let rootDirectoryURL: URL
@@ -58,6 +60,9 @@ public final class Store {
     
     private let history = History()
     private let historyAccessQueue = DispatchQueue(label: "llvs.dispatchQueue.historyaccess")
+
+    private var compactionInfo: CompactionInfo = CompactionInfo()
+    private var compactionInfoFileURL: URL { rootDirectoryURL.appendingPathComponent("compaction.json") }
     
     fileprivate let fileManager = FileManager()
     
@@ -76,8 +81,27 @@ public final class Store {
         try? fileManager.createDirectory(at: self.mapsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         
         try reloadHistory()
+        compactionInfo = loadCompactionInfo()
+        if !compactionInfo.compressedVersionIds.isEmpty {
+            // Remove compressed versions from in-memory history (they may have been loaded
+            // if their JSON files haven't been cleaned up yet)
+            historyAccessQueue.sync {
+                for versionId in compactionInfo.compressedVersionIds {
+                    history.remove(versionId)
+                }
+            }
+        }
+        try resumeCleanupIfNeeded()
     }
-    
+
+    public var compressedVersionIdentifiers: Set<Version.ID> {
+        return compactionInfo.compressedVersionIds
+    }
+
+    public func isCompressedVersion(_ versionId: Version.ID) -> Bool {
+        return compactionInfo.compressedVersionIds.contains(versionId)
+    }
+
     /// Call this to make sure all history is loaded. For example, if the store could have been
     /// changed by another process, calling this method will ensure the versions added by that process
     /// are loaded.
@@ -224,6 +248,9 @@ extension Store {
     }
     
     public func value(id valueId: Value.ID, at versionId: Version.ID) throws -> Value? {
+        guard !isCompressedVersion(versionId) else {
+            throw Error.accessToCompressedVersion(versionId)
+        }
         let ref = try valueReference(id: valueId, at: versionId)
         return try ref.flatMap { try value(id: valueId, storedAt: $0.storedVersionId) }
     }
@@ -363,6 +390,9 @@ extension Store {
             guard commonVersionIdentifier != nil else {
                 throw Error.noCommonAncestor(firstVersion: firstVersionIdentifier, secondVersion: secondVersionIdentifier)
             }
+            if isCompressedVersion(commonVersionIdentifier!) {
+                throw Error.mergeWithCompressedAncestor(versionId: firstVersionIdentifier, compressedAncestorId: commonVersionIdentifier!)
+            }
             
             firstVersion = history.version(identifiedBy: firstVersionIdentifier)
             secondVersion = history.version(identifiedBy: secondVersionIdentifier)
@@ -436,6 +466,9 @@ extension Store {
     /// because in that case, any changes made in the branch of the other predecessor will also be included as changes, when they don't
     /// really belong (ie they were actually made in the past)
     public func valueChanges(madeInVersionIdentifiedBy versionId: Version.ID) throws -> [Value.Change] {
+        guard !isCompressedVersion(versionId) else {
+            throw Error.accessToCompressedVersion(versionId)
+        }
         guard let version = try version(identifiedBy: versionId) else { throw Error.missingVersion }
         
         guard let predecessors = version.predecessors else {
@@ -588,6 +621,238 @@ extension Store {
         return version
     }
 
+}
+
+
+// MARK:- Compaction
+
+extension Store {
+
+    /// Compacts old history by collapsing all versions before a cutoff into a single baseline snapshot.
+    /// Returns the baseline version ID, or nil if compaction could not proceed.
+    @discardableResult public func compact(beforeDate cutoffDate: Date = Date(timeIntervalSinceNow: -7*24*3600), minRetainedVersions: Int = 50) throws -> Version.ID? {
+        // Find compaction boundary
+        guard let (compactionPointId, compressedSet) = try findCompactionBoundary(beforeDate: cutoffDate, minRetainedVersions: minRetainedVersions) else {
+            return nil
+        }
+
+        // Phase 1: PREPARE
+        let baselineId = Version.ID()
+        var compactionPointTimestamp: TimeInterval = Date().timeIntervalSinceReferenceDate
+        queryHistory { history in
+            if let v = history.version(identifiedBy: compactionPointId) {
+                compactionPointTimestamp = v.timestamp
+            }
+        }
+
+        // Enumerate all values at the compaction point and copy them to the baseline
+        var deltas: [Map.Delta] = []
+        try valuesMap.enumerateValueReferences(forVersionIdentifiedBy: compactionPointId) { ref in
+            let data = try valuesZone.data(for: ZoneReference(key: ref.valueId.rawValue, version: ref.storedVersionId))
+            if let data = data {
+                let baselineRef = ZoneReference(key: ref.valueId.rawValue, version: baselineId)
+                try valuesZone.store(data, for: baselineRef)
+            }
+            let newValueRef = Value.Reference(valueId: ref.valueId, storedVersionId: baselineId)
+            var delta = Map.Delta(key: Map.Key(ref.valueId.rawValue))
+            delta.addedValueReferences = [newValueRef]
+            deltas.append(delta)
+        }
+
+        // Build baseline Map (no predecessor — fresh root)
+        try valuesMap.addVersion(baselineId, basedOn: nil, applying: deltas)
+
+        // Write baseline Version JSON
+        var baselineVersion = Version(id: baselineId, predecessors: nil, valueDataSize: 0, metadata: [:])
+        baselineVersion.timestamp = compactionPointTimestamp
+        try store(baselineVersion)
+
+        // Find children of compaction point that are NOT in the compressed set.
+        // Update their predecessor pointers to reference the baseline instead.
+        var childrenOfCompactionPoint: [Version] = []
+        queryHistory { history in
+            if let v = history.version(identifiedBy: compactionPointId) {
+                for successorId in v.successors.ids where !compressedSet.contains(successorId) {
+                    if let successor = history.version(identifiedBy: successorId) {
+                        childrenOfCompactionPoint.append(successor)
+                    }
+                }
+            }
+        }
+
+        for child in childrenOfCompactionPoint {
+            var updatedChild = child
+            if var preds = updatedChild.predecessors {
+                if preds.idOfFirst == compactionPointId {
+                    preds.idOfFirst = baselineId
+                }
+                if preds.idOfSecond == compactionPointId {
+                    preds.idOfSecond = baselineId
+                }
+                updatedChild.predecessors = preds
+            }
+            try store(updatedChild)
+        }
+
+        // Phase 2: COMMIT
+        compactionInfo.baselineVersionId = baselineId
+        compactionInfo.compressedVersionIds.formUnion(compressedSet)
+        compactionInfo.pendingCleanup = true
+        try saveCompactionInfo()
+
+        // Update in-memory History
+        try historyAccessQueue.sync {
+            try history.add(baselineVersion, updatingPredecessorVersions: false)
+
+            // Update children predecessor pointers in memory
+            for child in childrenOfCompactionPoint {
+                var updatedChild = child
+                if var preds = updatedChild.predecessors {
+                    if preds.idOfFirst == compactionPointId {
+                        preds.idOfFirst = baselineId
+                    }
+                    if preds.idOfSecond == compactionPointId {
+                        preds.idOfSecond = baselineId
+                    }
+                    updatedChild.predecessors = preds
+                }
+                // Re-add the updated child by removing and re-adding
+                // Actually, we need to directly update the version in history
+                // Since History doesn't have an update method, we remove and re-add
+                history.remove(updatedChild.id)
+                try history.add(updatedChild, updatingPredecessorVersions: false)
+            }
+
+            // Update successor info for baseline
+            try history.updateSuccessors(inPredecessorsOf: baselineVersion)
+            for child in childrenOfCompactionPoint {
+                try history.updateSuccessors(inPredecessorsOf: child)
+            }
+
+            // Remove compressed versions
+            for versionId in compressedSet {
+                history.remove(versionId)
+            }
+        }
+
+        // Phase 3: CLEANUP
+        try performCleanup(forCompressedVersionIds: compressedSet)
+
+        compactionInfo.pendingCleanup = false
+        try saveCompactionInfo()
+
+        return baselineId
+    }
+
+    private func findCompactionBoundary(beforeDate cutoffDate: Date, minRetainedVersions: Int) throws -> (Version.ID, Set<Version.ID>)? {
+        let cutoffTimestamp = cutoffDate.timeIntervalSinceReferenceDate
+
+        var result: (Version.ID, Set<Version.ID>)?
+        try queryHistory { history in
+            let heads = history.headIdentifiers
+            guard !heads.isEmpty else { return }
+
+            if heads.count > 1 {
+                // Multiple heads: find their GCA as the bottleneck
+                guard let gca = try history.greatestCommonAncestor(ofAll: heads) else { return }
+                guard let gcaVersion = history.version(identifiedBy: gca) else { return }
+                guard gcaVersion.timestamp < cutoffTimestamp else { return }
+
+                // Check we retain enough versions above the GCA
+                let ancestors = history.allAncestors(of: gca)
+                let totalVersionCount = history.allVersionIdentifiers.count
+                let compressedCount = ancestors.count + 1 // ancestors + GCA itself
+                let retained = totalVersionCount - compressedCount
+                guard retained >= minRetainedVersions else { return }
+
+                var compressedSet = ancestors
+                compressedSet.insert(gca)
+                result = (gca, compressedSet)
+            } else {
+                // Single head: walk backward to find a bottleneck
+                let headId = heads.first!
+                var versionsSkipped = 0
+                var foundBottleneck: Version.ID?
+
+                // Walk backward through history
+                for version in history {
+                    if version.id == headId { continue }
+                    versionsSkipped += 1
+
+                    if versionsSkipped >= minRetainedVersions && version.timestamp < cutoffTimestamp {
+                        // This version is old enough and we've skipped enough.
+                        let succCount = version.successors.ids.count
+                        if succCount <= 1 {
+                            foundBottleneck = version.id
+                            break
+                        }
+                    }
+                }
+
+                guard let bottleneck = foundBottleneck else { return }
+                var compressedSet = history.allAncestors(of: bottleneck)
+                compressedSet.insert(bottleneck)
+                result = (bottleneck, compressedSet)
+            }
+        }
+        return result
+    }
+
+    private func performCleanup(forCompressedVersionIds compressedIds: Set<Version.ID>) throws {
+        // Collect all value storedVersionIds that are still referenced by versions
+        // above the boundary, so we don't delete data that's still needed.
+        var referencedStoredVersionIds = Set<Version.ID>()
+        var aboveBoundaryVersionIds: [Version.ID] = []
+        queryHistory { history in
+            aboveBoundaryVersionIds = history.allVersionIdentifiers.filter { !compressedIds.contains($0) }
+        }
+        for versionId in aboveBoundaryVersionIds {
+            try valuesMap.enumerateValueReferences(forVersionIdentifiedBy: versionId) { ref in
+                if compressedIds.contains(ref.storedVersionId) {
+                    referencedStoredVersionIds.insert(ref.storedVersionId)
+                }
+            }
+        }
+
+        // Only delete value data for compressed versions that are NOT still referenced
+        let safeToDeleteValueData = compressedIds.subtracting(referencedStoredVersionIds)
+        for versionId in safeToDeleteValueData {
+            try valuesZone.deleteAll(forVersionIdentifiedBy: versionId)
+        }
+
+        // Note: Map nodes for compressed versions are intentionally kept.
+        // Versions above the compaction boundary may have Map subnodes that
+        // reference compressed versions. Deleting them would break the Map trie.
+
+        // Delete version JSON files for all compressed versions
+        for versionId in compressedIds {
+            let (_, fileURL) = fileSystemLocation(forVersionIdentifiedBy: versionId)
+            try? fileManager.removeItem(at: fileURL)
+        }
+
+        // Purge caches
+        valuesMap.purgeCache()
+    }
+
+    private func loadCompactionInfo() -> CompactionInfo {
+        guard let data = try? Data(contentsOf: compactionInfoFileURL),
+              let info = try? JSONDecoder().decode(CompactionInfo.self, from: data) else {
+            return CompactionInfo()
+        }
+        return info
+    }
+
+    private func saveCompactionInfo() throws {
+        let data = try JSONEncoder().encode(compactionInfo)
+        try data.write(to: compactionInfoFileURL, options: .atomic)
+    }
+
+    private func resumeCleanupIfNeeded() throws {
+        guard compactionInfo.pendingCleanup else { return }
+        try performCleanup(forCompressedVersionIds: compactionInfo.compressedVersionIds)
+        compactionInfo.pendingCleanup = false
+        try saveCompactionInfo()
+    }
 }
 
 

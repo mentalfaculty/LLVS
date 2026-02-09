@@ -74,6 +74,33 @@ internal final class FileZone: Zone {
         return (directoryURL: directoryURL, fileURL: fileURL)
     }
     
+    internal func delete(for reference: ZoneReference) throws {
+        let (_, file) = try fileSystemLocation(for: reference)
+        cache.removeValue(for: reference)
+        try? fileManager.removeItem(at: file)
+    }
+
+    internal func deleteAll(forVersionIdentifiedBy version: Version.ID) throws {
+        let versionString = version.rawValue
+        let enumerator = fileManager.enumerator(at: rootDirectory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])!
+        var filesToDelete: [URL] = []
+        for any in enumerator {
+            guard let url = any as? URL else { continue }
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory), !isDirectory.boolValue else { continue }
+            let name = url.deletingPathExtension().lastPathComponent
+            // The version UUID is split with a 1-char prefix directory. Reconstruct it.
+            let parentDir = url.deletingLastPathComponent().lastPathComponent
+            let reconstructed = parentDir + name
+            if reconstructed == versionString {
+                filesToDelete.append(url)
+            }
+        }
+        for file in filesToDelete {
+            try? fileManager.removeItem(at: file)
+        }
+    }
+
     internal func versionIds(for key: String) throws -> [Version.ID] {
         let valueDirectoryURL = rootDirectory.appendingSplitPathComponent(key)
         let valueDirLength = valueDirectoryURL.path.count

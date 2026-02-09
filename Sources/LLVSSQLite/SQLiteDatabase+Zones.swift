@@ -24,12 +24,12 @@ internal extension SQLiteDatabase {
         )
         try execute(statement:
             """
-            CREATE INDEX index_key ON Zone (key);
+            CREATE INDEX IF NOT EXISTS index_key ON Zone (key);
             """
         )
         try execute(statement:
             """
-            CREATE INDEX index_version ON Zone (version);
+            CREATE INDEX IF NOT EXISTS index_version ON Zone (version);
             """
         )
     }
@@ -90,6 +90,22 @@ internal extension SQLiteDatabase {
         }
 
         return result
+    }
+
+    func delete(for reference: ZoneReference) throws {
+        try execute(statement:
+            """
+            DELETE FROM Zone WHERE key=? AND version=?;
+            """,
+            withBindingsList: [[reference.key, reference.version.rawValue]])
+    }
+
+    func deleteAll(forVersionIdentifiedBy version: String) throws {
+        try execute(statement:
+            """
+            DELETE FROM Zone WHERE version=?;
+            """,
+            withBindingsList: [[version]])
     }
 
     func versionIds(forKey key: String) throws -> [String] {

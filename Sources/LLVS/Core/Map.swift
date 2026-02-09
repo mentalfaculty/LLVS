@@ -93,6 +93,22 @@ final class Map {
         }
     }
     
+    func purgeCache() {
+        nodeCache.purgeAllValues()
+    }
+
+    /// Returns zone references for the root node and all subnodes for a given version.
+    /// Used during compaction cleanup to know what Map data to delete.
+    func zoneReferences(forVersionIdentifiedBy versionId: Version.ID) throws -> [ZoneReference] {
+        let rootRef = ZoneReference(key: rootKey, version: versionId)
+        guard let rootNode = try node(for: rootRef) else { return [] }
+        var refs: [ZoneReference] = [rootRef]
+        if case let .nodes(subNodeRefs) = rootNode.children {
+            refs.append(contentsOf: subNodeRefs)
+        }
+        return refs
+    }
+
     func differences(between firstVersion: Version.ID, and secondVersion: Version.ID, withCommonAncestor commonAncestor: Version.ID?) throws -> [Diff] {
         let originRef = commonAncestor.flatMap { ZoneReference(key: rootKey, version: $0) }
         let rootRef1 = ZoneReference(key: rootKey, version: firstVersion)

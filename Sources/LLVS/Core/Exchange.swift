@@ -87,10 +87,11 @@ public extension Exchange {
 
     private func versionIdsMissingFromHistory(forRemoteIdentifiers remoteIdentifiers: [Version.ID]) -> [Version.ID] {
         var toRetrieveIds: [Version.ID]!
+        let compressed = self.store.compressedVersionIdentifiers
         self.store.queryHistory { history in
             let storeVersionIds = Set(history.allVersionIdentifiers)
             let remoteVersionIds = Set(remoteIdentifiers)
-            toRetrieveIds = Array(remoteVersionIds.subtracting(storeVersionIds))
+            toRetrieveIds = Array(remoteVersionIds.subtracting(storeVersionIds).subtracting(compressed))
         }
         return toRetrieveIds
     }
@@ -256,10 +257,11 @@ public extension Exchange {
 
     private func versionIdsMissingRemotely(forRemoteIdentifiers remoteIdentifiers: [Version.ID]) -> [Version.ID] {
         var toSendIds: [Version.ID]!
+        let compressed = self.store.compressedVersionIdentifiers
         self.store.queryHistory { history in
             let storeVersionIds = Set(history.allVersionIdentifiers)
             let remoteVersionIds = Set(remoteIdentifiers)
-            toSendIds = Array(storeVersionIds.subtracting(remoteVersionIds))
+            toSendIds = Array(storeVersionIds.subtracting(remoteVersionIds).subtracting(compressed))
         }
         return toSendIds
     }
