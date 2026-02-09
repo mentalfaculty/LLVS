@@ -45,6 +45,9 @@ public class CloudKitExchange: Exchange {
         case couldNotGetVersionFromRecord
         case noZoneFound
         case invalidValueChangesDataInRecord
+        case snapshotManifestDecodingFailed
+        case snapshotChunkMissing(Int)
+        case snapshotChunkAssetMissing(Int)
     }
 
     fileprivate lazy var temporaryDirectory: URL = {
@@ -504,6 +507,234 @@ public extension CloudKitExchange {
 }
 
 
+// MARK:- Snapshot Exchange
+
+extension CloudKitExchange: SnapshotExchange {
+
+    public func retrieveSnapshotManifest(completionHandler: @escaping CompletionHandler<SnapshotManifest?>) {
+        log.trace("Retrieving snapshot manifest from CloudKit")
+        let recordName = "\(storeIdentifier)_snapshot_manifest"
+        let recordID = CKRecord.ID(recordName: recordName, zoneID: zoneID ?? .default)
+        let operation = CKFetchRecordsOperation(recordIDs: [recordID])
+        operation.desiredKeys = [CKRecord.ExchangeKey.snapshotManifest.rawValue]
+        if let createZoneOp = createZoneOperation {
+            operation.addDependency(createZoneOp)
+        }
+        operation.fetchRecordsCompletionBlock = { recordsByID, error in
+            if let ckError = error as? CKError {
+                if ckError.code == .unknownItem {
+                    completionHandler(.success(nil))
+                    return
+                }
+                if ckError.code == .partialFailure,
+                   let partialErrors = ckError.partialErrorsByItemID,
+                   partialErrors.values.contains(where: { ($0 as? CKError)?.code == .unknownItem }) {
+                    completionHandler(.success(nil))
+                    return
+                }
+                completionHandler(.failure(ckError))
+                return
+            }
+            guard let record = recordsByID?[recordID],
+                  let manifestData = record.exchangeValue(forKey: .snapshotManifest) as? Data else {
+                completionHandler(.success(nil))
+                return
+            }
+            do {
+                let manifest = try JSONDecoder().decode(SnapshotManifest.self, from: manifestData)
+                log.trace("Retrieved snapshot manifest: \(manifest.snapshotId)")
+                completionHandler(.success(manifest))
+            } catch {
+                log.error("Failed to decode snapshot manifest: \(error)")
+                completionHandler(.failure(Error.snapshotManifestDecodingFailed))
+            }
+        }
+        database.add(operation)
+    }
+
+    public func retrieveSnapshotChunk(index: Int, completionHandler: @escaping CompletionHandler<Data>) {
+        log.trace("Retrieving snapshot chunk \(index) from CloudKit")
+        let recordName = "\(storeIdentifier)_snapshot_chunk_\(index)"
+        let recordID = CKRecord.ID(recordName: recordName, zoneID: zoneID ?? .default)
+        let operation = CKFetchRecordsOperation(recordIDs: [recordID])
+        operation.desiredKeys = [CKRecord.ExchangeKey.snapshotChunkData.rawValue]
+        if let createZoneOp = createZoneOperation {
+            operation.addDependency(createZoneOp)
+        }
+        operation.fetchRecordsCompletionBlock = { recordsByID, error in
+            if let error = error {
+                log.error("Failed to retrieve snapshot chunk \(index): \(error)")
+                completionHandler(.failure(Error.snapshotChunkMissing(index)))
+                return
+            }
+            guard let record = recordsByID?[recordID],
+                  let asset = record.exchangeValue(forKey: .snapshotChunkData) as? CKAsset,
+                  let fileURL = asset.fileURL else {
+                log.error("Snapshot chunk \(index) has no asset")
+                completionHandler(.failure(Error.snapshotChunkAssetMissing(index)))
+                return
+            }
+            do {
+                let data = try Data(contentsOf: fileURL)
+                log.trace("Retrieved snapshot chunk \(index): \(data.count) bytes")
+                completionHandler(.success(data))
+            } catch {
+                log.error("Failed to read snapshot chunk \(index) asset: \(error)")
+                completionHandler(.failure(error))
+            }
+        }
+        database.add(operation)
+    }
+
+    public func sendSnapshot(manifest: SnapshotManifest, chunkProvider: @escaping (Int) throws -> Data, completionHandler: @escaping CompletionHandler<Void>) {
+        log.trace("Sending snapshot to CloudKit: \(manifest.chunkCount) chunks")
+
+        let deleteExcess = AsynchronousTask { finish in
+            self.deleteExcessSnapshotChunks(keepingCount: manifest.chunkCount) { result in
+                finish(result)
+            }
+        }
+
+        let uploadChunks = AsynchronousTask { finish in
+            self.uploadSnapshotChunks(manifest: manifest, chunkProvider: chunkProvider) { result in
+                finish(result)
+            }
+        }
+
+        let uploadManifest = AsynchronousTask { finish in
+            self.uploadSnapshotManifest(manifest) { result in
+                finish(result)
+            }
+        }
+
+        [deleteExcess, uploadChunks, uploadManifest].executeInOrder(completingWith: completionHandler)
+    }
+
+    // MARK: Snapshot Helpers
+
+    private func deleteExcessSnapshotChunks(keepingCount: Int, completionHandler: @escaping CompletionHandler<Void>) {
+        log.trace("Querying for excess snapshot chunks beyond index \(keepingCount)")
+        let predicate = NSPredicate(format: "storeIdentifier = %@ AND snapshotChunkIndex >= %d", storeIdentifier, keepingCount)
+        let query = CKQuery(recordType: CKRecord.ExchangeType.SnapshotChunk.rawValue, predicate: predicate)
+        queryDatabase(with: .query(query)) { result in
+            switch result {
+            case .success(let records):
+                if records.isEmpty {
+                    log.trace("No excess snapshot chunks to delete")
+                    completionHandler(.success(()))
+                } else {
+                    log.trace("Deleting \(records.count) excess snapshot chunks")
+                    self.deleteRecords(records.map { $0.recordID }, completionHandler: completionHandler)
+                }
+            case .failure(let error as CKError) where error.code == .unknownItem:
+                completionHandler(.success(()))
+            case .failure(let error):
+                log.error("Failed to query excess snapshot chunks: \(error)")
+                completionHandler(.failure(error))
+            }
+        }
+    }
+
+    private func deleteRecords(_ recordIDs: [CKRecord.ID], completionHandler: @escaping CompletionHandler<Void>) {
+        guard !recordIDs.isEmpty else {
+            completionHandler(.success(()))
+            return
+        }
+        let batchRanges = (0...recordIDs.count-1).split(intoRangesOfLength: cloudKitFetchLimit)
+        let tasks = batchRanges.map { range in
+            AsynchronousTask { finish in
+                let batchIDs = Array(recordIDs[range])
+                let operation = CKModifyRecordsOperation(recordsToSave: nil, recordIDsToDelete: batchIDs)
+                operation.modifyRecordsCompletionBlock = { _, _, error in
+                    if let error = error {
+                        log.error("Failed to delete records: \(error)")
+                        finish(.failure(error))
+                    } else {
+                        finish(.success(()))
+                    }
+                }
+                self.database.add(operation)
+            }
+        }
+        tasks.executeInOrder(completingWith: completionHandler)
+    }
+
+    private func uploadSnapshotChunks(manifest: SnapshotManifest, chunkProvider: @escaping (Int) throws -> Data, completionHandler: @escaping CompletionHandler<Void>) {
+        guard manifest.chunkCount > 0 else {
+            completionHandler(.success(()))
+            return
+        }
+        let batchRanges = (0...manifest.chunkCount-1).split(intoRangesOfLength: cloudKitFetchLimit)
+        let tasks = batchRanges.map { range in
+            AsynchronousTask { finish in
+                do {
+                    var tempFileURLs: [URL] = []
+                    let records: [CKRecord] = try range.map { index in
+                        let chunkData = try chunkProvider(index)
+                        let recordName = "\(self.storeIdentifier)_snapshot_chunk_\(index)"
+                        let recordID = CKRecord.ID(recordName: recordName, zoneID: self.zoneID ?? .default)
+                        let record = CKRecord(recordType: .init(CKRecord.ExchangeType.SnapshotChunk.rawValue), recordID: recordID)
+                        record.setExchangeValue(self.storeIdentifier, forKey: .storeIdentifier)
+                        record.setExchangeValue(index, forKey: .snapshotChunkIndex)
+
+                        let tempFileURL = self.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                        try chunkData.write(to: tempFileURL)
+                        let asset = CKAsset(fileURL: tempFileURL)
+                        record.setExchangeValue(asset, forKey: .snapshotChunkData)
+                        tempFileURLs.append(tempFileURL)
+
+                        return record
+                    }
+                    let operation = CKModifyRecordsOperation(recordsToSave: records, recordIDsToDelete: nil)
+                    operation.savePolicy = .allKeys
+                    operation.modifyRecordsCompletionBlock = { _, _, error in
+                        tempFileURLs.forEach { try? FileManager.default.removeItem(at: $0) }
+                        if let error = error {
+                            log.error("Failed to upload snapshot chunks: \(error)")
+                            finish(.failure(error))
+                        } else {
+                            log.trace("Uploaded snapshot chunks \(range)")
+                            finish(.success(()))
+                        }
+                    }
+                    self.database.add(operation)
+                } catch {
+                    log.error("Failed to prepare snapshot chunks: \(error)")
+                    finish(.failure(error))
+                }
+            }
+        }
+        tasks.executeInOrder(completingWith: completionHandler)
+    }
+
+    private func uploadSnapshotManifest(_ manifest: SnapshotManifest, completionHandler: @escaping CompletionHandler<Void>) {
+        do {
+            let manifestData = try JSONEncoder().encode(manifest)
+            let recordName = "\(storeIdentifier)_snapshot_manifest"
+            let recordID = CKRecord.ID(recordName: recordName, zoneID: zoneID ?? .default)
+            let record = CKRecord(recordType: .init(CKRecord.ExchangeType.SnapshotManifest.rawValue), recordID: recordID)
+            record.setExchangeValue(manifestData, forKey: .snapshotManifest)
+            record.setExchangeValue(storeIdentifier, forKey: .storeIdentifier)
+            let operation = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
+            operation.savePolicy = .allKeys
+            operation.modifyRecordsCompletionBlock = { _, _, error in
+                if let error = error {
+                    log.error("Failed to upload snapshot manifest: \(error)")
+                    completionHandler(.failure(error))
+                } else {
+                    log.trace("Uploaded snapshot manifest")
+                    completionHandler(.success(()))
+                }
+            }
+            database.add(operation)
+        } catch {
+            log.error("Failed to encode snapshot manifest: \(error)")
+            completionHandler(.failure(error))
+        }
+    }
+}
+
+
 // MARK:- Subscriptions
 
 public extension CloudKitExchange {
@@ -595,10 +826,13 @@ fileprivate extension CKRecord {
 
     enum ExchangeType: String {
         case Version = "LLVS_Version"
+        case SnapshotManifest = "LLVS_SnapshotManifest"
+        case SnapshotChunk = "LLVS_SnapshotChunk"
     }
 
     enum ExchangeKey: String {
         case version, storeIdentifier, valueChanges, valueChangesAsset
+        case snapshotManifest, snapshotChunkIndex, snapshotChunkData
     }
 
     func exchangeValue(forKey key: ExchangeKey) -> Any? {
