@@ -5,73 +5,34 @@
 
 _Author: Drew McCormack ([@drewmccormack](https://github.com/drewmccormack))_
 
-## Introduction
+Ever wish it was as easy to move your app's data around as it is to push and pull your source code with Git?
 
-Ever wish it was as easy to move your app's data around as it is to push and pull your source code with Git? If so, read on.
+LLVS brings the same model to app data. Every save creates a version. Versions branch, merge, and sync between devices -- just like commits in a Git repository. Your app gets full version history, conflict resolution, and multi-device sync without writing any networking or diffing code.
 
-### Why LLVS?
+### The problem
 
-Application data is more decentralized than ever. A single user may have a multitude of devices -- phones, laptops, watches -- and each device may run several independent processes (main app, sharing extension, widget), each working with its own copy of the data. How do you keep all of this in sync without writing thousands of lines of custom code?
+A user edits a note on their phone during a flight. Meanwhile, a share extension updates the same note on their iPad. Later, their Watch app writes a quick addition. When the phone comes back online, three copies of the data have diverged independently.
 
-Software developers solved an analogous problem with source control. Advances in SCM led to tools like Git, which successfully handle decentralized collaboration across many machines. LLVS applies the same ideas to app data: it provides a framework for storing and moving data through the decentralized world in which our apps live.
+Keeping these in sync is the kind of problem that consumes months of development time. You end up writing custom conflict detection, manual diffing, retry logic, and timestamp heuristics -- and it's still fragile.
 
-### What is LLVS?
+LLVS handles this the way Git handles divergent branches: it tracks the full ancestry of every change, finds the common ancestor when versions diverge, and merges them back together through a conflict resolver you control. The framework does the hard part; you just decide what "resolve this conflict" means for your data.
 
-LLVS is a _decentralized, versioned, key-value storage framework_.
+### What you get
 
-It works like a traditional key-value store, where you insert data values for unique keys. But LLVS adds an extra dimension: each time you store a set of values, a new _version_ is created, and every version has an ancestry you can trace back in time. Just as with Git, you can retrieve the values for any version, determine what changed between any two versions, and merge versions together.
-
-LLVS can also _send_ and _receive_ versions with other stores, in the same way you _push_ and _pull_ between Git repositories.
-
-In summary, LLVS is:
-
-- A decentralized, versioned, key-value storage framework
-- A Directed Acyclic Graph (DAG) of your app's data history
-- A means to sync data sets across devices, processes, and the cloud
-- An abstraction layer for tracking the ancestry of a decentralized data set
-
-### What LLVS is _Not_
-
-- An Object-Relational Modeling (ORM) framework
-- A database
-- A serialization framework
-- A web services framework
-
-### Where Does it Fit?
-
-LLVS is an abstraction layer. It manages the history of a data set without knowing what the data represents, how it is stored on disk, or how it moves between devices.
-
-LLVS ships with storage backends (file-based and SQLite) and a cloud sync layer (CloudKit), but you can substitute your own. The data format is entirely up to you -- `Codable` structs, JSON, encrypted blobs, or anything else that reduces to `Data`.
-
-
-## Installation
-
-### Swift Package Manager
-
-Add LLVS as a dependency in your `Package.swift`:
-
-```swift
-dependencies: [
-    .package(url: "https://github.com/mentalfaculty/LLVS.git", from: "0.3.0")
-]
-```
-
-Then add the libraries you need to your target's dependencies: `LLVS` for the core framework, `LLVSSQLite` for SQLite-backed storage, and `LLVSCloudKit` for CloudKit sync.
-
-### Xcode
-
-In Xcode, choose _File > Add Package Dependencies..._, enter the LLVS repository URL, and select the libraries your target needs.
-
-### Platforms
-
-LLVS supports macOS 10.15+, iOS 13+, and watchOS 6+.
+- **Version history** -- Every save is a version. Branch, merge, diff, or revert to any point in time.
+- **Three-way merge** -- When versions diverge, LLVS finds their common ancestor and diffs both sides. You provide a `MergeArbiter` to resolve conflicts however you like, or use a built-in one.
+- **Sync without networking code** -- Push and pull versions between stores via CloudKit, a shared filesystem, or your own custom exchange. Attach multiple exchanges to the same store.
+- **Multi-process safe** -- Share a store between your main app, extensions, and widgets using an app group container. LLVS handles concurrent access.
+- **Pluggable storage** -- File-based storage by default, SQLite via `LLVSSQLite`, or bring your own backend.
+- **Encryption-friendly** -- LLVS stores opaque `Data` blobs. Encrypt them however you want; the framework never inspects your data.
+- **Compaction** -- Collapse old history into a baseline snapshot to reclaim disk space, without affecting recent versions.
 
 
 ## Quick Start
 
-This section walks through a minimal iOS app that syncs a shared message via CloudKit. The complete code is in the _Samples/TheMessage_ directory.
+This walks through a minimal app that syncs a shared message via CloudKit. Full code is in _Samples/TheMessage_.
 
-### Set Up a StoreCoordinator
+### Set up a StoreCoordinator
 
 `StoreCoordinator` is the simplest entry point. It wraps a `Store`, tracks the current version, and orchestrates sync and merging.
 
@@ -89,7 +50,7 @@ lazy var storeCoordinator: StoreCoordinator = {
 }()
 ```
 
-### Save Data
+### Save, fetch, sync
 
 ```swift
 let messageId = Value.ID("MESSAGE")
@@ -99,22 +60,12 @@ func post(message: String) {
     try! storeCoordinator.save(updating: [value])
     sync()
 }
-```
 
-LLVS stores `Value` objects, each consisting of an identifier (the key) and a `Data` payload. Your app converts its model types to and from `Data` however you see fit.
-
-### Fetch Data
-
-```swift
 func fetchMessage() -> String? {
     guard let value = try? storeCoordinator.value(id: messageId) else { return nil }
     return String(data: value.data, encoding: .utf8)
 }
-```
 
-### Sync
-
-```swift
 func sync() {
     storeCoordinator.exchange { _ in
         self.storeCoordinator.merge()
@@ -122,12 +73,37 @@ func sync() {
 }
 ```
 
-Call `exchange` to send and receive versions with the cloud, then `merge` to reconcile any concurrent changes. No networking code required.
+`exchange` sends and receives versions with the cloud. `merge` reconciles any concurrent changes. That's the entire sync implementation.
+
+This example is deliberately minimal -- the real power of LLVS shows up when data diverges across devices, which is covered below.
 
 
-## Working with `Store` Directly
+## Installation
 
-`StoreCoordinator` is convenient, but `Store` gives you full access to the version history, including branching, merging, and diffing.
+### Swift Package Manager
+
+Add LLVS as a dependency in your `Package.swift`:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/mentalfaculty/LLVS.git", from: "0.3.0")
+]
+```
+
+Then add the libraries you need: `LLVS` for the core framework, `LLVSSQLite` for SQLite-backed storage, and `LLVSCloudKit` for CloudKit sync.
+
+### Xcode
+
+Choose _File > Add Package Dependencies..._, enter the LLVS repository URL, and select the libraries your target needs.
+
+### Platforms
+
+macOS 10.15+, iOS 13+, watchOS 6+.
+
+
+## Working with `Store`
+
+`StoreCoordinator` is convenient for common cases, but `Store` gives you direct access to the version graph -- branching, merging, diffing, and time travel.
 
 ### Creating a Store
 
@@ -138,26 +114,22 @@ let rootDir = FileManager.default
 let store = try Store(rootDirectoryURL: rootDir)
 ```
 
-Using an app group container lets multiple processes (main app, extensions) share the same store.
-
-By default, `Store` uses file-based storage. To use SQLite instead:
+Using an app group container lets your main app, extensions, and widgets share the same store. For SQLite-backed storage:
 
 ```swift
 let store = try Store(rootDirectoryURL: rootDir, storage: SQLiteStorage())
 ```
 
-### Inserting Values
+### Versions and values
+
+Every write creates a new version:
 
 ```swift
 let value = Value(idString: "ABCDEF", data: "Hello".data(using: .utf8)!)
 let firstVersion = try store.makeVersion(basedOnPredecessor: nil, inserting: [value])
 ```
 
-Passing `nil` for the predecessor creates the initial version (analogous to Git's initial commit). The returned `Version` captures the state of the entire store, not just the values being added.
-
-### Updating and Removing Values
-
-Subsequent changes are based on a predecessor version:
+Passing `nil` for the predecessor creates the initial version -- like Git's first commit. Subsequent changes build on a predecessor:
 
 ```swift
 let updated = Value(idString: "ABCDEF", data: "World".data(using: .utf8)!)
@@ -167,7 +139,7 @@ let secondVersion = try store.makeVersion(
 )
 ```
 
-Inserts, updates, and removes can be combined in a single `makeVersion` call:
+Inserts, updates, and removes can be combined in a single call:
 
 ```swift
 let thirdVersion = try store.makeVersion(
@@ -178,70 +150,43 @@ let thirdVersion = try store.makeVersion(
 )
 ```
 
-### Versions are Store-Wide
-
-Versions apply to the store as a whole. Once a value is added, it persists in all subsequent versions until explicitly updated or removed.
-
-### Fetching Data
-
-Retrieving a value requires specifying the version:
+Versions are store-wide: once a value is added, it persists in all subsequent versions until explicitly updated or removed. You can retrieve any value at any version:
 
 ```swift
 let value = try store.value(idString: "ABCDEF", at: secondVersion.id)!
-let text = String(data: value.data, encoding: .utf8)
 ```
 
-If the value did not exist at the requested version, `nil` is returned.
+### Branching and heads
 
-### Branching
+When concurrent changes happen -- edits on two devices between syncs, or writes from both your app and its share extension -- the version history naturally diverges into branches. This isn't an error; it's the normal state of decentralized data. The branches get reconciled through merging.
 
-When concurrent changes are made -- for example, edits on two devices between syncs -- the version history diverges into branches. This is normal and expected; the branches are reconciled through merging.
-
-### Predecessors, Successors, and Heads
-
-Each `Version` can have up to two predecessors (one for linear history, two for merge commits) and zero or more successors. A _head_ is a version with no successors -- the tip of a branch.
-
-Most of the time, your app works with a head as its current version and bases new versions off of it. When multiple heads exist, they generally need to be merged.
-
-### Navigating History
-
-Access the version graph through `queryHistory`, which serializes access for thread safety:
+Each `Version` can have up to two predecessors (one for linear history, two for merge commits) and any number of successors. A _head_ is a version with no successors -- the tip of a branch. When multiple heads exist, they generally need to be merged.
 
 ```swift
 store.queryHistory { history in
     let heads = history.headIdentifiers
     // ...
 }
-```
 
-Or get the most recent head directly:
-
-```swift
+// Or get the most recent head directly:
 let latest: Version? = store.mostRecentHead
 ```
 
 ### Merging
 
-LLVS supports two merge modes:
-
-- **Three-way merge**: the standard case. LLVS finds the greatest common ancestor of two divergent versions, diffs each against it, and passes the results to a `MergeArbiter` to resolve conflicts.
-- **Two-way merge**: used when two versions share no common ancestry (e.g., two independent initial commits).
-
-A basic merge:
+This is where it gets interesting. When two versions have diverged, LLVS performs a three-way merge: it finds the greatest common ancestor, diffs each branch against it, and hands the results to a `MergeArbiter` that you provide. The arbiter decides how to resolve every conflict.
 
 ```swift
 let arbiter = MostRecentChangeFavoringArbiter()
 let merged = try store.merge(version: headA, with: headB, resolvingWith: arbiter)
 ```
 
-If one version is an ancestor of the other, LLVS fast-forwards without creating a new version.
+If one version is an ancestor of the other, LLVS fast-forwards without creating a new version -- just like Git.
 
-#### Built-in Arbiters
+LLVS ships with two built-in arbiters:
 
-- `MostRecentChangeFavoringArbiter` -- resolves each conflict by keeping whichever individual change is newer.
-- `MostRecentBranchFavoringArbiter` -- resolves all conflicts by keeping values from whichever branch has the newer timestamp.
-
-#### Custom Arbiters
+- `MostRecentChangeFavoringArbiter` -- resolves each conflict individually by keeping whichever change is newer.
+- `MostRecentBranchFavoringArbiter` -- resolves all conflicts by favoring whichever branch has the newer timestamp.
 
 For full control, implement the `MergeArbiter` protocol:
 
@@ -251,11 +196,11 @@ public protocol MergeArbiter {
 }
 ```
 
-The `Merge` object provides a dictionary of `Value.Fork` entries describing per-value conflict states: `.inserted`, `.updated`, `.removed` (non-conflicting, single branch), `.twiceInserted`, `.twiceUpdated`, `.removedAndUpdated` (conflicting, require resolution). Your arbiter must return changes that resolve all conflicting forks.
+The `Merge` object gives you a dictionary of `Value.Fork` entries describing per-value conflict states: `.inserted`, `.updated`, `.removed` (non-conflicting, single branch), `.twiceInserted`, `.twiceUpdated`, `.removedAndUpdated` (conflicting, both branches changed). Your arbiter returns `Value.Change` entries that resolve all the conflicting forks. This is where you encode your app's domain logic -- maybe the longer text wins, maybe you concatenate both, maybe you prompt the user.
 
-### Setting Up an Exchange
+### Sync (Exchange)
 
-An `Exchange` sends and receives versions between stores. LLVS includes two implementations:
+An `Exchange` sends and receives versions between stores -- the equivalent of `git push` and `git pull`.
 
 **CloudKit** (via the `LLVSCloudKit` library):
 
@@ -284,73 +229,12 @@ exchange.retrieve { result in /* handle result */ }
 exchange.send { result in /* handle result */ }
 ```
 
-You can attach multiple exchanges to a single store, pushing and pulling data via different routes. You can also implement custom exchanges by conforming to the `Exchange` protocol.
-
-
-## Architecture
-
-This section describes the internal design for contributors and advanced users.
-
-### Package Structure
-
-LLVS is split into four SPM targets with a layered dependency graph:
-
-| Target | Purpose | Dependencies |
-|---|---|---|
-| **LLVS** | Core framework: `Store`, `History`, `Map`, `Zone`, `Exchange`, `Value`, `Version` | None |
-| **LLVSSQLite** | SQLite storage backend | LLVS, SQLite3 |
-| **LLVSCloudKit** | CloudKit sync exchange | LLVS |
-| **SQLite3** | System library wrapper | System SQLite |
-
-### Core Data Flow
-
-`Store` is the central class. It owns three key components:
-
-- **History** -- An in-memory Directed Acyclic Graph (DAG) of all versions. Provides topological traversal (Kahn's algorithm), common ancestor finding, and head tracking. Access is serialized via `historyAccessQueue`.
-- **Map** -- A hierarchical trie-like index that tracks which values exist at each version. Nodes are keyed by 2-character prefixes of value identifiers. This allows efficient "what values exist at this version?" queries without scanning all values.
-- **Zone** -- A pluggable storage backend for reading and writing raw data.
-
-All writes go through `Store.makeVersion()`, which atomically records a new version with its value changes. All reads go through `Store.value(id:at:)`, which resolves the map to find where a value's data is physically stored.
-
-### Storage Abstraction
-
-The `Storage` protocol creates `Zone` instances. `Zone` is the raw read/write interface with two methods: `store(_:for:)` and `data(for:)`.
-
-Two implementations are provided:
-
-- **FileZone** -- Stores data as files on disk, using 2-character prefix subdirectories for filesystem efficiency. Multi-process safe.
-- **SQLiteZone** -- Stores data in a SQLite database. Not thread-safe (the caller manages concurrency). Available via the `LLVSSQLite` target.
-
-### Version History
-
-Versions form a DAG. Each `Version` has:
-
-- 0--2 predecessors (0 for the initial version, 1 for linear commits, 2 for merges)
-- 0+ successors
-- A timestamp, optional metadata, and an identifier (UUID)
-
-_Heads_ are versions with no successors -- the branch tips. `History` is enumerable via a topological iterator that yields versions from newest to oldest.
-
-### Merging
-
-Three-way merging works by finding the greatest common ancestor of two versions, then computing diffs against it. The diffs are expressed as `Value.Fork` entries describing per-value conflict states. A `MergeArbiter` receives these forks and returns `Value.Change` entries that resolve all conflicts.
-
-### Sync (Exchange)
-
-The `Exchange` protocol handles sending and receiving versions between stores. The default implementations orchestrate the full sync flow: discover remote version IDs, find missing ones, then fetch or push in batches (capped at 5 MB via `DynamicTaskBatcher`).
-
-### Map Internals
-
-The Map is a two-level trie. The root node for each version points to subnodes keyed by the first two characters of value identifiers. Each subnode contains `KeyValuePair` entries mapping value IDs to `Value.Reference` (which records the version where the value's data is physically stored).
-
-Subnodes are shared across versions -- if a version doesn't modify any values in a particular bucket, it reuses the parent version's subnode. This makes versioning space-efficient but means care is needed when deleting old data (see Compaction).
+You can attach multiple exchanges to a single store, syncing via different routes simultaneously -- CloudKit for cross-device, a shared directory for inter-process. You can also implement custom exchanges by conforming to the `Exchange` protocol.
 
 
 ## Structuring Your Data
 
-LLVS stores opaque `Data` blobs keyed by string identifiers. How you structure your model is up to you.
-
-Consider the granularity of each `Value`:
+LLVS stores opaque `Data` blobs keyed by string identifiers. How you map your model onto values is up to you, but the granularity matters:
 
 | Approach | Merging | Performance | Disk use |
 |---|---|---|---|
@@ -358,40 +242,35 @@ Consider the granularity of each `Value`:
 | **One entity per Value** | Good (per-entity conflict resolution) | Moderate | Moderate |
 | **Entire model in one Value** | Poor (must merge everything manually) | Fast (single read) | Large per-version files |
 
-The **one entity per Value** approach is a good default -- it balances merge granularity with performance.
+**One entity per Value** is a good default. It gives you per-entity conflict resolution while keeping read performance reasonable. Use `Codable`, JSON, flatbuffers, or whatever serialization you prefer -- LLVS never inspects the bytes.
 
 
-## Compaction (History Compression)
+## Compaction
 
-Over time, LLVS stores grow as every version, its map nodes, and its value data persist. For long-lived stores, you can use _compaction_ to collapse old history into a single baseline snapshot, reducing storage overhead while preserving full functionality for recent versions.
+Every version, its map nodes, and its value data persist indefinitely. For long-lived stores, _compaction_ collapses old history into a single baseline snapshot, reclaiming storage while keeping recent versions fully functional.
 
-### How It Works
+### How it works
 
 Compaction uses a three-phase, crash-safe algorithm:
 
-1. **Prepare** -- A baseline snapshot is created, capturing the full state of the store at a bottleneck point in the version graph. All new data is written; nothing is deleted yet.
-2. **Commit** -- A `compaction.json` file is atomically written, activating the baseline. Predecessor pointers of versions just above the boundary are relinked to the baseline.
-3. **Cleanup** -- Version JSON files for compressed versions are deleted. Value data that is no longer referenced is also removed. This phase is idempotent and will automatically resume on the next store initialization if interrupted.
+1. **Prepare** -- A baseline snapshot is created at a bottleneck point in the version graph. All new data is written; nothing is deleted yet.
+2. **Commit** -- A `compaction.json` file is atomically written, activating the baseline. Predecessor pointers of versions just above the boundary are relinked.
+3. **Cleanup** -- Version files for compressed versions are deleted. Unreferenced value data is removed. This phase is idempotent and resumes automatically if interrupted.
 
 ### Usage
 
-Compaction is available via `Store` or `StoreCoordinator`:
-
 ```swift
-// Compact versions older than 7 days, keeping at least 50 recent versions
+// Via Store: compact versions older than 7 days, keeping at least 50 recent
 let baselineId = try store.compact(
     beforeDate: Date(timeIntervalSinceNow: -7*24*3600),
     minRetainedVersions: 50
 )
-```
 
-Or with `StoreCoordinator`:
-
-```swift
+// Via StoreCoordinator (uses the same defaults)
 let baselineId = try storeCoordinator.compact()
 ```
 
-### Compaction Policy
+### Compaction policy
 
 `StoreCoordinator` supports a `CompactionPolicy` that controls when compaction runs:
 
@@ -402,49 +281,58 @@ let baselineId = try storeCoordinator.compact()
 | `.none` | Compaction is disabled on the coordinator entirely. (`Store.compact()` still works directly.) |
 
 ```swift
-// Auto-compact on startup (default)
-let coordinator = try StoreCoordinator()
-
-// Only compact when explicitly requested
-let coordinator = try StoreCoordinator(compactionPolicy: .manual)
-
-// Disable compaction through the coordinator
-let coordinator = try StoreCoordinator(compactionPolicy: .none)
+let coordinator = try StoreCoordinator()                            // .auto (default)
+let coordinator = try StoreCoordinator(compactionPolicy: .manual)   // explicit only
+let coordinator = try StoreCoordinator(compactionPolicy: .none)     // disabled
 ```
 
-### Boundary Selection
+### Boundary selection
 
-The compaction boundary is always a _bottleneck_ -- a single version through which the entire DAG converges. This ensures no active branch needs a compressed version as a merge ancestor.
+The compaction boundary is always a _bottleneck_ -- a single version through which the entire graph converges. This ensures no active branch needs a compressed version as a merge ancestor.
 
 - If there are multiple heads, the greatest common ancestor is used.
 - For a single head, the algorithm walks backward, skipping at least `minRetainedVersions` versions, until finding a suitable bottleneck older than the cutoff date.
 
-### Compressed Versions
-
-After compaction, compressed versions are tracked in a persistent set. Attempting to read values _at_ a compressed version will throw an error. Exchanges automatically filter out compressed versions, so they are never sent to or retrieved from remote stores.
-
-```swift
-if store.isCompressedVersion(someVersionId) { ... }
-```
-
-Compaction can be run multiple times. Each subsequent compaction builds on the previous baseline, progressively compressing more history.
+After compaction, compressed versions are tracked in a persistent set. Reading values at a compressed version throws an error. Exchanges automatically filter them out. Compaction can be run repeatedly; each pass builds on the previous baseline.
 
 
-## Features
+## Architecture
 
-- Full version history with branching and merging
-- Three-way merge with pluggable conflict resolution
-- Decentralized sync -- push and pull between any number of stores
-- Multiple exchange backends (CloudKit, file system, or custom)
-- Multiple storage backends (file-based, SQLite, or custom)
-- Thread safe -- work from any thread
-- Multiprocess safe -- share a store between app and extensions
-- Safe in syncing folders (e.g., Dropbox), unlike raw SQLite databases
-- No lock-in -- use multiple cloud services simultaneously
-- Compact old history to reclaim storage
-- Compatible with end-to-end encryption (data is opaque to the framework)
-- Diff between any two versions
-- Revert to any previous version
+This section covers the internal design for contributors and anyone who wants to understand what's happening under the hood.
+
+### Package structure
+
+LLVS is split into four SPM targets:
+
+| Target | Purpose | Dependencies |
+|---|---|---|
+| **LLVS** | Core framework: `Store`, `History`, `Map`, `Zone`, `Exchange`, `Value`, `Version` | None |
+| **LLVSSQLite** | SQLite storage backend | LLVS, SQLite3 |
+| **LLVSCloudKit** | CloudKit sync exchange | LLVS |
+| **SQLite3** | System library wrapper | System SQLite |
+
+### Core data flow
+
+`Store` is the central class. It owns three components:
+
+- **History** -- An in-memory directed acyclic graph (DAG) of all versions. Provides topological traversal (Kahn's algorithm), common ancestor finding, and head tracking. Access is serialized via `historyAccessQueue`.
+- **Map** -- A hierarchical trie-like index that tracks which values exist at each version. Nodes are keyed by 2-character prefixes of value identifiers, making "what values exist at this version?" queries efficient without scanning everything.
+- **Zone** -- A pluggable storage backend for reading and writing raw data.
+
+All writes go through `Store.makeVersion()`, which atomically records a new version with its value changes. All reads go through `Store.value(id:at:)`, which walks the map to find where a value's data is physically stored.
+
+### Storage abstraction
+
+The `Storage` protocol creates `Zone` instances. `Zone` is the raw read/write interface with two methods: `store(_:for:)` and `data(for:)`.
+
+- **FileZone** -- Files on disk, using 2-character prefix subdirectories for filesystem efficiency. Multi-process safe.
+- **SQLiteZone** -- SQLite-backed. Not thread-safe by design (the caller manages concurrency). Available via `LLVSSQLite`.
+
+### Map internals
+
+The Map is a two-level trie. The root node for each version points to subnodes keyed by the first two characters of value identifiers. Each subnode maps value IDs to `Value.Reference` (which records the version where the data is physically stored).
+
+Subnodes are shared across versions -- if a version doesn't modify any values in a particular bucket, it reuses the parent's subnode. This makes versioning space-efficient but means care is needed when deleting old data (see Compaction).
 
 
 ## Samples
