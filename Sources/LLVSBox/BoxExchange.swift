@@ -8,27 +8,35 @@
 import Foundation
 import LLVS
 import Combine
+import BoxSdkGen
 
-/// An Exchange that syncs versions via the Box REST API.
+/// An Exchange that syncs versions via the Box Swift SDK.
 ///
 /// Data is stored inside a configurable Box folder, organized as:
 /// - `versions/` — JSON-encoded version metadata, one file per version
 /// - `changes/` — JSON-encoded value changes, one file per version
 ///
-/// Requires an OAuth2 access token for authentication. The caller is responsible
-/// for token refresh.
+/// Uses `BoxClient` from the official Box SDK for all API operations.
+/// The caller provides an authenticated `BoxClient` (e.g. via `BoxDeveloperTokenAuth`
+/// or `BoxCCGAuth`).
 public class BoxExchange: Exchange {
 
     public enum Error: Swift.Error {
-        case invalidResponse
-        case httpError(Int)
         case versionFileInvalid
-        case changesFileInvalid
-        case folderNotFound
         case fileNotFound(String)
+        case downloadFailed
+        case folderNotFound
     }
 
     public let store: Store
+
+    /// The Box client used for API calls.
+    public let client: BoxClient
+
+    /// The Box folder ID that serves as the root for LLVS data.
+    public let rootFolderID: String
+
+    @Atomic private var restoration = RestorationInfo()
 
     private let newVersionsSubject = PassthroughSubject<Void, Never>()
 
@@ -37,62 +45,53 @@ public class BoxExchange: Exchange {
     }
 
     public var restorationState: Data? {
-        get {
-            try? JSONEncoder().encode(cachedFolderIDs)
-        }
+        get { try? JSONEncoder().encode(restoration) }
         set {
-            if let data = newValue, let ids = try? JSONDecoder().decode([String: String].self, from: data) {
-                cachedFolderIDs = ids
+            if let data = newValue, let info = try? JSONDecoder().decode(RestorationInfo.self, from: data) {
+                restoration = info
             }
         }
     }
 
-    /// OAuth2 access token for Box API authentication.
-    public var accessToken: String
-
-    /// The Box folder ID that serves as the root for LLVS data.
-    public let rootFolderID: String
-
-    private let apiBaseURL = URL(string: "https://api.box.com/2.0")!
-    private let uploadBaseURL = URL(string: "https://upload.box.com/api/2.0")!
-
-    private let session: URLSession
-
-    /// Cache of folder name -> Box folder ID mappings.
-    private var cachedFolderIDs: [String: String] = [:]
+    fileprivate lazy var temporaryDirectory: URL = {
+        let result = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try? FileManager.default.createDirectory(at: result, withIntermediateDirectories: true, attributes: nil)
+        return result
+    }()
 
     /// - Parameters:
     ///   - store: The LLVS store to sync.
-    ///   - accessToken: Box OAuth2 access token.
+    ///   - client: An authenticated `BoxClient` instance.
     ///   - rootFolderID: The Box folder ID to use as root for LLVS data.
-    ///   - urlSession: URLSession to use for requests. Defaults to `.shared`.
-    public init(store: Store, accessToken: String, rootFolderID: String, urlSession: URLSession = .shared) {
+    public init(store: Store, client: BoxClient, rootFolderID: String) {
         self.store = store
-        self.accessToken = accessToken
+        self.client = client
         self.rootFolderID = rootFolderID
-        self.session = urlSession
     }
 
     // MARK: - Retrieve
 
     public func prepareToRetrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        ensureFoldersExist(completionHandler: completionHandler)
+        Task {
+            do {
+                try await ensureFoldersExist()
+                completionHandler(.success(()))
+            } catch {
+                completionHandler(.failure(error))
+            }
+        }
     }
 
     public func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>) {
-        folderID(forName: "versions") { result in
-            switch result {
-            case .success(let folderID):
-                self.listFolderItems(folderID: folderID) { result in
-                    switch result {
-                    case .success(let items):
-                        let ids = items.map { Version.ID($0.name) }
-                        completionHandler(.success(ids))
-                    case .failure(let error):
-                        completionHandler(.failure(error))
-                    }
+        Task {
+            do {
+                guard let folderID = restoration.versionsFolderID else {
+                    completionHandler(.success([]))
+                    return
                 }
-            case .failure(let error):
+                let items = try await listAllFileItems(inFolder: folderID)
+                completionHandler(.success(items.map { Version.ID($0.name) }))
+            } catch {
                 completionHandler(.failure(error))
             }
         }
@@ -103,55 +102,30 @@ public class BoxExchange: Exchange {
             completionHandler(.success([]))
             return
         }
+        Task {
+            do {
+                guard let folderID = restoration.versionsFolderID else {
+                    completionHandler(.success([]))
+                    return
+                }
+                let items = try await listAllFileItems(inFolder: folderID)
+                let itemsByName = Dictionary(items.map { ($0.name, $0.id) }, uniquingKeysWith: { first, _ in first })
 
-        folderID(forName: "versions") { result in
-            switch result {
-            case .failure(let error):
-                completionHandler(.failure(error))
-            case .success(let folderID):
-                self.listFolderItems(folderID: folderID) { result in
-                    switch result {
-                    case .failure(let error):
-                        completionHandler(.failure(error))
-                    case .success(let items):
-                        let itemsByName = Dictionary(items.map { ($0.name, $0.id) }, uniquingKeysWith: { first, _ in first })
-
-                        var versions: [Version] = []
-                        let tasks = versionIds.map { versionId in
-                            AsynchronousTask { finish in
-                                guard let fileID = itemsByName[versionId.rawValue] else {
-                                    finish(.failure(Error.fileNotFound(versionId.rawValue)))
-                                    return
-                                }
-                                self.downloadFile(fileID: fileID) { downloadResult in
-                                    switch downloadResult {
-                                    case .success(let data):
-                                        do {
-                                            if let version = try JSONDecoder().decode([String: Version].self, from: data)["version"] {
-                                                versions.append(version)
-                                                finish(.success(()))
-                                            } else {
-                                                finish(.failure(Error.versionFileInvalid))
-                                            }
-                                        } catch {
-                                            finish(.failure(error))
-                                        }
-                                    case .failure(let error):
-                                        finish(.failure(error))
-                                    }
-                                }
-                            }
-                        }
-                        tasks.executeInOrder { tasksResult in
-                            switch tasksResult {
-                            case .success:
-                                completionHandler(.success(versions))
-                            case .failure(let error):
-                                completionHandler(.failure(error))
-                            }
-                        }
+                var versions: [Version] = []
+                for versionId in versionIds {
+                    guard let fileID = itemsByName[versionId.rawValue] else {
+                        throw Error.fileNotFound(versionId.rawValue)
+                    }
+                    let data = try await downloadFileData(fileID: fileID)
+                    if let version = try JSONDecoder().decode([String: Version].self, from: data)["version"] {
+                        versions.append(version)
+                    } else {
+                        throw Error.versionFileInvalid
                     }
                 }
+                completionHandler(.success(versions))
+            } catch {
+                completionHandler(.failure(error))
             }
         }
     }
@@ -161,52 +135,27 @@ public class BoxExchange: Exchange {
             completionHandler(.success([:]))
             return
         }
-
-        folderID(forName: "changes") { result in
-            switch result {
-            case .failure(let error):
-                completionHandler(.failure(error))
-            case .success(let folderID):
-                self.listFolderItems(folderID: folderID) { result in
-                    switch result {
-                    case .failure(let error):
-                        completionHandler(.failure(error))
-                    case .success(let items):
-                        let itemsByName = Dictionary(items.map { ($0.name, $0.id) }, uniquingKeysWith: { first, _ in first })
-
-                        var changesByVersion: [Version.ID: [Value.Change]] = [:]
-                        let tasks = versionIds.map { versionId in
-                            AsynchronousTask { finish in
-                                guard let fileID = itemsByName[versionId.rawValue] else {
-                                    finish(.failure(Error.fileNotFound(versionId.rawValue)))
-                                    return
-                                }
-                                self.downloadFile(fileID: fileID) { downloadResult in
-                                    switch downloadResult {
-                                    case .success(let data):
-                                        do {
-                                            let changes = try JSONDecoder().decode([Value.Change].self, from: data)
-                                            changesByVersion[versionId] = changes
-                                            finish(.success(()))
-                                        } catch {
-                                            finish(.failure(error))
-                                        }
-                                    case .failure(let error):
-                                        finish(.failure(error))
-                                    }
-                                }
-                            }
-                        }
-                        tasks.executeInOrder { tasksResult in
-                            switch tasksResult {
-                            case .success:
-                                completionHandler(.success(changesByVersion))
-                            case .failure(let error):
-                                completionHandler(.failure(error))
-                            }
-                        }
-                    }
+        Task {
+            do {
+                guard let folderID = restoration.changesFolderID else {
+                    completionHandler(.success([:]))
+                    return
                 }
+                let items = try await listAllFileItems(inFolder: folderID)
+                let itemsByName = Dictionary(items.map { ($0.name, $0.id) }, uniquingKeysWith: { first, _ in first })
+
+                var changesByVersion: [Version.ID: [Value.Change]] = [:]
+                for versionId in versionIds {
+                    guard let fileID = itemsByName[versionId.rawValue] else {
+                        throw Error.fileNotFound(versionId.rawValue)
+                    }
+                    let data = try await downloadFileData(fileID: fileID)
+                    let changes = try JSONDecoder().decode([Value.Change].self, from: data)
+                    changesByVersion[versionId] = changes
+                }
+                completionHandler(.success(changesByVersion))
+            } catch {
+                completionHandler(.failure(error))
             }
         }
     }
@@ -214,7 +163,14 @@ public class BoxExchange: Exchange {
     // MARK: - Send
 
     public func prepareToSend(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        ensureFoldersExist(completionHandler: completionHandler)
+        Task {
+            do {
+                try await ensureFoldersExist()
+                completionHandler(.success(()))
+            } catch {
+                completionHandler(.failure(error))
+            }
+        }
     }
 
     public func send(versionChanges: [VersionChanges], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
@@ -222,294 +178,124 @@ public class BoxExchange: Exchange {
             completionHandler(.success(()))
             return
         }
+        Task {
+            do {
+                guard let versionsFolderID = restoration.versionsFolderID,
+                      let changesFolderID = restoration.changesFolderID else {
+                    throw Error.folderNotFound
+                }
 
-        let getVersionsFolderID = AsynchronousTask { finish in
-            self.folderID(forName: "versions") { result in
-                finish(result.voidResult)
-            }
-        }
-        let getChangesFolderID = AsynchronousTask { finish in
-            self.folderID(forName: "changes") { result in
-                finish(result.voidResult)
-            }
-        }
+                for (version, valueChanges) in versionChanges {
+                    let changesData = try JSONEncoder().encode(valueChanges)
+                    let versionData = try JSONEncoder().encode(["version": version])
 
-        [getVersionsFolderID, getChangesFolderID].executeInOrder { result in
-            switch result {
-            case .failure(let error):
+                    try await uploadFileData(changesData, name: version.id.rawValue, toFolder: changesFolderID)
+                    try await uploadFileData(versionData, name: version.id.rawValue, toFolder: versionsFolderID)
+                }
+
+                newVersionsSubject.send(())
+                completionHandler(.success(()))
+            } catch {
                 completionHandler(.failure(error))
-            case .success:
-                guard let versionsFolderID = self.cachedFolderIDs["versions"],
-                      let changesFolderID = self.cachedFolderIDs["changes"] else {
-                    completionHandler(.failure(Error.folderNotFound))
-                    return
-                }
-
-                let tasks = versionChanges.map { (version, valueChanges) in
-                    AsynchronousTask { finish in
-                        do {
-                            let changesData = try JSONEncoder().encode(valueChanges)
-                            let versionData = try JSONEncoder().encode(["version": version])
-
-                            let uploadChanges = AsynchronousTask { innerFinish in
-                                self.uploadFile(data: changesData, fileName: version.id.rawValue, parentFolderID: changesFolderID) { uploadResult in
-                                    innerFinish(uploadResult)
-                                }
-                            }
-
-                            let uploadVersion = AsynchronousTask { innerFinish in
-                                self.uploadFile(data: versionData, fileName: version.id.rawValue, parentFolderID: versionsFolderID) { uploadResult in
-                                    innerFinish(uploadResult)
-                                }
-                            }
-
-                            [uploadChanges, uploadVersion].executeInOrder { uploadResult in
-                                finish(uploadResult)
-                            }
-                        } catch {
-                            finish(.failure(error))
-                        }
-                    }
-                }
-                tasks.executeInOrder { tasksResult in
-                    switch tasksResult {
-                    case .success:
-                        self.newVersionsSubject.send(())
-                        completionHandler(.success(()))
-                    case .failure(let error):
-                        completionHandler(.failure(error))
-                    }
-                }
             }
         }
     }
 
-    // MARK: - Box API Helpers
+    // MARK: - Box SDK Helpers
 
-    private struct BoxItem {
+    private struct FileItem {
         let id: String
         let name: String
     }
 
-    private func authorizedRequest(url: URL) -> URLRequest {
-        var request = URLRequest(url: url)
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        return request
+    private func ensureFoldersExist() async throws {
+        if restoration.versionsFolderID != nil && restoration.changesFolderID != nil { return }
+
+        let versionsFolderID = try await createSubfolderIfNeeded(named: "versions", inFolder: rootFolderID)
+        let changesFolderID = try await createSubfolderIfNeeded(named: "changes", inFolder: rootFolderID)
+
+        restoration.versionsFolderID = versionsFolderID
+        restoration.changesFolderID = changesFolderID
     }
 
-    private func ensureFoldersExist(completionHandler: @escaping CompletionHandler<Void>) {
-        let createVersions = AsynchronousTask { finish in
-            self.createSubfolderIfNeeded(name: "versions") { result in
-                finish(result.voidResult)
-            }
+    private func createSubfolderIfNeeded(named name: String, inFolder parentID: String) async throws -> String {
+        // Check if it already exists by listing the parent
+        let items = try await listAllItems(inFolder: parentID)
+        if let existing = items.first(where: { $0.name == name && $0.isFolder }) {
+            return existing.id
         }
-        let createChanges = AsynchronousTask { finish in
-            self.createSubfolderIfNeeded(name: "changes") { result in
-                finish(result.voidResult)
-            }
-        }
-        [createVersions, createChanges].executeInOrder(completingWith: completionHandler)
+
+        let body = CreateFolderRequestBody(
+            name: name,
+            parent: CreateFolderRequestBodyParentField(id: parentID)
+        )
+        let folder = try await client.folders.createFolder(requestBody: body)
+        return folder.id
     }
 
-    private func folderID(forName name: String, completionHandler: @escaping CompletionHandler<String>) {
-        if let cached = cachedFolderIDs[name] {
-            completionHandler(.success(cached))
-            return
-        }
-        createSubfolderIfNeeded(name: name) { result in
-            completionHandler(result)
-        }
+    private struct ItemInfo {
+        let id: String
+        let name: String
+        let isFolder: Bool
     }
 
-    private func createSubfolderIfNeeded(name: String, completionHandler: @escaping CompletionHandler<String>) {
-        // First check if it already exists by listing root folder
-        listFolderItems(folderID: rootFolderID) { result in
-            switch result {
-            case .success(let items):
-                if let existing = items.first(where: { $0.name == name }) {
-                    self.cachedFolderIDs[name] = existing.id
-                    completionHandler(.success(existing.id))
-                    return
-                }
-                // Create it
-                self.createFolder(name: name, parentID: self.rootFolderID) { createResult in
-                    switch createResult {
-                    case .success(let folderID):
-                        self.cachedFolderIDs[name] = folderID
-                        completionHandler(.success(folderID))
-                    case .failure(let error):
-                        completionHandler(.failure(error))
-                    }
-                }
-            case .failure(let error):
-                completionHandler(.failure(error))
-            }
-        }
-    }
-
-    private func createFolder(name: String, parentID: String, completionHandler: @escaping CompletionHandler<String>) {
-        let url = apiBaseURL.appendingPathComponent("folders")
-        var request = authorizedRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let body: [String: Any] = [
-            "name": name,
-            "parent": ["id": parentID]
-        ]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
-        let task = session.dataTask(with: request) { data, response, error in
-            if let error = error {
-                completionHandler(.failure(error))
-                return
-            }
-            guard let httpResponse = response as? HTTPURLResponse else {
-                completionHandler(.failure(Error.invalidResponse))
-                return
-            }
-            // 409 means folder already exists — retrieve its ID
-            if httpResponse.statusCode == 409 {
-                self.listFolderItems(folderID: parentID) { listResult in
-                    switch listResult {
-                    case .success(let items):
-                        if let item = items.first(where: { $0.name == name }) {
-                            completionHandler(.success(item.id))
-                        } else {
-                            completionHandler(.failure(Error.folderNotFound))
+    private func listAllItems(inFolder folderID: String) async throws -> [ItemInfo] {
+        var allItems: [ItemInfo] = []
+        var marker: String? = nil
+        repeat {
+            let queryParams = GetFolderItemsQueryParams(usemarker: true, marker: marker, limit: 1000)
+            let items = try await client.folders.getFolderItems(folderId: folderID, queryParams: queryParams)
+            if let entries = items.entries {
+                for entry in entries {
+                    switch entry {
+                    case .fileFull(let file):
+                        if let name = file.name {
+                            allItems.append(ItemInfo(id: file.id, name: name, isFolder: false))
                         }
-                    case .failure(let error):
-                        completionHandler(.failure(error))
+                    case .folderMini(let folder):
+                        if let name = folder.name {
+                            allItems.append(ItemInfo(id: folder.id, name: name, isFolder: true))
+                        }
+                    default:
+                        break
                     }
                 }
-                return
             }
-            guard (200..<300).contains(httpResponse.statusCode),
-                  let data = data,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let folderID = json["id"] as? String else {
-                completionHandler(.failure(Error.httpError(httpResponse.statusCode)))
-                return
-            }
-            completionHandler(.success(folderID))
-        }
-        task.resume()
+            marker = items.nextMarker
+        } while marker != nil
+        return allItems
     }
 
-    private func listFolderItems(folderID: String, completionHandler: @escaping CompletionHandler<[BoxItem]>) {
-        listFolderItems(folderID: folderID, offset: 0, accumulated: [], completionHandler: completionHandler)
+    private func listAllFileItems(inFolder folderID: String) async throws -> [FileItem] {
+        let items = try await listAllItems(inFolder: folderID)
+        return items.filter { !$0.isFolder }.map { FileItem(id: $0.id, name: $0.name) }
     }
 
-    private func listFolderItems(folderID: String, offset: Int, accumulated: [BoxItem], completionHandler: @escaping CompletionHandler<[BoxItem]>) {
-        let limit = 1000
-        var components = URLComponents(url: apiBaseURL.appendingPathComponent("folders/\(folderID)/items"), resolvingAgainstBaseURL: false)!
-        components.queryItems = [
-            URLQueryItem(name: "limit", value: "\(limit)"),
-            URLQueryItem(name: "offset", value: "\(offset)"),
-            URLQueryItem(name: "fields", value: "id,name")
-        ]
-
-        let request = authorizedRequest(url: components.url!)
-        let task = session.dataTask(with: request) { data, response, error in
-            if let error = error {
-                completionHandler(.failure(error))
-                return
-            }
-            guard let httpResponse = response as? HTTPURLResponse else {
-                completionHandler(.failure(Error.invalidResponse))
-                return
-            }
-            guard (200..<300).contains(httpResponse.statusCode),
-                  let data = data,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let entries = json["entries"] as? [[String: Any]],
-                  let totalCount = json["total_count"] as? Int else {
-                completionHandler(.failure(Error.httpError(httpResponse.statusCode)))
-                return
-            }
-
-            let items = entries.compactMap { entry -> BoxItem? in
-                guard let id = entry["id"] as? String, let name = entry["name"] as? String else { return nil }
-                return BoxItem(id: id, name: name)
-            }
-
-            let allItems = accumulated + items
-            if allItems.count < totalCount {
-                self.listFolderItems(folderID: folderID, offset: allItems.count, accumulated: allItems, completionHandler: completionHandler)
-            } else {
-                completionHandler(.success(allItems))
-            }
+    private func downloadFileData(fileID: String) async throws -> Data {
+        let tempURL = temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+        guard let savedURL = try await client.downloads.downloadFile(fileId: fileID, downloadDestinationUrl: tempURL) else {
+            throw Error.downloadFailed
         }
-        task.resume()
+        return try Data(contentsOf: savedURL)
     }
 
-    private func downloadFile(fileID: String, completionHandler: @escaping CompletionHandler<Data>) {
-        let url = apiBaseURL.appendingPathComponent("files/\(fileID)/content")
-        let request = authorizedRequest(url: url)
-
-        let task = session.dataTask(with: request) { data, response, error in
-            if let error = error {
-                completionHandler(.failure(error))
-                return
-            }
-            guard let httpResponse = response as? HTTPURLResponse,
-                  (200..<400).contains(httpResponse.statusCode) else {
-                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-                completionHandler(.failure(Error.httpError(code)))
-                return
-            }
-            if let data = data {
-                completionHandler(.success(data))
-            } else {
-                completionHandler(.failure(Error.invalidResponse))
-            }
-        }
-        task.resume()
+    private func uploadFileData(_ data: Data, name: String, toFolder folderID: String) async throws {
+        let attributes = UploadFileRequestBodyAttributesField(
+            name: name,
+            parent: UploadFileRequestBodyAttributesParentField(id: folderID)
+        )
+        let body = UploadFileRequestBody(
+            attributes: attributes,
+            file: Utils.generateByteStreamFromBuffer(buffer: data)
+        )
+        _ = try await client.uploads.uploadFile(requestBody: body)
     }
 
-    private func uploadFile(data: Data, fileName: String, parentFolderID: String, completionHandler: @escaping CompletionHandler<Void>) {
-        let url = uploadBaseURL.appendingPathComponent("files/content")
-        var request = authorizedRequest(url: url)
-        request.httpMethod = "POST"
+    // MARK: - Restoration
 
-        let boundary = UUID().uuidString
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-
-        let attributes: [String: Any] = [
-            "name": fileName,
-            "parent": ["id": parentFolderID]
-        ]
-        let attributesData = try! JSONSerialization.data(withJSONObject: attributes)
-
-        var body = Data()
-        // Attributes part
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"attributes\"\r\n\r\n".data(using: .utf8)!)
-        body.append(attributesData)
-        body.append("\r\n".data(using: .utf8)!)
-        // File part
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: application/octet-stream\r\n\r\n".data(using: .utf8)!)
-        body.append(data)
-        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
-        request.httpBody = body
-
-        let task = session.dataTask(with: request) { data, response, error in
-            if let error = error {
-                completionHandler(.failure(error))
-                return
-            }
-            guard let httpResponse = response as? HTTPURLResponse else {
-                completionHandler(.failure(Error.invalidResponse))
-                return
-            }
-            if (200..<300).contains(httpResponse.statusCode) {
-                completionHandler(.success(()))
-            } else {
-                completionHandler(.failure(Error.httpError(httpResponse.statusCode)))
-            }
-        }
-        task.resume()
+    fileprivate struct RestorationInfo: Codable {
+        var versionsFolderID: String?
+        var changesFolderID: String?
     }
 }

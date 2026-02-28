@@ -29,6 +29,8 @@ let package = Package(
             targets: ["LLVSBox"]),
     ],
     dependencies: [
+        .package(url: "https://github.com/pCloud/pcloud-sdk-swift.git", from: "3.0.0"),
+        .package(url: "https://github.com/box/box-ios-sdk.git", from: "10.0.0"),
     ],
     targets: [
         .systemLibrary(
@@ -52,11 +54,17 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v5)]),
         .target(
             name: "LLVSPCloud",
-            dependencies: ["LLVS"],
+            dependencies: [
+                "LLVS",
+                .product(name: "PCloudSDKSwift", package: "pcloud-sdk-swift")
+            ],
             swiftSettings: [.swiftLanguageMode(.v5)]),
         .target(
             name: "LLVSBox",
-            dependencies: ["LLVS"],
+            dependencies: [
+                "LLVS",
+                .product(name: "BoxSDK", package: "box-ios-sdk")
+            ],
             swiftSettings: [.swiftLanguageMode(.v5)])
     ]
 )
