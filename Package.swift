@@ -21,6 +21,12 @@ let package = Package(
         .library(
             name: "LLVSSQLite",
             targets: ["LLVSSQLite"]),
+        .library(
+            name: "LLVSPCloud",
+            targets: ["LLVSPCloud"]),
+        .library(
+            name: "LLVSBox",
+            targets: ["LLVSBox"]),
     ],
     dependencies: [
     ],
@@ -43,6 +49,14 @@ let package = Package(
         .target(
             name: "LLVSSQLite",
             dependencies: ["LLVS", "SQLite3"],
+            swiftSettings: [.swiftLanguageMode(.v5)]),
+        .target(
+            name: "LLVSPCloud",
+            dependencies: ["LLVS"],
+            swiftSettings: [.swiftLanguageMode(.v5)]),
+        .target(
+            name: "LLVSBox",
+            dependencies: ["LLVS"],
             swiftSettings: [.swiftLanguageMode(.v5)])
     ]
 )
