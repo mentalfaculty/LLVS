@@ -18,7 +18,7 @@ class MockPeerTransport: PeerTransport {
             throw MultipeerExchange.Error.transportUnavailable
         }
         // Deliver asynchronously to simulate real network
-        DispatchQueue.global().async {
+        Task {
             exchange.receiveData(data)
         }
     }
@@ -148,11 +148,14 @@ class MockPeerTransport: PeerTransport {
 
         try await exchange1.send(versionChanges: versionChanges)
 
-        // Give time for async delivery
-        try await Task.sleep(nanoseconds: 500_000_000)
+        // Poll for async delivery (push is fire-and-forget with two async hops)
+        var storedVersion: Version? = nil
+        for _ in 0..<100 {
+            try await Task.sleep(nanoseconds: 50_000_000) // 50ms
+            storedVersion = try store2.version(identifiedBy: ver.id)
+            if storedVersion != nil { break }
+        }
 
-        // Verify store2 received the pushed data
-        let storedVersion = try store2.version(identifiedBy: ver.id)
         #expect(storedVersion != nil)
     }
 
