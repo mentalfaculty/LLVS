@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "LLVS",
     platforms: [
-        .macOS(.v10_15), .iOS(.v13), .watchOS(.v6)
+        .macOS(.v11), .iOS(.v14), .watchOS(.v7)
     ],
     products: [
         .library(
@@ -21,8 +21,12 @@ let package = Package(
         .library(
             name: "LLVSSQLite",
             targets: ["LLVSSQLite"]),
+        .library(
+            name: "LLVSModel",
+            targets: ["LLVSModel"]),
     ],
     dependencies: [
+        .package(path: "../../Developer/Forked"),
     ],
     targets: [
         .systemLibrary(
@@ -43,6 +47,24 @@ let package = Package(
         .target(
             name: "LLVSSQLite",
             dependencies: ["LLVS", "SQLite3"],
+            swiftSettings: [.swiftLanguageMode(.v5)]),
+        .target(
+            name: "LLVSModel",
+            dependencies: [
+                "LLVS",
+                .product(name: "ForkedModel", package: "Forked"),
+            ],
+            swiftSettings: [.swiftLanguageMode(.v5)]),
+        .testTarget(
+            name: "LLVSModelTests",
+            dependencies: [
+                "LLVSModel",
+                "LLVS",
+                "LLVSSQLite",
+                .product(name: "Forked", package: "Forked"),
+                .product(name: "ForkedMerge", package: "Forked"),
+                .product(name: "ForkedModel", package: "Forked"),
+            ],
             swiftSettings: [.swiftLanguageMode(.v5)])
     ]
 )
