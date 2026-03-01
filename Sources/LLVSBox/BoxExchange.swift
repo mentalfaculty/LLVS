@@ -10,6 +10,8 @@ import LLVS
 import Combine
 import BoxSdkGen
 
+private typealias AsyncTask = _Concurrency.Task
+
 /// An Exchange that syncs versions via the Box Swift SDK.
 ///
 /// Data is stored inside a configurable Box folder, organized as:
@@ -72,7 +74,7 @@ public class BoxExchange: Exchange {
     // MARK: - Retrieve
 
     public func prepareToRetrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        Task {
+        AsyncTask {
             do {
                 try await ensureFoldersExist()
                 completionHandler(.success(()))
@@ -82,27 +84,27 @@ public class BoxExchange: Exchange {
         }
     }
 
-    public func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>) {
-        Task {
+    public func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[LLVS.Version.ID]>) {
+        AsyncTask {
             do {
                 guard let folderID = restoration.versionsFolderID else {
                     completionHandler(.success([]))
                     return
                 }
                 let items = try await listAllFileItems(inFolder: folderID)
-                completionHandler(.success(items.map { Version.ID($0.name) }))
+                completionHandler(.success(items.map { LLVS.Version.ID($0.name) }))
             } catch {
                 completionHandler(.failure(error))
             }
         }
     }
 
-    public func retrieveVersions(identifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
+    public func retrieveVersions(identifiedBy versionIds: [LLVS.Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[LLVS.Version]>) {
         guard !versionIds.isEmpty else {
             completionHandler(.success([]))
             return
         }
-        Task {
+        AsyncTask {
             do {
                 guard let folderID = restoration.versionsFolderID else {
                     completionHandler(.success([]))
@@ -111,13 +113,13 @@ public class BoxExchange: Exchange {
                 let items = try await listAllFileItems(inFolder: folderID)
                 let itemsByName = Dictionary(items.map { ($0.name, $0.id) }, uniquingKeysWith: { first, _ in first })
 
-                var versions: [Version] = []
+                var versions: [LLVS.Version] = []
                 for versionId in versionIds {
                     guard let fileID = itemsByName[versionId.rawValue] else {
                         throw Error.fileNotFound(versionId.rawValue)
                     }
                     let data = try await downloadFileData(fileID: fileID)
-                    if let version = try JSONDecoder().decode([String: Version].self, from: data)["version"] {
+                    if let version = try JSONDecoder().decode([String: LLVS.Version].self, from: data)["version"] {
                         versions.append(version)
                     } else {
                         throw Error.versionFileInvalid
@@ -130,12 +132,12 @@ public class BoxExchange: Exchange {
         }
     }
 
-    public func retrieveValueChanges(forVersionsIdentifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID: [Value.Change]]>) {
+    public func retrieveValueChanges(forVersionsIdentifiedBy versionIds: [LLVS.Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[LLVS.Version.ID: [Value.Change]]>) {
         guard !versionIds.isEmpty else {
             completionHandler(.success([:]))
             return
         }
-        Task {
+        AsyncTask {
             do {
                 guard let folderID = restoration.changesFolderID else {
                     completionHandler(.success([:]))
@@ -144,7 +146,7 @@ public class BoxExchange: Exchange {
                 let items = try await listAllFileItems(inFolder: folderID)
                 let itemsByName = Dictionary(items.map { ($0.name, $0.id) }, uniquingKeysWith: { first, _ in first })
 
-                var changesByVersion: [Version.ID: [Value.Change]] = [:]
+                var changesByVersion: [LLVS.Version.ID: [Value.Change]] = [:]
                 for versionId in versionIds {
                     guard let fileID = itemsByName[versionId.rawValue] else {
                         throw Error.fileNotFound(versionId.rawValue)
@@ -163,7 +165,7 @@ public class BoxExchange: Exchange {
     // MARK: - Send
 
     public func prepareToSend(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        Task {
+        AsyncTask {
             do {
                 try await ensureFoldersExist()
                 completionHandler(.success(()))
@@ -178,7 +180,7 @@ public class BoxExchange: Exchange {
             completionHandler(.success(()))
             return
         }
-        Task {
+        AsyncTask {
             do {
                 guard let versionsFolderID = restoration.versionsFolderID,
                       let changesFolderID = restoration.changesFolderID else {
