@@ -119,7 +119,7 @@ import Foundation
 
         let manifest = try storage.writeSnapshotChunks(storeRootURL: rootURL, to: snapshotDir, maxChunkSize: 5_000_000)
 
-        #expect(manifest.format == "fileStorage-v1")
+        #expect(manifest.format == "zip-v1")
         #expect(manifest.versionCount == 50)
         #expect(manifest.chunkCount > 0)
         #expect(!manifest.latestVersionId.rawValue.isEmpty)
@@ -137,7 +137,7 @@ import Foundation
         defer { try? fm.removeItem(at: snapshotDir) }
 
         let manifest = try storage.writeSnapshotChunks(storeRootURL: rootURL, to: snapshotDir, maxChunkSize: 5_000_000)
-        #expect(manifest.format == "sqliteStorage-v1")
+        #expect(manifest.format == "zip-v1")
         #expect(manifest.versionCount == 50)
 
         // Restore
@@ -230,7 +230,7 @@ import Foundation
 
         let downloadedManifest = try await exchange2.retrieveSnapshotManifest()
         #expect(downloadedManifest != nil)
-        #expect(downloadedManifest?.format == "fileStorage-v1")
+        #expect(downloadedManifest?.format == "zip-v1")
         #expect(downloadedManifest?.versionCount == 50)
     }
 

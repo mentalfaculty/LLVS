@@ -29,6 +29,7 @@ let package = Package(
             targets: ["LLVSBox"]),
     ],
     dependencies: [
+        .package(url: "https://github.com/weichsel/ZIPFoundation.git", .upToNextMajor(from: "0.9.0")),
         .package(url: "https://github.com/pCloud/pcloud-sdk-swift.git", from: "3.0.0"),
         .package(url: "https://github.com/box/box-ios-sdk.git", from: "10.0.0"),
     ],
@@ -38,7 +39,9 @@ let package = Package(
         ),
         .target(
             name: "LLVS",
-            dependencies: [],
+            dependencies: [
+                .product(name: "ZIPFoundation", package: "ZIPFoundation"),
+            ],
             swiftSettings: [.swiftLanguageMode(.v5)]),
         .testTarget(
             name: "LLVSTests",
