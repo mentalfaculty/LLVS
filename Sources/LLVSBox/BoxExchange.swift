@@ -18,11 +18,12 @@ import BoxSdkGen
 /// Uses `BoxClient` from the official Box SDK for all API operations.
 /// The caller provides an authenticated `BoxClient` (e.g. via `BoxDeveloperTokenAuth`
 /// or `BoxCCGAuth`).
-public class BoxExchange: Exchange {
+public class BoxExchange: FolderBasedExchange {
+
+    public typealias FileID = String
+    public typealias FolderID = String
 
     public enum Error: Swift.Error {
-        case versionFileInvalid
-        case fileNotFound(String)
         case downloadFailed
         case folderNotFound
     }
@@ -68,91 +69,56 @@ public class BoxExchange: Exchange {
         self.newVersionsContinuation = continuation
     }
 
-    // MARK: - Retrieve
+    // MARK: - Prepare
 
     public func prepareToRetrieve() async throws {
         try await ensureFoldersExist()
     }
 
-    public func retrieveAllVersionIdentifiers() async throws -> [LLVS.Version.ID] {
-        guard let folderID = restoration.versionsFolderID else {
-            return []
-        }
-        let items = try await listAllFileItems(inFolder: folderID)
-        return items.map { LLVS.Version.ID($0.name) }
-    }
-
-    public func retrieveVersions(identifiedBy versionIds: [LLVS.Version.ID]) async throws -> [LLVS.Version] {
-        guard !versionIds.isEmpty else { return [] }
-        guard let folderID = restoration.versionsFolderID else { return [] }
-
-        let items = try await listAllFileItems(inFolder: folderID)
-        let itemsByName = Dictionary(items.map { ($0.name, $0.id) }, uniquingKeysWith: { first, _ in first })
-
-        var versions: [LLVS.Version] = []
-        for versionId in versionIds {
-            guard let fileID = itemsByName[versionId.rawValue] else {
-                throw Error.fileNotFound(versionId.rawValue)
-            }
-            let data = try await downloadFileData(fileID: fileID)
-            if let version = try JSONDecoder().decode([String: LLVS.Version].self, from: data)["version"] {
-                versions.append(version)
-            } else {
-                throw Error.versionFileInvalid
-            }
-        }
-        return versions
-    }
-
-    public func retrieveValueChanges(forVersionsIdentifiedBy versionIds: [LLVS.Version.ID]) async throws -> [LLVS.Version.ID: [Value.Change]] {
-        guard !versionIds.isEmpty else { return [:] }
-        guard let folderID = restoration.changesFolderID else { return [:] }
-
-        let items = try await listAllFileItems(inFolder: folderID)
-        let itemsByName = Dictionary(items.map { ($0.name, $0.id) }, uniquingKeysWith: { first, _ in first })
-
-        var changesByVersion: [LLVS.Version.ID: [Value.Change]] = [:]
-        for versionId in versionIds {
-            guard let fileID = itemsByName[versionId.rawValue] else {
-                throw Error.fileNotFound(versionId.rawValue)
-            }
-            let data = try await downloadFileData(fileID: fileID)
-            let changes = try JSONDecoder().decode([Value.Change].self, from: data)
-            changesByVersion[versionId] = changes
-        }
-        return changesByVersion
-    }
-
-    // MARK: - Send
-
     public func prepareToSend() async throws {
         try await ensureFoldersExist()
     }
 
-    public func send(versionChanges: [VersionChanges]) async throws {
-        guard !versionChanges.isEmpty else { return }
-        guard let versionsFolderID = restoration.versionsFolderID,
-              let changesFolderID = restoration.changesFolderID else {
-            throw Error.folderNotFound
-        }
+    // MARK: - FolderBasedExchange
 
-        for (version, valueChanges) in versionChanges {
-            let changesData = try JSONEncoder().encode(valueChanges)
-            let versionData = try JSONEncoder().encode(["version": version])
+    public var versionsFolderID: String? { restoration.versionsFolderID }
+    public var changesFolderID: String? { restoration.changesFolderID }
 
-            try await uploadFileData(changesData, name: version.id.rawValue, toFolder: changesFolderID)
-            try await uploadFileData(versionData, name: version.id.rawValue, toFolder: versionsFolderID)
-        }
-
+    public func notifyNewVersionsAvailable() {
         newVersionsContinuation.yield(())
     }
 
-    // MARK: - Box SDK Helpers
-
-    private struct FileItem {
-        let id: String
-        let name: String
+    public func listFiles(inFolder folderID: String) async throws -> [String: String] {
+        let items = try await listAllItems(inFolder: folderID)
+        var fileMap: [String: String] = [:]
+        for item in items where !item.isFolder {
+            fileMap[item.name] = item.id
+        }
+        return fileMap
     }
+
+    public func downloadData(forFile fileID: String) async throws -> Data {
+        let tempURL = temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+        guard let savedURL = try await client.downloads.downloadFile(fileId: fileID, downloadDestinationUrl: tempURL) else {
+            throw Error.downloadFailed
+        }
+        return try Data(contentsOf: savedURL)
+    }
+
+    public func uploadData(_ data: Data, named name: String, toFolder folderID: String) async throws {
+        let attributes = UploadFileRequestBodyAttributesField(
+            name: name,
+            parent: UploadFileRequestBodyAttributesParentField(id: folderID)
+        )
+        let body = UploadFileRequestBody(
+            attributes: attributes,
+            file: Utils.generateByteStreamFromBuffer(buffer: data)
+        )
+        _ = try await client.uploads.uploadFile(requestBody: body)
+    }
+
+    // MARK: - Box SDK Helpers
 
     private func ensureFoldersExist() async throws {
         if restoration.versionsFolderID != nil && restoration.changesFolderID != nil { return }
@@ -209,32 +175,6 @@ public class BoxExchange: Exchange {
             marker = items.nextMarker
         } while marker != nil
         return allItems
-    }
-
-    private func listAllFileItems(inFolder folderID: String) async throws -> [FileItem] {
-        let items = try await listAllItems(inFolder: folderID)
-        return items.filter { !$0.isFolder }.map { FileItem(id: $0.id, name: $0.name) }
-    }
-
-    private func downloadFileData(fileID: String) async throws -> Data {
-        let tempURL = temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: tempURL) }
-        guard let savedURL = try await client.downloads.downloadFile(fileId: fileID, downloadDestinationUrl: tempURL) else {
-            throw Error.downloadFailed
-        }
-        return try Data(contentsOf: savedURL)
-    }
-
-    private func uploadFileData(_ data: Data, name: String, toFolder folderID: String) async throws {
-        let attributes = UploadFileRequestBodyAttributesField(
-            name: name,
-            parent: UploadFileRequestBodyAttributesParentField(id: folderID)
-        )
-        let body = UploadFileRequestBody(
-            attributes: attributes,
-            file: Utils.generateByteStreamFromBuffer(buffer: data)
-        )
-        _ = try await client.uploads.uploadFile(requestBody: body)
     }
 
     // MARK: - Restoration

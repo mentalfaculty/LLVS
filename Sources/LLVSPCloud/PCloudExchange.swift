@@ -17,14 +17,14 @@ import PCloudSDKSwift
 ///
 /// Uses `PCloudClient` from the official pCloud SDK for all API operations.
 /// Folder IDs are cached via `restorationState` to avoid repeated lookups.
-public class PCloudExchange: Exchange {
+public class PCloudExchange: FolderBasedExchange {
+
+    public typealias FileID = UInt64
+    public typealias FolderID = UInt64
 
     public enum Error: Swift.Error {
-        case versionFileInvalid
-        case fileNotFound(String)
         case missingDownloadLink
         case invalidResponse
-        case foldersNotInitialized
     }
 
     public let store: Store
@@ -72,115 +72,26 @@ public class PCloudExchange: Exchange {
         self.newVersionsContinuation = continuation
     }
 
-    // MARK: - Retrieve
+    // MARK: - Prepare
 
     public func prepareToRetrieve() async throws {
         try await ensureFoldersExist()
     }
 
-    public func retrieveAllVersionIdentifiers() async throws -> [Version.ID] {
-        guard let folderID = restoration.versionsFolderID else {
-            return []
-        }
-        let fileMap = try await listFileNames(inFolder: folderID)
-        return fileMap.map { Version.ID($0.key) }
-    }
-
-    public func retrieveVersions(identifiedBy versionIds: [Version.ID]) async throws -> [Version] {
-        guard !versionIds.isEmpty else { return [] }
-        guard let folderID = restoration.versionsFolderID else { return [] }
-
-        let fileMap = try await listFileNames(inFolder: folderID)
-        var versions: [Version] = []
-        for versionId in versionIds {
-            guard let fileID = fileMap[versionId.rawValue] else {
-                throw Error.fileNotFound(versionId.rawValue)
-            }
-            let data = try await downloadFileData(fileID: fileID)
-            if let version = try JSONDecoder().decode([String: Version].self, from: data)["version"] {
-                versions.append(version)
-            } else {
-                throw Error.versionFileInvalid
-            }
-        }
-        return versions
-    }
-
-    public func retrieveValueChanges(forVersionsIdentifiedBy versionIds: [Version.ID]) async throws -> [Version.ID: [Value.Change]] {
-        guard !versionIds.isEmpty else { return [:] }
-        guard let folderID = restoration.changesFolderID else { return [:] }
-
-        let fileMap = try await listFileNames(inFolder: folderID)
-        var changesByVersion: [Version.ID: [Value.Change]] = [:]
-        for versionId in versionIds {
-            guard let fileID = fileMap[versionId.rawValue] else {
-                throw Error.fileNotFound(versionId.rawValue)
-            }
-            let data = try await downloadFileData(fileID: fileID)
-            let changes = try JSONDecoder().decode([Value.Change].self, from: data)
-            changesByVersion[versionId] = changes
-        }
-        return changesByVersion
-    }
-
-    // MARK: - Send
-
     public func prepareToSend() async throws {
         try await ensureFoldersExist()
     }
 
-    public func send(versionChanges: [VersionChanges]) async throws {
-        guard !versionChanges.isEmpty else { return }
-        guard let versionsFolderID = restoration.versionsFolderID,
-              let changesFolderID = restoration.changesFolderID else {
-            throw Error.foldersNotInitialized
-        }
+    // MARK: - FolderBasedExchange
 
-        for (version, valueChanges) in versionChanges {
-            let changesData = try JSONEncoder().encode(valueChanges)
-            let versionData = try JSONEncoder().encode(["version": version])
+    public var versionsFolderID: UInt64? { restoration.versionsFolderID }
+    public var changesFolderID: UInt64? { restoration.changesFolderID }
 
-            try await uploadData(changesData, toFolder: changesFolderID, asFileNamed: version.id.rawValue)
-            try await uploadData(versionData, toFolder: versionsFolderID, asFileNamed: version.id.rawValue)
-        }
-
+    public func notifyNewVersionsAvailable() {
         newVersionsContinuation.yield(())
     }
 
-    // MARK: - pCloud SDK Helpers
-
-    private func ensureFoldersExist() async throws {
-        if restoration.versionsFolderID != nil && restoration.changesFolderID != nil {
-            return
-        }
-
-        let rootID = try await createFolderIfNeeded(named: folderName, inFolder: parentFolderID)
-        restoration.rootFolderID = rootID
-
-        let versionsID = try await createFolderIfNeeded(named: "versions", inFolder: rootID)
-        restoration.versionsFolderID = versionsID
-
-        let changesID = try await createFolderIfNeeded(named: "changes", inFolder: rootID)
-        restoration.changesFolderID = changesID
-    }
-
-    private func createFolderIfNeeded(named name: String, inFolder parentID: UInt64) async throws -> UInt64 {
-        try await withCheckedThrowingContinuation { continuation in
-            client.createFolderIfDoesNotExist(named: name, inFolder: parentID)
-                .addCompletionBlock { result in
-                    switch result {
-                    case .success(let response):
-                        continuation.resume(returning: response.folder.id)
-                    case .failure(let error):
-                        continuation.resume(throwing: error)
-                    }
-                }
-                .start()
-        }
-    }
-
-    /// Lists file contents of a folder, returning a name-to-fileID mapping.
-    private func listFileNames(inFolder folderID: UInt64) async throws -> [String: UInt64] {
+    public func listFiles(inFolder folderID: UInt64) async throws -> [String: UInt64] {
         try await withCheckedThrowingContinuation { continuation in
             client.listFolder(folderID, recursively: false)
                 .addCompletionBlock { result in
@@ -201,8 +112,7 @@ public class PCloudExchange: Exchange {
         }
     }
 
-    /// Downloads file data by first getting a CDN link via the SDK, then fetching via URLSession.
-    private func downloadFileData(fileID: UInt64) async throws -> Data {
+    public func downloadData(forFile fileID: UInt64) async throws -> Data {
         let link: URL = try await withCheckedThrowingContinuation { continuation in
             client.getFileLink(forFile: fileID)
                 .addCompletionBlock { result in
@@ -234,13 +144,45 @@ public class PCloudExchange: Exchange {
         }
     }
 
-    private func uploadData(_ data: Data, toFolder folderID: UInt64, asFileNamed name: String) async throws {
+    public func uploadData(_ data: Data, named name: String, toFolder folderID: UInt64) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Swift.Error>) in
             client.upload(data, toFolder: folderID, asFileNamed: name)
                 .addCompletionBlock { result in
                     switch result {
                     case .success:
                         continuation.resume(returning: ())
+                    case .failure(let error):
+                        continuation.resume(throwing: error)
+                    }
+                }
+                .start()
+        }
+    }
+
+    // MARK: - pCloud SDK Helpers
+
+    private func ensureFoldersExist() async throws {
+        if restoration.versionsFolderID != nil && restoration.changesFolderID != nil {
+            return
+        }
+
+        let rootID = try await createFolderIfNeeded(named: folderName, inFolder: parentFolderID)
+        restoration.rootFolderID = rootID
+
+        let versionsID = try await createFolderIfNeeded(named: "versions", inFolder: rootID)
+        restoration.versionsFolderID = versionsID
+
+        let changesID = try await createFolderIfNeeded(named: "changes", inFolder: rootID)
+        restoration.changesFolderID = changesID
+    }
+
+    private func createFolderIfNeeded(named name: String, inFolder parentID: UInt64) async throws -> UInt64 {
+        try await withCheckedThrowingContinuation { continuation in
+            client.createFolderIfDoesNotExist(named: name, inFolder: parentID)
+                .addCompletionBlock { result in
+                    switch result {
+                    case .success(let response):
+                        continuation.resume(returning: response.folder.id)
                     case .failure(let error):
                         continuation.resume(throwing: error)
                     }
