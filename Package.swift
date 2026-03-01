@@ -26,7 +26,7 @@ let package = Package(
             targets: ["LLVSModel"]),
     ],
     dependencies: [
-        .package(path: "../../Developer/Forked"),
+        .package(url: "https://github.com/drewmccormack/Forked.git", from: "0.5.9"),
     ],
     targets: [
         .systemLibrary(

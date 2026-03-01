@@ -1,6 +1,15 @@
 {
-  "originHash" : "a2a0219d8fa25a102b0226bb3103420d5b485a0128a5a018e21c998675d0e9fe",
+  "originHash" : "3f83181181e49ce62ac21f926379ac4da59b9edc6312efe07d697b51df68b329",
   "pins" : [
+    {
+      "identity" : "forked",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/drewmccormack/Forked.git",
+      "state" : {
+        "revision" : "4c8db8baa2a1c85a8a77543d0ac290266aca6a52",
+        "version" : "0.5.9"
+      }
+    },
     {
       "identity" : "swift-async-algorithms",
       "kind" : "remoteSourceControl",
