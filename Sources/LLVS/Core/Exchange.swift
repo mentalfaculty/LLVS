@@ -125,8 +125,9 @@ public extension Exchange {
                     case let .success(valueChangesByVersionIdentifier):
                         let valueChangesByVersionID: [Version.ID:[Value.Change]] = valueChangesByVersionIdentifier.reduce(into: [:]) { result, keyValue in
                             var version = versionsByIdentifier[keyValue.key]!
-                            if version.valueDataSize == nil { version.valueDataSize = keyValue.value.valueDataSize }
-                            result[version.id] = keyValue.value
+                            let decompressedChanges = DataCompression.decompressValueChanges(keyValue.value)
+                            if version.valueDataSize == nil { version.valueDataSize = decompressedChanges.valueDataSize }
+                            result[version.id] = decompressedChanges
                         }
                         self.addToHistory(sortedVersions: batchVersions, valueChangesByVersionID: valueChangesByVersionID) { result in
                             switch result {
@@ -232,7 +233,8 @@ public extension Exchange {
                             throw ExchangeError.missingVersion
                         }
                         let changes = try self.store.valueChanges(madeInVersionIdentifiedBy: versionId)
-                        return (version, changes)
+                        let compressedChanges = DataCompression.compressValueChanges(changes)
+                        return (version, compressedChanges)
                     }
 
                     guard !versionChanges.isEmpty else {

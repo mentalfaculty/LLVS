@@ -190,13 +190,15 @@ internal final class SQLiteZone: Zone {
     }
     
     internal func store(_ data: Data, for reference: ZoneReference) throws {
-        try database.store(data, for: reference)
+        let compressed = DataCompression.compress(data)
+        try database.store(compressed, for: reference)
         cacheIfNeeded(data, for: reference)
     }
-    
+
     internal func data(for reference: ZoneReference) throws -> Data? {
         if let data = cache.value(for: reference) { return data }
-        guard let data = try database.data(for: reference) else { return nil }
+        guard let raw = try database.data(for: reference) else { return nil }
+        let data = DataCompression.decompressIfNeeded(raw)
         cacheIfNeeded(data, for: reference)
         return data
     }
@@ -219,7 +221,8 @@ internal final class SQLiteZone: Zone {
             let tuples = uncached.map { (key: $0.key, version: $0.version) }
             let fetched = try database.data(forReferences: tuples)
             for (localIndex, entry) in uncached.enumerated() {
-                if let data = fetched[localIndex] {
+                if let raw = fetched[localIndex] {
+                    let data = DataCompression.decompressIfNeeded(raw)
                     results[entry.index] = data
                     cacheIfNeeded(data, for: references[entry.index])
                 }
