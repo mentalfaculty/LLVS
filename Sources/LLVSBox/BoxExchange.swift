@@ -2,15 +2,12 @@
 //  BoxExchange.swift
 //  LLVS
 //
-//  Created by Claude on 28/02/2026.
+//  Created by Drew McCormack on 28/02/2026.
 //
 
 import Foundation
 import LLVS
-import Combine
 import BoxSdkGen
-
-private typealias AsyncTask = _Concurrency.Task
 
 /// An Exchange that syncs versions via the Box Swift SDK.
 ///
@@ -40,11 +37,8 @@ public class BoxExchange: Exchange {
 
     @Atomic private var restoration = RestorationInfo()
 
-    private let newVersionsSubject = PassthroughSubject<Void, Never>()
-
-    public var newVersionsAvailable: AnyPublisher<Void, Never> {
-        newVersionsSubject.eraseToAnyPublisher()
-    }
+    public let newVersionsAvailable: AsyncStream<Void>
+    private let newVersionsContinuation: AsyncStream<Void>.Continuation
 
     public var restorationState: Data? {
         get { try? JSONEncoder().encode(restoration) }
@@ -69,138 +63,88 @@ public class BoxExchange: Exchange {
         self.store = store
         self.client = client
         self.rootFolderID = rootFolderID
+        let (stream, continuation) = AsyncStream<Void>.makeStream()
+        self.newVersionsAvailable = stream
+        self.newVersionsContinuation = continuation
     }
 
     // MARK: - Retrieve
 
-    public func prepareToRetrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        AsyncTask {
-            do {
-                try await ensureFoldersExist()
-                completionHandler(.success(()))
-            } catch {
-                completionHandler(.failure(error))
-            }
-        }
+    public func prepareToRetrieve() async throws {
+        try await ensureFoldersExist()
     }
 
-    public func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[LLVS.Version.ID]>) {
-        AsyncTask {
-            do {
-                guard let folderID = restoration.versionsFolderID else {
-                    completionHandler(.success([]))
-                    return
-                }
-                let items = try await listAllFileItems(inFolder: folderID)
-                completionHandler(.success(items.map { LLVS.Version.ID($0.name) }))
-            } catch {
-                completionHandler(.failure(error))
-            }
+    public func retrieveAllVersionIdentifiers() async throws -> [LLVS.Version.ID] {
+        guard let folderID = restoration.versionsFolderID else {
+            return []
         }
+        let items = try await listAllFileItems(inFolder: folderID)
+        return items.map { LLVS.Version.ID($0.name) }
     }
 
-    public func retrieveVersions(identifiedBy versionIds: [LLVS.Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[LLVS.Version]>) {
-        guard !versionIds.isEmpty else {
-            completionHandler(.success([]))
-            return
-        }
-        AsyncTask {
-            do {
-                guard let folderID = restoration.versionsFolderID else {
-                    completionHandler(.success([]))
-                    return
-                }
-                let items = try await listAllFileItems(inFolder: folderID)
-                let itemsByName = Dictionary(items.map { ($0.name, $0.id) }, uniquingKeysWith: { first, _ in first })
+    public func retrieveVersions(identifiedBy versionIds: [LLVS.Version.ID]) async throws -> [LLVS.Version] {
+        guard !versionIds.isEmpty else { return [] }
+        guard let folderID = restoration.versionsFolderID else { return [] }
 
-                var versions: [LLVS.Version] = []
-                for versionId in versionIds {
-                    guard let fileID = itemsByName[versionId.rawValue] else {
-                        throw Error.fileNotFound(versionId.rawValue)
-                    }
-                    let data = try await downloadFileData(fileID: fileID)
-                    if let version = try JSONDecoder().decode([String: LLVS.Version].self, from: data)["version"] {
-                        versions.append(version)
-                    } else {
-                        throw Error.versionFileInvalid
-                    }
-                }
-                completionHandler(.success(versions))
-            } catch {
-                completionHandler(.failure(error))
+        let items = try await listAllFileItems(inFolder: folderID)
+        let itemsByName = Dictionary(items.map { ($0.name, $0.id) }, uniquingKeysWith: { first, _ in first })
+
+        var versions: [LLVS.Version] = []
+        for versionId in versionIds {
+            guard let fileID = itemsByName[versionId.rawValue] else {
+                throw Error.fileNotFound(versionId.rawValue)
+            }
+            let data = try await downloadFileData(fileID: fileID)
+            if let version = try JSONDecoder().decode([String: LLVS.Version].self, from: data)["version"] {
+                versions.append(version)
+            } else {
+                throw Error.versionFileInvalid
             }
         }
+        return versions
     }
 
-    public func retrieveValueChanges(forVersionsIdentifiedBy versionIds: [LLVS.Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[LLVS.Version.ID: [Value.Change]]>) {
-        guard !versionIds.isEmpty else {
-            completionHandler(.success([:]))
-            return
-        }
-        AsyncTask {
-            do {
-                guard let folderID = restoration.changesFolderID else {
-                    completionHandler(.success([:]))
-                    return
-                }
-                let items = try await listAllFileItems(inFolder: folderID)
-                let itemsByName = Dictionary(items.map { ($0.name, $0.id) }, uniquingKeysWith: { first, _ in first })
+    public func retrieveValueChanges(forVersionsIdentifiedBy versionIds: [LLVS.Version.ID]) async throws -> [LLVS.Version.ID: [Value.Change]] {
+        guard !versionIds.isEmpty else { return [:] }
+        guard let folderID = restoration.changesFolderID else { return [:] }
 
-                var changesByVersion: [LLVS.Version.ID: [Value.Change]] = [:]
-                for versionId in versionIds {
-                    guard let fileID = itemsByName[versionId.rawValue] else {
-                        throw Error.fileNotFound(versionId.rawValue)
-                    }
-                    let data = try await downloadFileData(fileID: fileID)
-                    let changes = try JSONDecoder().decode([Value.Change].self, from: data)
-                    changesByVersion[versionId] = changes
-                }
-                completionHandler(.success(changesByVersion))
-            } catch {
-                completionHandler(.failure(error))
+        let items = try await listAllFileItems(inFolder: folderID)
+        let itemsByName = Dictionary(items.map { ($0.name, $0.id) }, uniquingKeysWith: { first, _ in first })
+
+        var changesByVersion: [LLVS.Version.ID: [Value.Change]] = [:]
+        for versionId in versionIds {
+            guard let fileID = itemsByName[versionId.rawValue] else {
+                throw Error.fileNotFound(versionId.rawValue)
             }
+            let data = try await downloadFileData(fileID: fileID)
+            let changes = try JSONDecoder().decode([Value.Change].self, from: data)
+            changesByVersion[versionId] = changes
         }
+        return changesByVersion
     }
 
     // MARK: - Send
 
-    public func prepareToSend(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        AsyncTask {
-            do {
-                try await ensureFoldersExist()
-                completionHandler(.success(()))
-            } catch {
-                completionHandler(.failure(error))
-            }
-        }
+    public func prepareToSend() async throws {
+        try await ensureFoldersExist()
     }
 
-    public func send(versionChanges: [VersionChanges], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        guard !versionChanges.isEmpty else {
-            completionHandler(.success(()))
-            return
+    public func send(versionChanges: [VersionChanges]) async throws {
+        guard !versionChanges.isEmpty else { return }
+        guard let versionsFolderID = restoration.versionsFolderID,
+              let changesFolderID = restoration.changesFolderID else {
+            throw Error.folderNotFound
         }
-        AsyncTask {
-            do {
-                guard let versionsFolderID = restoration.versionsFolderID,
-                      let changesFolderID = restoration.changesFolderID else {
-                    throw Error.folderNotFound
-                }
 
-                for (version, valueChanges) in versionChanges {
-                    let changesData = try JSONEncoder().encode(valueChanges)
-                    let versionData = try JSONEncoder().encode(["version": version])
+        for (version, valueChanges) in versionChanges {
+            let changesData = try JSONEncoder().encode(valueChanges)
+            let versionData = try JSONEncoder().encode(["version": version])
 
-                    try await uploadFileData(changesData, name: version.id.rawValue, toFolder: changesFolderID)
-                    try await uploadFileData(versionData, name: version.id.rawValue, toFolder: versionsFolderID)
-                }
-
-                newVersionsSubject.send(())
-                completionHandler(.success(()))
-            } catch {
-                completionHandler(.failure(error))
-            }
+            try await uploadFileData(changesData, name: version.id.rawValue, toFolder: changesFolderID)
+            try await uploadFileData(versionData, name: version.id.rawValue, toFolder: versionsFolderID)
         }
+
+        newVersionsContinuation.yield(())
     }
 
     // MARK: - Box SDK Helpers
@@ -221,7 +165,6 @@ public class BoxExchange: Exchange {
     }
 
     private func createSubfolderIfNeeded(named name: String, inFolder parentID: String) async throws -> String {
-        // Check if it already exists by listing the parent
         let items = try await listAllItems(inFolder: parentID)
         if let existing = items.first(where: { $0.name == name && $0.isFolder }) {
             return existing.id

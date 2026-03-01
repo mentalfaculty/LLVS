@@ -1,33 +1,27 @@
-import XCTest
+import Testing
 import Foundation
 @testable import LLVS
 
-final class StoreSetupTests: XCTestCase {
-    
-    var store: Store!
-    var rootURL: URL!
-    
-    override func setUp() {
-        super.setUp()
+@Suite class StoreSetupTests {
+
+    let store: Store
+    let rootURL: URL
+
+    init() throws {
         rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
-        store = try! Store(rootDirectoryURL: rootURL)
+        store = try Store(rootDirectoryURL: rootURL)
     }
-    
-    override func tearDown() {
+
+    deinit {
         try? FileManager.default.removeItem(at: rootURL)
-        super.tearDown()
     }
-    
-    func testStoreCreatesDirectories() {
+
+    @Test func storeCreatesDirectories() {
         let fm = FileManager.default
         let root = rootURL.path as NSString
-        XCTAssert(fm.fileExists(atPath: root as String))
-        XCTAssert(fm.fileExists(atPath: root.appendingPathComponent("versions")))
-        XCTAssert(fm.fileExists(atPath: root.appendingPathComponent("values")))
-        XCTAssert(fm.fileExists(atPath: root.appendingPathComponent("maps")))
+        #expect(fm.fileExists(atPath: root as String))
+        #expect(fm.fileExists(atPath: root.appendingPathComponent("versions")))
+        #expect(fm.fileExists(atPath: root.appendingPathComponent("values")))
+        #expect(fm.fileExists(atPath: root.appendingPathComponent("maps")))
     }
-    
-    static var allTests = [
-        ("testStoreCreatesDirectories", testStoreCreatesDirectories),
-    ]
 }

@@ -5,77 +5,65 @@
 //  Created by Drew McCormack on 16/02/2022.
 //
 
-import XCTest
+import Testing
 import Foundation
 @testable import LLVS
 @testable import LLVSSQLite
 
-class SQLiteZoneTests: XCTestCase {
+@Suite class SQLiteZoneTests {
 
     let fm = FileManager.default
-    
-    var zone: SQLiteZone!
-    var rootURL: URL!
-    var ref: ZoneReference!
-    
-    override func setUp() {
-        super.setUp()
 
+    let zone: SQLiteZone
+    let rootURL: URL
+    let ref: ZoneReference
+
+    init() throws {
         rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
-        zone = try! SQLiteZone(rootDirectory: rootURL, fileExtension: "sqlite")
+        zone = try SQLiteZone(rootDirectory: rootURL, fileExtension: "sqlite")
         ref = ZoneReference(key: "ABCDEF", version: .init("1234"))
     }
-    
-    override func tearDown() {
+
+    deinit {
         try? zone.dismantle()
         try? fm.removeItem(at: rootURL)
-        super.tearDown()
     }
-    
-    func testCreation() {
-        XCTAssert(fm.fileExists(atPath: rootURL.path))
-        XCTAssert(fm.fileExists(atPath: rootURL.appendingPathComponent("zone.sqlite").path))
+
+    @Test func creation() {
+        #expect(fm.fileExists(atPath: rootURL.path))
+        #expect(fm.fileExists(atPath: rootURL.appendingPathComponent("zone.sqlite").path))
     }
-    
-    func testAddingMultipleReferencesWithSameKey() {
-        XCTAssertNoThrow(try zone.store(Data(), for: ref))
-        XCTAssertNoThrow(try zone.store(Data(), for: .init(key: ref.key, version: .init("1245"))))
+
+    @Test func addingMultipleReferencesWithSameKey() throws {
+        try zone.store(Data(), for: ref)
+        try zone.store(Data(), for: .init(key: ref.key, version: .init("1245")))
     }
-    
-    func testAddingMultipleReferencesWithSameVersion() {
-        XCTAssertNoThrow(try zone.store(Data(), for: ref))
-        XCTAssertNoThrow(try zone.store(Data(), for: .init(key: "ABCDEFG", version: ref.version)))
+
+    @Test func addingMultipleReferencesWithSameVersion() throws {
+        try zone.store(Data(), for: ref)
+        try zone.store(Data(), for: .init(key: "ABCDEFG", version: ref.version))
     }
-    
-    func testRetrievingNonExistentData() {
-        let data = try! zone.data(for: ref)
-        XCTAssertNil(data)
+
+    @Test func retrievingNonExistentData() throws {
+        let data = try zone.data(for: ref)
+        #expect(data == nil)
     }
-    
-    func testRetrievingData() {
-        try! zone.store("Test".data(using: .utf8)!, for: ref)
-        let data = try! zone.data(for: ref)
-        XCTAssertNotNil(data)
+
+    @Test func retrievingData() throws {
+        try zone.store("Test".data(using: .utf8)!, for: ref)
+        let data = try zone.data(for: ref)
+        #expect(data != nil)
         let string = String(bytes: data!, encoding: .utf8)
-        XCTAssertEqual(string, "Test")
+        #expect(string == "Test")
     }
-    
-    func testVersionsQuery() {
-        try! zone.store(Data(), for: ref)
-        try! zone.store(Data(), for: .init(key: "ABCDEF", version: .init("1245")))
-        let versions = try! zone.versionIds(for: "ABCDEF")
+
+    @Test func versionsQuery() throws {
+        try zone.store(Data(), for: ref)
+        try zone.store(Data(), for: .init(key: "ABCDEF", version: .init("1245")))
+        let versions = try zone.versionIds(for: "ABCDEF")
         let versionStrings = versions.map { $0.rawValue }
-        XCTAssertEqual(versions.count, 2)
-        XCTAssert(versionStrings.contains("1234"))
-        XCTAssert(versionStrings.contains("1245"))
+        #expect(versions.count == 2)
+        #expect(versionStrings.contains("1234"))
+        #expect(versionStrings.contains("1245"))
     }
-    
-    static var allTests = [
-        ("testCreation", testCreation),
-        ("testAddingMultipleReferencesWithSameKey", testAddingMultipleReferencesWithSameKey),
-        ("testAddingMultipleReferencesWithSameVersion", testAddingMultipleReferencesWithSameVersion),
-        ("testRetrievingNonExistentData", testRetrievingNonExistentData),
-        ("testRetrievingData", testRetrievingData),
-        ("testVersionsQuery", testVersionsQuery),
-    ]
 }

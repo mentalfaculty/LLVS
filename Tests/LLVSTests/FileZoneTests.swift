@@ -5,82 +5,69 @@
 //  Created by Drew McCormack on 07/12/2018.
 //
 
-import XCTest
+import Testing
 import Foundation
 @testable import LLVS
 
-class FileZoneTests: XCTestCase {
+@Suite class FileZoneTests {
 
     let fm = FileManager.default
-    
-    var zone: FileZone!
-    var rootURL: URL!
-    var ref: ZoneReference!
-    
-    override func setUp() {
-        super.setUp()
 
+    let zone: FileZone
+    let rootURL: URL
+    let ref: ZoneReference
+
+    init() throws {
         rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         zone = FileZone(rootDirectory: rootURL, fileExtension: "json")
         ref = ZoneReference(key: "ABCDEF", version: .init("1234"))
     }
-    
-    override func tearDown() {
+
+    deinit {
         try? fm.removeItem(at: rootURL)
-        super.tearDown()
     }
-    
-    func testCreation() {
-        XCTAssert(fm.fileExists(atPath: rootURL.path))
+
+    @Test func creation() {
+        #expect(fm.fileExists(atPath: rootURL.path))
     }
-    
-    func testAddingDataCreatesFiles() {
-        XCTAssertNoThrow(try zone.store(Data(), for: ref))
+
+    @Test func addingDataCreatesFiles() throws {
+        try zone.store(Data(), for: ref)
         fm.fileExists(atPath: rootURL.appendingPathComponent("AB/CDEF/1/234.json").path)
     }
-    
-    func testAddingMultipleReferencesInSameDiretories() {
-        XCTAssertNoThrow(try zone.store(Data(), for: ref))
-        XCTAssertNoThrow(try zone.store(Data(), for: .init(key: "ABCDEF", version: .init("1245"))))
+
+    @Test func addingMultipleReferencesInSameDiretories() throws {
+        try zone.store(Data(), for: ref)
+        try zone.store(Data(), for: .init(key: "ABCDEF", version: .init("1245")))
         fm.fileExists(atPath: rootURL.appendingPathComponent("AB/CDEF/1/245.json").path)
     }
-    
-    func testAddingMultipleReferencesWithDifferentVersionDirectories() {
-        XCTAssertNoThrow(try zone.store(Data(), for: ref))
-        XCTAssertNoThrow(try zone.store(Data(), for: .init(key: "ABCDEF", version: .init("2222"))))
+
+    @Test func addingMultipleReferencesWithDifferentVersionDirectories() throws {
+        try zone.store(Data(), for: ref)
+        try zone.store(Data(), for: .init(key: "ABCDEF", version: .init("2222")))
         fm.fileExists(atPath: rootURL.appendingPathComponent("AB/CDEF/2/222.json").path)
     }
-    
-    func testRetrievingNonExistentData() {
-        let data = try! zone.data(for: ref)
-        XCTAssertNil(data)
+
+    @Test func retrievingNonExistentData() throws {
+        let data = try zone.data(for: ref)
+        #expect(data == nil)
     }
-    
-    func testRetrievingData() {
-        try! zone.store("Test".data(using: .utf8)!, for: ref)
-        let data = try! zone.data(for: ref)
-        XCTAssertNotNil(data)
+
+    @Test func retrievingData() throws {
+        try zone.store("Test".data(using: .utf8)!, for: ref)
+        let data = try zone.data(for: ref)
+        #expect(data != nil)
         let string = String(bytes: data!, encoding: .utf8)
-        XCTAssertEqual(string, "Test")
+        #expect(string == "Test")
     }
-    
-    func testVersionsQuery() {
-        try! zone.store(Data(), for: ref)
-        try! zone.store(Data(), for: .init(key: "ABCDEF", version: .init("1245")))
-        let versions = try! zone.versionIds(for: "ABCDEF")
+
+    @Test func versionsQuery() throws {
+        try zone.store(Data(), for: ref)
+        try zone.store(Data(), for: .init(key: "ABCDEF", version: .init("1245")))
+        let versions = try zone.versionIds(for: "ABCDEF")
         let versionStrings = versions.map { $0.rawValue }
-        XCTAssertEqual(versions.count, 2)
-        XCTAssert(versionStrings.contains("1234"))
-        XCTAssert(versionStrings.contains("1245"))
+        #expect(versions.count == 2)
+        #expect(versionStrings.contains("1234"))
+        #expect(versionStrings.contains("1245"))
     }
-    
-    static var allTests = [
-        ("testCreation", testCreation),
-        ("testAddingDataCreatesFiles", testAddingDataCreatesFiles),
-        ("testAddingMultipleReferencesInSameDiretories", testAddingMultipleReferencesInSameDiretories),
-        ("testAddingMultipleReferencesWithDifferentVersionDirectories", testAddingMultipleReferencesWithDifferentVersionDirectories),
-        ("testRetrievingNonExistentData", testRetrievingNonExistentData),
-        ("testRetrievingData", testRetrievingData),
-        ("testVersionsQuery", testVersionsQuery),
-    ]
 }

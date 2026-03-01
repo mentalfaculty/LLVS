@@ -2,12 +2,11 @@
 //  PCloudExchange.swift
 //  LLVS
 //
-//  Created by Claude on 28/02/2026.
+//  Created by Drew McCormack on 28/02/2026.
 //
 
 import Foundation
 import LLVS
-import Combine
 import PCloudSDKSwift
 
 /// An Exchange that syncs versions via the pCloud Swift SDK.
@@ -44,11 +43,8 @@ public class PCloudExchange: Exchange {
 
     @Atomic private var restoration = RestorationInfo()
 
-    private let newVersionsSubject = PassthroughSubject<Void, Never>()
-
-    public var newVersionsAvailable: AnyPublisher<Void, Never> {
-        newVersionsSubject.eraseToAnyPublisher()
-    }
+    public let newVersionsAvailable: AsyncStream<Void>
+    private let newVersionsContinuation: AsyncStream<Void>.Continuation
 
     public var restorationState: Data? {
         get { try? JSONEncoder().encode(restoration) }
@@ -71,306 +67,186 @@ public class PCloudExchange: Exchange {
         self.parentFolderID = parentFolderID
         self.folderName = folderName
         self.urlSession = urlSession
+        let (stream, continuation) = AsyncStream<Void>.makeStream()
+        self.newVersionsAvailable = stream
+        self.newVersionsContinuation = continuation
     }
 
     // MARK: - Retrieve
 
-    public func prepareToRetrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        ensureFoldersExist(completionHandler: completionHandler)
+    public func prepareToRetrieve() async throws {
+        try await ensureFoldersExist()
     }
 
-    public func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>) {
+    public func retrieveAllVersionIdentifiers() async throws -> [Version.ID] {
         guard let folderID = restoration.versionsFolderID else {
-            completionHandler(.success([]))
-            return
+            return []
         }
-        listFileNames(inFolder: folderID) { result in
-            switch result {
-            case .success(let fileMap):
-                completionHandler(.success(fileMap.map { Version.ID($0.key) }))
-            case .failure(let error):
-                completionHandler(.failure(error))
-            }
-        }
+        let fileMap = try await listFileNames(inFolder: folderID)
+        return fileMap.map { Version.ID($0.key) }
     }
 
-    public func retrieveVersions(identifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
-        guard !versionIds.isEmpty else {
-            completionHandler(.success([]))
-            return
-        }
-        guard let folderID = restoration.versionsFolderID else {
-            completionHandler(.success([]))
-            return
-        }
+    public func retrieveVersions(identifiedBy versionIds: [Version.ID]) async throws -> [Version] {
+        guard !versionIds.isEmpty else { return [] }
+        guard let folderID = restoration.versionsFolderID else { return [] }
 
-        listFileNames(inFolder: folderID) { result in
-            switch result {
-            case .failure(let error):
-                completionHandler(.failure(error))
-            case .success(let fileMap):
-                var versions: [Version] = []
-                let tasks = versionIds.map { versionId in
-                    AsynchronousTask { finish in
-                        guard let fileID = fileMap[versionId.rawValue] else {
-                            finish(.failure(Error.fileNotFound(versionId.rawValue)))
-                            return
-                        }
-                        self.downloadFileData(fileID: fileID) { downloadResult in
-                            switch downloadResult {
-                            case .success(let data):
-                                do {
-                                    if let version = try JSONDecoder().decode([String: Version].self, from: data)["version"] {
-                                        versions.append(version)
-                                        finish(.success(()))
-                                    } else {
-                                        finish(.failure(Error.versionFileInvalid))
-                                    }
-                                } catch {
-                                    finish(.failure(error))
-                                }
-                            case .failure(let error):
-                                finish(.failure(error))
-                            }
-                        }
-                    }
-                }
-                tasks.executeInOrder { tasksResult in
-                    switch tasksResult {
-                    case .success:
-                        completionHandler(.success(versions))
-                    case .failure(let error):
-                        completionHandler(.failure(error))
-                    }
-                }
+        let fileMap = try await listFileNames(inFolder: folderID)
+        var versions: [Version] = []
+        for versionId in versionIds {
+            guard let fileID = fileMap[versionId.rawValue] else {
+                throw Error.fileNotFound(versionId.rawValue)
+            }
+            let data = try await downloadFileData(fileID: fileID)
+            if let version = try JSONDecoder().decode([String: Version].self, from: data)["version"] {
+                versions.append(version)
+            } else {
+                throw Error.versionFileInvalid
             }
         }
+        return versions
     }
 
-    public func retrieveValueChanges(forVersionsIdentifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID: [Value.Change]]>) {
-        guard !versionIds.isEmpty else {
-            completionHandler(.success([:]))
-            return
-        }
-        guard let folderID = restoration.changesFolderID else {
-            completionHandler(.success([:]))
-            return
-        }
+    public func retrieveValueChanges(forVersionsIdentifiedBy versionIds: [Version.ID]) async throws -> [Version.ID: [Value.Change]] {
+        guard !versionIds.isEmpty else { return [:] }
+        guard let folderID = restoration.changesFolderID else { return [:] }
 
-        listFileNames(inFolder: folderID) { result in
-            switch result {
-            case .failure(let error):
-                completionHandler(.failure(error))
-            case .success(let fileMap):
-                var changesByVersion: [Version.ID: [Value.Change]] = [:]
-                let tasks = versionIds.map { versionId in
-                    AsynchronousTask { finish in
-                        guard let fileID = fileMap[versionId.rawValue] else {
-                            finish(.failure(Error.fileNotFound(versionId.rawValue)))
-                            return
-                        }
-                        self.downloadFileData(fileID: fileID) { downloadResult in
-                            switch downloadResult {
-                            case .success(let data):
-                                do {
-                                    let changes = try JSONDecoder().decode([Value.Change].self, from: data)
-                                    changesByVersion[versionId] = changes
-                                    finish(.success(()))
-                                } catch {
-                                    finish(.failure(error))
-                                }
-                            case .failure(let error):
-                                finish(.failure(error))
-                            }
-                        }
-                    }
-                }
-                tasks.executeInOrder { tasksResult in
-                    switch tasksResult {
-                    case .success:
-                        completionHandler(.success(changesByVersion))
-                    case .failure(let error):
-                        completionHandler(.failure(error))
-                    }
-                }
+        let fileMap = try await listFileNames(inFolder: folderID)
+        var changesByVersion: [Version.ID: [Value.Change]] = [:]
+        for versionId in versionIds {
+            guard let fileID = fileMap[versionId.rawValue] else {
+                throw Error.fileNotFound(versionId.rawValue)
             }
+            let data = try await downloadFileData(fileID: fileID)
+            let changes = try JSONDecoder().decode([Value.Change].self, from: data)
+            changesByVersion[versionId] = changes
         }
+        return changesByVersion
     }
 
     // MARK: - Send
 
-    public func prepareToSend(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        ensureFoldersExist(completionHandler: completionHandler)
+    public func prepareToSend() async throws {
+        try await ensureFoldersExist()
     }
 
-    public func send(versionChanges: [VersionChanges], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        guard !versionChanges.isEmpty else {
-            completionHandler(.success(()))
-            return
-        }
+    public func send(versionChanges: [VersionChanges]) async throws {
+        guard !versionChanges.isEmpty else { return }
         guard let versionsFolderID = restoration.versionsFolderID,
               let changesFolderID = restoration.changesFolderID else {
-            completionHandler(.failure(Error.foldersNotInitialized))
-            return
+            throw Error.foldersNotInitialized
         }
 
-        let tasks = versionChanges.map { (version, valueChanges) in
-            AsynchronousTask { finish in
-                do {
-                    let changesData = try JSONEncoder().encode(valueChanges)
-                    let versionData = try JSONEncoder().encode(["version": version])
+        for (version, valueChanges) in versionChanges {
+            let changesData = try JSONEncoder().encode(valueChanges)
+            let versionData = try JSONEncoder().encode(["version": version])
 
-                    let uploadChanges = AsynchronousTask { innerFinish in
-                        self.client.upload(changesData, toFolder: changesFolderID, asFileNamed: version.id.rawValue)
-                            .addCompletionBlock { result in
-                                switch result {
-                                case .success:
-                                    innerFinish(.success(()))
-                                case .failure(let error):
-                                    innerFinish(.failure(error))
-                                }
-                            }
-                            .start()
-                    }
-
-                    let uploadVersion = AsynchronousTask { innerFinish in
-                        self.client.upload(versionData, toFolder: versionsFolderID, asFileNamed: version.id.rawValue)
-                            .addCompletionBlock { result in
-                                switch result {
-                                case .success:
-                                    innerFinish(.success(()))
-                                case .failure(let error):
-                                    innerFinish(.failure(error))
-                                }
-                            }
-                            .start()
-                    }
-
-                    [uploadChanges, uploadVersion].executeInOrder { result in
-                        finish(result)
-                    }
-                } catch {
-                    finish(.failure(error))
-                }
-            }
+            try await uploadData(changesData, toFolder: changesFolderID, asFileNamed: version.id.rawValue)
+            try await uploadData(versionData, toFolder: versionsFolderID, asFileNamed: version.id.rawValue)
         }
-        tasks.executeInOrder { result in
-            switch result {
-            case .success:
-                self.newVersionsSubject.send(())
-                completionHandler(.success(()))
-            case .failure(let error):
-                completionHandler(.failure(error))
-            }
-        }
+
+        newVersionsContinuation.yield(())
     }
 
     // MARK: - pCloud SDK Helpers
 
-    private func ensureFoldersExist(completionHandler: @escaping CompletionHandler<Void>) {
+    private func ensureFoldersExist() async throws {
         if restoration.versionsFolderID != nil && restoration.changesFolderID != nil {
-            completionHandler(.success(()))
             return
         }
 
-        let createRoot = AsynchronousTask { finish in
-            self.client.createFolderIfDoesNotExist(named: self.folderName, inFolder: self.parentFolderID)
+        let rootID = try await createFolderIfNeeded(named: folderName, inFolder: parentFolderID)
+        restoration.rootFolderID = rootID
+
+        let versionsID = try await createFolderIfNeeded(named: "versions", inFolder: rootID)
+        restoration.versionsFolderID = versionsID
+
+        let changesID = try await createFolderIfNeeded(named: "changes", inFolder: rootID)
+        restoration.changesFolderID = changesID
+    }
+
+    private func createFolderIfNeeded(named name: String, inFolder parentID: UInt64) async throws -> UInt64 {
+        try await withCheckedThrowingContinuation { continuation in
+            client.createFolderIfDoesNotExist(named: name, inFolder: parentID)
                 .addCompletionBlock { result in
                     switch result {
                     case .success(let response):
-                        self.restoration.rootFolderID = response.folder.id
-                        finish(.success(()))
+                        continuation.resume(returning: response.folder.id)
                     case .failure(let error):
-                        finish(.failure(error))
+                        continuation.resume(throwing: error)
                     }
                 }
                 .start()
         }
-
-        let createVersions = AsynchronousTask { finish in
-            guard let rootID = self.restoration.rootFolderID else {
-                finish(.failure(Error.foldersNotInitialized))
-                return
-            }
-            self.client.createFolderIfDoesNotExist(named: "versions", inFolder: rootID)
-                .addCompletionBlock { result in
-                    switch result {
-                    case .success(let response):
-                        self.restoration.versionsFolderID = response.folder.id
-                        finish(.success(()))
-                    case .failure(let error):
-                        finish(.failure(error))
-                    }
-                }
-                .start()
-        }
-
-        let createChanges = AsynchronousTask { finish in
-            guard let rootID = self.restoration.rootFolderID else {
-                finish(.failure(Error.foldersNotInitialized))
-                return
-            }
-            self.client.createFolderIfDoesNotExist(named: "changes", inFolder: rootID)
-                .addCompletionBlock { result in
-                    switch result {
-                    case .success(let response):
-                        self.restoration.changesFolderID = response.folder.id
-                        finish(.success(()))
-                    case .failure(let error):
-                        finish(.failure(error))
-                    }
-                }
-                .start()
-        }
-
-        [createRoot, createVersions, createChanges].executeInOrder(completingWith: completionHandler)
     }
 
     /// Lists file contents of a folder, returning a name-to-fileID mapping.
-    private func listFileNames(inFolder folderID: UInt64, completionHandler: @escaping CompletionHandler<[String: UInt64]>) {
-        client.listFolder(folderID, recursively: false)
-            .addCompletionBlock { result in
-                switch result {
-                case .success(let folder):
-                    var fileMap: [String: UInt64] = [:]
-                    for content in folder.contents {
-                        if case .file(let file) = content {
-                            fileMap[file.name] = file.id
+    private func listFileNames(inFolder folderID: UInt64) async throws -> [String: UInt64] {
+        try await withCheckedThrowingContinuation { continuation in
+            client.listFolder(folderID, recursively: false)
+                .addCompletionBlock { result in
+                    switch result {
+                    case .success(let folder):
+                        var fileMap: [String: UInt64] = [:]
+                        for content in folder.contents {
+                            if case .file(let file) = content {
+                                fileMap[file.name] = file.id
+                            }
                         }
+                        continuation.resume(returning: fileMap)
+                    case .failure(let error):
+                        continuation.resume(throwing: error)
                     }
-                    completionHandler(.success(fileMap))
-                case .failure(let error):
-                    completionHandler(.failure(error))
                 }
-            }
-            .start()
+                .start()
+        }
     }
 
     /// Downloads file data by first getting a CDN link via the SDK, then fetching via URLSession.
-    private func downloadFileData(fileID: UInt64, completionHandler: @escaping CompletionHandler<Data>) {
-        client.getFileLink(forFile: fileID)
-            .addCompletionBlock { result in
-                switch result {
-                case .success(let links):
-                    guard let link = links.first else {
-                        completionHandler(.failure(Error.missingDownloadLink))
-                        return
-                    }
-                    let task = self.urlSession.dataTask(with: link.address) { data, _, error in
-                        if let error = error {
-                            completionHandler(.failure(error))
-                        } else if let data = data {
-                            completionHandler(.success(data))
-                        } else {
-                            completionHandler(.failure(Error.invalidResponse))
+    private func downloadFileData(fileID: UInt64) async throws -> Data {
+        let link: URL = try await withCheckedThrowingContinuation { continuation in
+            client.getFileLink(forFile: fileID)
+                .addCompletionBlock { result in
+                    switch result {
+                    case .success(let links):
+                        guard let link = links.first else {
+                            continuation.resume(throwing: Error.missingDownloadLink)
+                            return
                         }
+                        continuation.resume(returning: link.address)
+                    case .failure(let error):
+                        continuation.resume(throwing: error)
                     }
-                    task.resume()
-                case .failure(let error):
-                    completionHandler(.failure(error))
+                }
+                .start()
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let task = urlSession.dataTask(with: link) { data, _, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                } else if let data = data {
+                    continuation.resume(returning: data)
+                } else {
+                    continuation.resume(throwing: Error.invalidResponse)
                 }
             }
-            .start()
+            task.resume()
+        }
+    }
+
+    private func uploadData(_ data: Data, toFolder folderID: UInt64, asFileNamed name: String) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Swift.Error>) in
+            client.upload(data, toFolder: folderID, asFileNamed: name)
+                .addCompletionBlock { result in
+                    switch result {
+                    case .success:
+                        continuation.resume(returning: ())
+                    case .failure(let error):
+                        continuation.resume(throwing: error)
+                    }
+                }
+                .start()
+        }
     }
 
     // MARK: - Restoration

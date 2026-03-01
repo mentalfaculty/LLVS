@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import Combine
 
 /// A `StoreCoordinator` takes care of all aspects of setting up a syncing store.
 /// It's the simplest way to get started, though you may want more control for advanced use cases.
@@ -38,13 +37,14 @@ public class StoreCoordinator {
         return exchange?.restorationState
     }
 
-    public var currentVersionSubject: CurrentValueSubject<Version.ID, Never>
+    public let currentVersionUpdates: AsyncStream<Version.ID>
+    private let currentVersionContinuation: AsyncStream<Version.ID>.Continuation
 
     public private(set) var currentVersion: Version.ID {
         didSet {
             guard self.currentVersion != oldValue else { return }
             persist()
-            currentVersionSubject.value = self.currentVersion
+            currentVersionContinuation.yield(self.currentVersion)
         }
     }
 
@@ -79,7 +79,9 @@ public class StoreCoordinator {
 
         self.store = try Store(rootDirectoryURL: storeURL)
         self.currentVersion = Version.ID() // Set a temporary version. Final is in cache
-        self.currentVersionSubject = .init(self.currentVersion)
+        let (stream, continuation) = AsyncStream<Version.ID>.makeStream()
+        self.currentVersionUpdates = stream
+        self.currentVersionContinuation = continuation
         try loadCache()
     }
 
@@ -192,73 +194,37 @@ public class StoreCoordinator {
 
     public var isExchanging = false
 
-    private lazy var exchangeQueue: OperationQueue = {
-        let queue = OperationQueue()
-        queue.maxConcurrentOperationCount = 1
-        return queue
-    }()
-
-    /// This transfers data between cloud and local store, but does not alter the current branch or do any merging.
-    /// It's a bit like a two-way version of Git's fetch. Completion is on the main thread.
-    public func exchange(executingUponCompletion completionHandler: ((Swift.Error?) -> Void)? = nil) {
-        exchangeQueue.addAsynchronousOperation { finish in
-            self.performExchangeOnQueue { error in
-                completionHandler?(error)
-                finish()
-            }
+    /// Ensures only one exchange runs at a time.
+    private actor ExchangeSerializer {
+        func run<T>(_ work: @Sendable () async throws -> T) async throws -> T {
+            try await work()
         }
     }
 
-    private func performExchangeOnQueue(executingUponCompletion completionHandler: ((Swift.Error?) -> Void)? = nil) {
+    private let exchangeSerializer = ExchangeSerializer()
+
+    /// This transfers data between cloud and local store, but does not alter the current branch or do any merging.
+    /// It's a bit like a two-way version of Git's fetch.
+    public func exchange() async throws {
+        try await exchangeSerializer.run {
+            try await self.performExchange()
+        }
+    }
+
+    private func performExchange() async throws {
         isExchanging = true
+        defer { isExchanging = false }
 
-        guard let exchange = exchange else {
-            OperationQueue.main.addOperation {
-                completionHandler?(nil)
-                self.isExchanging = false
-            }
-            return
-        }
+        guard let exchange = exchange else { return }
 
-        let retrieve = AsynchronousTask { finish in
-            exchange.retrieve { result in
-                switch result {
-                case let .failure(error):
-                    finish(.failure(error))
-                case .success:
-                    finish(.success(()))
-                }
-            }
-        }
+        _ = try await exchange.retrieve()
+        _ = try await exchange.send()
 
-        let send = AsynchronousTask { finish in
-            exchange.send { result in
-                switch result {
-                case let .failure(error):
-                    finish(.failure(error))
-                case .success:
-                    finish(.success(()))
-                }
-            }
-        }
+        log.trace("Sync successful")
 
-        [retrieve, send].executeInOrder { result in
-            var returnError: Swift.Error?
-            switch result {
-            case let .failure(error):
-                returnError = error
-                log.error("Failed to sync: \(error)")
-            case .success:
-                log.trace("Sync successful")
-            }
-
-            // Upload snapshot if policy allows (fire and forget — don't block completion)
-            self.uploadSnapshotIfNeeded { _ in }
-
-            OperationQueue.main.addOperation {
-                completionHandler?(returnError)
-                self.isExchanging = false
-            }
+        // Upload snapshot if policy allows (fire and forget)
+        Task { [weak self] in
+            try? await self?.uploadSnapshotIfNeeded()
         }
     }
 
@@ -281,10 +247,9 @@ public class StoreCoordinator {
 
     /// Download and restore a cloud snapshot if available and compatible.
     /// Call before the first exchange on a new device.
-    public func bootstrapFromSnapshot(completionHandler: @escaping (Swift.Error?) -> Void) {
+    public func bootstrapFromSnapshot() async throws {
         guard let snapshotExchange = exchange as? SnapshotExchange,
               let snapshotStorage = store.storage as? SnapshotCapable else {
-            completionHandler(nil)
             return
         }
 
@@ -293,94 +258,43 @@ public class StoreCoordinator {
         store.queryHistory { history in
             versionCount = history.allVersionIdentifiers.count
         }
-        guard versionCount <= 1 else {
-            completionHandler(nil)
+        guard versionCount <= 1 else { return }
+
+        guard let manifest = try await snapshotExchange.retrieveSnapshotManifest() else {
             return
         }
 
-        snapshotExchange.retrieveSnapshotManifest { result in
-            switch result {
-            case .failure(let error):
-                completionHandler(error)
-            case .success(let manifest):
-                guard let manifest = manifest else {
-                    completionHandler(nil)
-                    return
-                }
+        // Check format matches
+        guard manifest.format == snapshotStorage.snapshotFormat else { return }
 
-                // Check format matches
-                guard manifest.format == snapshotStorage.snapshotFormat else {
-                    completionHandler(nil)
-                    return
-                }
+        // Download chunks to temp directory
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true, attributes: nil)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
 
-                // Download chunks to temp directory
-                let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-                do {
-                    try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true, attributes: nil)
-                } catch {
-                    completionHandler(error)
-                    return
-                }
+        for i in 0..<manifest.chunkCount {
+            let data = try await snapshotExchange.retrieveSnapshotChunk(index: i)
+            let chunkFile = tempDir.appendingPathComponent(String(format: "chunk-%03d", i))
+            try data.write(to: chunkFile)
+        }
 
-                self.downloadChunks(from: snapshotExchange, manifest: manifest, to: tempDir, currentIndex: 0) { downloadError in
-                    defer { try? FileManager.default.removeItem(at: tempDir) }
+        try snapshotStorage.restoreFromSnapshotChunks(
+            storeRootURL: store.rootDirectoryURL,
+            from: tempDir,
+            manifest: manifest
+        )
+        try store.reloadHistory()
 
-                    guard downloadError == nil else {
-                        completionHandler(downloadError)
-                        return
-                    }
-
-                    do {
-                        try snapshotStorage.restoreFromSnapshotChunks(
-                            storeRootURL: self.store.rootDirectoryURL,
-                            from: tempDir,
-                            manifest: manifest
-                        )
-                        try self.store.reloadHistory()
-
-                        // Update currentVersion to the latest head
-                        if let head = self.store.mostRecentHead {
-                            self.currentVersion = head.id
-                        }
-
-                        completionHandler(nil)
-                    } catch {
-                        completionHandler(error)
-                    }
-                }
-            }
+        // Update currentVersion to the latest head
+        if let head = store.mostRecentHead {
+            currentVersion = head.id
         }
     }
 
-    private func downloadChunks(from exchange: SnapshotExchange, manifest: SnapshotManifest, to directory: URL, currentIndex: Int, completionHandler: @escaping (Swift.Error?) -> Void) {
-        guard currentIndex < manifest.chunkCount else {
-            completionHandler(nil)
-            return
-        }
-
-        exchange.retrieveSnapshotChunk(index: currentIndex) { result in
-            switch result {
-            case .failure(let error):
-                completionHandler(error)
-            case .success(let data):
-                let chunkFile = directory.appendingPathComponent(String(format: "chunk-%03d", currentIndex))
-                do {
-                    try data.write(to: chunkFile)
-                } catch {
-                    completionHandler(error)
-                    return
-                }
-                self.downloadChunks(from: exchange, manifest: manifest, to: directory, currentIndex: currentIndex + 1, completionHandler: completionHandler)
-            }
-        }
-    }
-
-    internal func uploadSnapshotIfNeeded(completionHandler: @escaping (Swift.Error?) -> Void) {
+    internal func uploadSnapshotIfNeeded() async throws {
         guard snapshotPolicy.enabled,
               let snapshotExchange = exchange as? SnapshotExchange,
               let snapshotStorage = store.storage as? SnapshotCapable else {
-            completionHandler(nil)
             return
         }
 
@@ -390,51 +304,33 @@ public class StoreCoordinator {
             currentVersionCount = history.allVersionIdentifiers.count
         }
 
-        snapshotExchange.retrieveSnapshotManifest { result in
-            switch result {
-            case .failure(let error):
-                completionHandler(error)
-            case .success(let existingManifest):
-                if let manifest = existingManifest {
-                    // Skip if recent enough
-                    if manifest.createdAt.timeIntervalSinceNow > -self.snapshotPolicy.minimumInterval {
-                        completionHandler(nil)
-                        return
-                    }
-                    // Skip if not enough new versions
-                    if currentVersionCount - manifest.versionCount < self.snapshotPolicy.minimumNewVersions {
-                        completionHandler(nil)
-                        return
-                    }
-                }
+        let existingManifest = try await snapshotExchange.retrieveSnapshotManifest()
 
-                // Write snapshot to temp directory
-                let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-                do {
-                    try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true, attributes: nil)
-                    let manifest = try snapshotStorage.writeSnapshotChunks(
-                        storeRootURL: self.store.rootDirectoryURL,
-                        to: tempDir,
-                        maxChunkSize: 5_000_000
-                    )
-
-                    snapshotExchange.sendSnapshot(manifest: manifest, chunkProvider: { index in
-                        let chunkFile = tempDir.appendingPathComponent(String(format: "chunk-%03d", index))
-                        return try Data(contentsOf: chunkFile)
-                    }) { uploadResult in
-                        try? FileManager.default.removeItem(at: tempDir)
-                        switch uploadResult {
-                        case .failure(let error):
-                            completionHandler(error)
-                        case .success:
-                            completionHandler(nil)
-                        }
-                    }
-                } catch {
-                    try? FileManager.default.removeItem(at: tempDir)
-                    completionHandler(error)
-                }
+        if let manifest = existingManifest {
+            // Skip if recent enough
+            if manifest.createdAt.timeIntervalSinceNow > -snapshotPolicy.minimumInterval {
+                return
+            }
+            // Skip if not enough new versions
+            if currentVersionCount - manifest.versionCount < snapshotPolicy.minimumNewVersions {
+                return
             }
         }
+
+        // Write snapshot to temp directory
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true, attributes: nil)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let manifest = try snapshotStorage.writeSnapshotChunks(
+            storeRootURL: store.rootDirectoryURL,
+            to: tempDir,
+            maxChunkSize: 5_000_000
+        )
+
+        try await snapshotExchange.sendSnapshot(manifest: manifest, chunkProvider: { index in
+            let chunkFile = tempDir.appendingPathComponent(String(format: "chunk-%03d", index))
+            return try Data(contentsOf: chunkFile)
+        })
     }
 }

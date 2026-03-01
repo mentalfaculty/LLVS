@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "LLVS",
     platforms: [
-        .macOS(.v10_15), .iOS(.v13), .watchOS(.v6)
+        .macOS(.v15), .iOS(.v18), .watchOS(.v11)
     ],
     products: [
         .library(

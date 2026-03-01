@@ -5,29 +5,27 @@
 //  Created by Drew McCormack on 09/02/2026.
 //
 
-import XCTest
+import Testing
 import Foundation
 @testable import LLVS
 @testable import LLVSSQLite
 
 // MARK: - Storage-Level Tests
 
-class SnapshotStorageTests: XCTestCase {
+@Suite class SnapshotStorageTests {
 
     let fm = FileManager.default
 
-    var store: Store!
-    var rootURL: URL!
+    let store: Store
+    let rootURL: URL
 
-    override func setUp() {
-        super.setUp()
+    init() throws {
         rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
-        store = try! Store(rootDirectoryURL: rootURL)
+        store = try Store(rootDirectoryURL: rootURL)
     }
 
-    override func tearDown() {
+    deinit {
         try? fm.removeItem(at: rootURL)
-        super.tearDown()
     }
 
     private func value(_ id: String, _ string: String) -> Value {
@@ -36,7 +34,7 @@ class SnapshotStorageTests: XCTestCase {
 
     @discardableResult
     private func makeLinearChain(count: Int, store: Store? = nil) -> [Version] {
-        let s = store ?? self.store!
+        let s = store ?? self.store
         var versions: [Version] = []
         var predecessor: Version.ID? = nil
         for i in 0..<count {
@@ -48,7 +46,7 @@ class SnapshotStorageTests: XCTestCase {
         return versions
     }
 
-    func testFileStorageSnapshotRoundTrip() throws {
+    @Test func fileStorageSnapshotRoundTrip() throws {
         let versions = makeLinearChain(count: 50)
         let storage = FileStorage()
 
@@ -71,21 +69,21 @@ class SnapshotStorageTests: XCTestCase {
         store2.queryHistory { history in
             versionCount = history.allVersionIdentifiers.count
         }
-        XCTAssertEqual(versionCount, 50)
+        #expect(versionCount == 50)
 
         // Verify all values readable
         for version in versions {
             let refs = try store2.valueReferences(at: version.id)
-            XCTAssertFalse(refs.isEmpty)
+            #expect(!refs.isEmpty)
         }
 
         // Verify latest value readable
         let latestVal = try store2.value(id: .init("val49"), at: versions.last!.id)
-        XCTAssertNotNil(latestVal)
-        XCTAssertEqual(String(data: latestVal!.data, encoding: .utf8), "data49")
+        #expect(latestVal != nil)
+        #expect(String(data: latestVal!.data, encoding: .utf8) == "data49")
     }
 
-    func testSnapshotChunking() throws {
+    @Test func snapshotChunking() throws {
         // Create enough data to produce multiple chunks
         let versions = makeLinearChain(count: 50)
         let storage = FileStorage()
@@ -96,7 +94,7 @@ class SnapshotStorageTests: XCTestCase {
         // Use a very small chunk size to ensure multiple chunks
         let manifest = try storage.writeSnapshotChunks(storeRootURL: rootURL, to: snapshotDir, maxChunkSize: 1024)
 
-        XCTAssertGreaterThan(manifest.chunkCount, 1, "Small maxChunkSize should produce multiple chunks")
+        #expect(manifest.chunkCount > 1, "Small maxChunkSize should produce multiple chunks")
 
         // Verify round-trip with chunked snapshot
         let rootURL2 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
@@ -108,11 +106,11 @@ class SnapshotStorageTests: XCTestCase {
 
         // Verify integrity
         let latestVal = try store2.value(id: .init("val49"), at: versions.last!.id)
-        XCTAssertNotNil(latestVal)
-        XCTAssertEqual(String(data: latestVal!.data, encoding: .utf8), "data49")
+        #expect(latestVal != nil)
+        #expect(String(data: latestVal!.data, encoding: .utf8) == "data49")
     }
 
-    func testSnapshotManifestContents() throws {
+    @Test func snapshotManifestContents() throws {
         makeLinearChain(count: 50)
         let storage = FileStorage()
 
@@ -121,14 +119,14 @@ class SnapshotStorageTests: XCTestCase {
 
         let manifest = try storage.writeSnapshotChunks(storeRootURL: rootURL, to: snapshotDir, maxChunkSize: 5_000_000)
 
-        XCTAssertEqual(manifest.format, "fileStorage-v1")
-        XCTAssertEqual(manifest.versionCount, 50)
-        XCTAssertGreaterThan(manifest.chunkCount, 0)
-        XCTAssertFalse(manifest.latestVersionId.rawValue.isEmpty)
-        XCTAssertGreaterThan(manifest.totalSize, 0)
+        #expect(manifest.format == "fileStorage-v1")
+        #expect(manifest.versionCount == 50)
+        #expect(manifest.chunkCount > 0)
+        #expect(!manifest.latestVersionId.rawValue.isEmpty)
+        #expect(manifest.totalSize > 0)
     }
 
-    func testSQLiteStorageSnapshotRoundTrip() throws {
+    @Test func sqliteStorageSnapshotRoundTrip() throws {
         // Create store with SQLite storage
         try? fm.removeItem(at: rootURL)
         let sqlStore = try Store(rootDirectoryURL: rootURL, storage: SQLiteStorage())
@@ -139,8 +137,8 @@ class SnapshotStorageTests: XCTestCase {
         defer { try? fm.removeItem(at: snapshotDir) }
 
         let manifest = try storage.writeSnapshotChunks(storeRootURL: rootURL, to: snapshotDir, maxChunkSize: 5_000_000)
-        XCTAssertEqual(manifest.format, "sqliteStorage-v1")
-        XCTAssertEqual(manifest.versionCount, 50)
+        #expect(manifest.format == "sqliteStorage-v1")
+        #expect(manifest.versionCount == 50)
 
         // Restore
         let rootURL2 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
@@ -154,38 +152,36 @@ class SnapshotStorageTests: XCTestCase {
         store2.queryHistory { history in
             versionCount = history.allVersionIdentifiers.count
         }
-        XCTAssertEqual(versionCount, 50)
+        #expect(versionCount == 50)
 
         let latestVal = try store2.value(id: .init("val49"), at: versions.last!.id)
-        XCTAssertNotNil(latestVal)
-        XCTAssertEqual(String(data: latestVal!.data, encoding: .utf8), "data49")
+        #expect(latestVal != nil)
+        #expect(String(data: latestVal!.data, encoding: .utf8) == "data49")
     }
 }
 
 
 // MARK: - Exchange-Level Tests
 
-class SnapshotExchangeTests: XCTestCase {
+@Suite class SnapshotExchangeTests {
 
     let fm = FileManager.default
 
-    var store1: Store!
-    var rootURL1: URL!
-    var exchangeURL: URL!
-    var exchange1: FileSystemExchange!
+    let store1: Store
+    let rootURL1: URL
+    let exchangeURL: URL
+    let exchange1: FileSystemExchange
 
-    override func setUp() {
-        super.setUp()
+    init() throws {
         rootURL1 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
-        store1 = try! Store(rootDirectoryURL: rootURL1)
+        store1 = try Store(rootDirectoryURL: rootURL1)
         exchangeURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         exchange1 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store1, usesFileCoordination: false)
     }
 
-    override func tearDown() {
+    deinit {
         try? fm.removeItem(at: rootURL1)
         try? fm.removeItem(at: exchangeURL)
-        super.tearDown()
     }
 
     private func value(_ id: String, _ string: String) -> Value {
@@ -194,7 +190,7 @@ class SnapshotExchangeTests: XCTestCase {
 
     @discardableResult
     private func makeLinearChain(count: Int, store: Store? = nil) -> [Version] {
-        let s = store ?? self.store1!
+        let s = store ?? self.store1
         var versions: [Version] = []
         var predecessor: Version.ID? = nil
         for i in 0..<count {
@@ -206,7 +202,7 @@ class SnapshotExchangeTests: XCTestCase {
         return versions
     }
 
-    func testFileSystemExchangeSnapshotUploadDownload() throws {
+    @Test func fileSystemExchangeSnapshotUploadDownload() async throws {
         makeLinearChain(count: 50)
         let storage = FileStorage()
 
@@ -217,19 +213,14 @@ class SnapshotExchangeTests: XCTestCase {
         let manifest = try storage.writeSnapshotChunks(storeRootURL: rootURL1, to: snapshotDir, maxChunkSize: 5_000_000)
 
         // Upload via exchange
-        let uploadExpect = expectation(description: "Upload")
-        exchange1.sendSnapshot(manifest: manifest, chunkProvider: { index in
+        try await exchange1.sendSnapshot(manifest: manifest, chunkProvider: { index in
             let chunkFile = snapshotDir.appendingPathComponent(String(format: "chunk-%03d", index))
             return try Data(contentsOf: chunkFile)
-        }) { result in
-            if case .failure(let error) = result { XCTFail("Upload failed: \(error)") }
-            uploadExpect.fulfill()
-        }
-        waitForExpectations(timeout: 10)
+        })
 
         // Verify files exist in snapshots/ directory
         let snapshotsDir = exchangeURL.appendingPathComponent("snapshots")
-        XCTAssertTrue(fm.fileExists(atPath: snapshotsDir.appendingPathComponent("manifest.json").path))
+        #expect(fm.fileExists(atPath: snapshotsDir.appendingPathComponent("manifest.json").path))
 
         // Download manifest from second exchange instance
         let rootURL2 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
@@ -237,28 +228,17 @@ class SnapshotExchangeTests: XCTestCase {
         let store2 = try Store(rootDirectoryURL: rootURL2)
         let exchange2 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store2, usesFileCoordination: false)
 
-        let manifestExpect = expectation(description: "Manifest")
-        exchange2.retrieveSnapshotManifest { result in
-            switch result {
-            case .success(let downloadedManifest):
-                XCTAssertNotNil(downloadedManifest)
-                XCTAssertEqual(downloadedManifest?.format, "fileStorage-v1")
-                XCTAssertEqual(downloadedManifest?.versionCount, 50)
-            case .failure(let error):
-                XCTFail("Manifest download failed: \(error)")
-            }
-            manifestExpect.fulfill()
-        }
-        waitForExpectations(timeout: 10)
+        let downloadedManifest = try await exchange2.retrieveSnapshotManifest()
+        #expect(downloadedManifest != nil)
+        #expect(downloadedManifest?.format == "fileStorage-v1")
+        #expect(downloadedManifest?.versionCount == 50)
     }
 
-    func testBootstrapFromSnapshot() throws {
+    @Test func bootstrapFromSnapshot() async throws {
         let versions = makeLinearChain(count: 50)
 
         // Sync to exchange
-        let sendExpect = expectation(description: "Send")
-        exchange1.send { _ in sendExpect.fulfill() }
-        waitForExpectations(timeout: 10)
+        _ = try await exchange1.send()
 
         // Upload snapshot
         let storage = FileStorage()
@@ -266,15 +246,10 @@ class SnapshotExchangeTests: XCTestCase {
         defer { try? fm.removeItem(at: snapshotDir) }
         let manifest = try storage.writeSnapshotChunks(storeRootURL: rootURL1, to: snapshotDir, maxChunkSize: 5_000_000)
 
-        let uploadExpect = expectation(description: "Upload")
-        exchange1.sendSnapshot(manifest: manifest, chunkProvider: { index in
+        try await exchange1.sendSnapshot(manifest: manifest, chunkProvider: { index in
             let chunkFile = snapshotDir.appendingPathComponent(String(format: "chunk-%03d", index))
             return try Data(contentsOf: chunkFile)
-        }) { result in
-            if case .failure(let error) = result { XCTFail("Upload failed: \(error)") }
-            uploadExpect.fulfill()
-        }
-        waitForExpectations(timeout: 10)
+        })
 
         // Create store2 coordinator and bootstrap
         let rootURL2 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
@@ -287,26 +262,21 @@ class SnapshotExchangeTests: XCTestCase {
         let coordinator2 = try StoreCoordinator(withStoreDirectoryAt: rootURL2, cacheDirectoryAt: cacheURL2)
         coordinator2.exchange = FileSystemExchange(rootDirectoryURL: exchangeURL, store: coordinator2.store, usesFileCoordination: false)
 
-        let bootstrapExpect = expectation(description: "Bootstrap")
-        coordinator2.bootstrapFromSnapshot { error in
-            XCTAssertNil(error)
-            bootstrapExpect.fulfill()
-        }
-        waitForExpectations(timeout: 10)
+        try await coordinator2.bootstrapFromSnapshot()
 
         // Verify all versions: 50 from snapshot + 1 initial from coordinator2
         var versionCount = 0
         coordinator2.store.queryHistory { history in
             versionCount = history.allVersionIdentifiers.count
         }
-        XCTAssertEqual(versionCount, 51)
+        #expect(versionCount == 51)
 
         // Verify data readable
         let latestVal = try coordinator2.store.value(id: .init("val49"), at: versions.last!.id)
-        XCTAssertNotNil(latestVal)
+        #expect(latestVal != nil)
     }
 
-    func testBootstrapThenIncrementalSync() throws {
+    @Test func bootstrapThenIncrementalSync() async throws {
         let versions = makeLinearChain(count: 50)
 
         // Upload snapshot
@@ -315,15 +285,10 @@ class SnapshotExchangeTests: XCTestCase {
         defer { try? fm.removeItem(at: snapshotDir) }
         let manifest = try storage.writeSnapshotChunks(storeRootURL: rootURL1, to: snapshotDir, maxChunkSize: 5_000_000)
 
-        let uploadExpect = expectation(description: "Upload")
-        exchange1.sendSnapshot(manifest: manifest, chunkProvider: { index in
+        try await exchange1.sendSnapshot(manifest: manifest, chunkProvider: { index in
             let chunkFile = snapshotDir.appendingPathComponent(String(format: "chunk-%03d", index))
             return try Data(contentsOf: chunkFile)
-        }) { result in
-            if case .failure(let error) = result { XCTFail("Upload failed: \(error)") }
-            uploadExpect.fulfill()
-        }
-        waitForExpectations(timeout: 10)
+        })
 
         // Add 10 more versions and sync to exchange
         var predecessor = versions.last!.id
@@ -332,9 +297,7 @@ class SnapshotExchangeTests: XCTestCase {
             predecessor = ver.id
         }
 
-        let sendExpect = expectation(description: "Send")
-        exchange1.send { _ in sendExpect.fulfill() }
-        waitForExpectations(timeout: 10)
+        _ = try await exchange1.send()
 
         // Create store2, bootstrap, then incremental sync
         let rootURL2 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
@@ -348,35 +311,23 @@ class SnapshotExchangeTests: XCTestCase {
         let exchange2 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: coordinator2.store, usesFileCoordination: false)
         coordinator2.exchange = exchange2
 
-        let bootstrapExpect = expectation(description: "Bootstrap")
-        coordinator2.bootstrapFromSnapshot { error in
-            XCTAssertNil(error)
-            bootstrapExpect.fulfill()
-        }
-        waitForExpectations(timeout: 10)
+        try await coordinator2.bootstrapFromSnapshot()
 
         // Normal exchange to get remaining 10 versions
-        let exchangeExpect = expectation(description: "Exchange")
-        coordinator2.exchange { error in
-            XCTAssertNil(error)
-            exchangeExpect.fulfill()
-        }
-        waitForExpectations(timeout: 10)
+        try await coordinator2.exchange()
 
         // Should have all versions: 60 from store1 + 1 initial from coordinator2
         var versionCount = 0
         coordinator2.store.queryHistory { history in
             versionCount = history.allVersionIdentifiers.count
         }
-        XCTAssertEqual(versionCount, 61)
+        #expect(versionCount == 61)
 
         let val59 = try coordinator2.store.value(id: .init("val59"), at: .init(predecessor.rawValue))
-        XCTAssertNotNil(val59)
+        #expect(val59 != nil)
     }
 
-    func testConcurrentSnapshotUploadsProduceValidSnapshot() throws {
-        // Two stores upload snapshots concurrently to the same exchange directory.
-        // After both complete, the resulting snapshot should be valid and bootstrappable.
+    @Test func concurrentSnapshotUploadsProduceValidSnapshot() async throws {
         makeLinearChain(count: 30)
 
         // Create a second store with different data
@@ -403,44 +354,32 @@ class SnapshotExchangeTests: XCTestCase {
         let manifestA = try storage.writeSnapshotChunks(storeRootURL: rootURL1, to: snapshotDirA, maxChunkSize: 1024)
         let manifestB = try storage.writeSnapshotChunks(storeRootURL: rootURL2, to: snapshotDirB, maxChunkSize: 1024)
 
-        // Two separate exchange instances pointing to the same shared directory
         let exchangeA = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store1, usesFileCoordination: false)
         let exchangeB = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store2, usesFileCoordination: false)
 
         // Upload concurrently
-        let expectA = expectation(description: "Upload A")
-        let expectB = expectation(description: "Upload B")
+        async let uploadA: () = {
+            try? await exchangeA.sendSnapshot(manifest: manifestA, chunkProvider: { index in
+                let chunkFile = snapshotDirA.appendingPathComponent(String(format: "chunk-%03d", index))
+                return try Data(contentsOf: chunkFile)
+            })
+        }()
+        async let uploadB: () = {
+            try? await exchangeB.sendSnapshot(manifest: manifestB, chunkProvider: { index in
+                let chunkFile = snapshotDirB.appendingPathComponent(String(format: "chunk-%03d", index))
+                return try Data(contentsOf: chunkFile)
+            })
+        }()
 
-        exchangeA.sendSnapshot(manifest: manifestA, chunkProvider: { index in
-            let chunkFile = snapshotDirA.appendingPathComponent(String(format: "chunk-%03d", index))
-            return try Data(contentsOf: chunkFile)
-        }) { result in
-            // Upload may succeed or fail due to concurrent directory deletion — both are acceptable
-            expectA.fulfill()
-        }
+        _ = await (uploadA, uploadB)
 
-        exchangeB.sendSnapshot(manifest: manifestB, chunkProvider: { index in
+        // Retry upload from store2 to guarantee a clean snapshot
+        try await exchangeB.sendSnapshot(manifest: manifestB, chunkProvider: { index in
             let chunkFile = snapshotDirB.appendingPathComponent(String(format: "chunk-%03d", index))
             return try Data(contentsOf: chunkFile)
-        }) { result in
-            expectB.fulfill()
-        }
+        })
 
-        waitForExpectations(timeout: 10)
-
-        // Now attempt a retry upload from whichever store "won" — we just re-upload from store2
-        // to guarantee a clean snapshot exists
-        let retryExpect = expectation(description: "Retry Upload")
-        exchangeB.sendSnapshot(manifest: manifestB, chunkProvider: { index in
-            let chunkFile = snapshotDirB.appendingPathComponent(String(format: "chunk-%03d", index))
-            return try Data(contentsOf: chunkFile)
-        }) { result in
-            if case .failure(let error) = result { XCTFail("Retry upload failed: \(error)") }
-            retryExpect.fulfill()
-        }
-        waitForExpectations(timeout: 10)
-
-        // Verify the final snapshot is valid by bootstrapping a third store
+        // Verify by bootstrapping a third store
         let rootURL3 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         let cacheURL3 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         defer {
@@ -450,32 +389,22 @@ class SnapshotExchangeTests: XCTestCase {
 
         // Send store2's versions so the bootstrapped store can load them
         let exchange2ForSend = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store2, usesFileCoordination: false)
-        let sendExpect = expectation(description: "Send")
-        exchange2ForSend.send { _ in sendExpect.fulfill() }
-        waitForExpectations(timeout: 10)
+        _ = try await exchange2ForSend.send()
 
         let coordinator3 = try StoreCoordinator(withStoreDirectoryAt: rootURL3, cacheDirectoryAt: cacheURL3)
         coordinator3.exchange = FileSystemExchange(rootDirectoryURL: exchangeURL, store: coordinator3.store, usesFileCoordination: false)
 
-        let bootstrapExpect = expectation(description: "Bootstrap")
-        coordinator3.bootstrapFromSnapshot { error in
-            XCTAssertNil(error, "Bootstrap after concurrent uploads should succeed once a clean snapshot exists")
-            bootstrapExpect.fulfill()
-        }
-        waitForExpectations(timeout: 10)
+        try await coordinator3.bootstrapFromSnapshot()
 
         var versionCount = 0
         coordinator3.store.queryHistory { history in
             versionCount = history.allVersionIdentifiers.count
         }
         // 40 versions from store2's snapshot + 1 initial from coordinator3
-        XCTAssertEqual(versionCount, 41)
+        #expect(versionCount == 41)
     }
 
-    func testBootstrapDuringSnapshotReplacementRecoversGracefully() throws {
-        // Upload an initial snapshot, then start a bootstrap while simultaneously
-        // replacing the snapshot. The bootstrap should either succeed or fail with
-        // an error (not crash or corrupt the store).
+    @Test func bootstrapDuringSnapshotReplacementRecoversGracefully() async throws {
         makeLinearChain(count: 30)
 
         let storage = FileStorage()
@@ -484,20 +413,13 @@ class SnapshotExchangeTests: XCTestCase {
         let manifest = try storage.writeSnapshotChunks(storeRootURL: rootURL1, to: snapshotDir, maxChunkSize: 1024)
 
         // Upload initial snapshot
-        let uploadExpect = expectation(description: "Initial upload")
-        exchange1.sendSnapshot(manifest: manifest, chunkProvider: { index in
+        try await exchange1.sendSnapshot(manifest: manifest, chunkProvider: { index in
             let chunkFile = snapshotDir.appendingPathComponent(String(format: "chunk-%03d", index))
             return try Data(contentsOf: chunkFile)
-        }) { result in
-            if case .failure(let error) = result { XCTFail("Initial upload failed: \(error)") }
-            uploadExpect.fulfill()
-        }
-        waitForExpectations(timeout: 10)
+        })
 
-        // Send versions to exchange so bootstrap can work
-        let sendExpect = expectation(description: "Send")
-        exchange1.send { _ in sendExpect.fulfill() }
-        waitForExpectations(timeout: 10)
+        // Send versions to exchange
+        _ = try await exchange1.send()
 
         // Prepare replacement snapshot from a different store
         let rootURL2 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
@@ -512,7 +434,7 @@ class SnapshotExchangeTests: XCTestCase {
         defer { try? fm.removeItem(at: snapshotDir2) }
         let manifest2 = try storage.writeSnapshotChunks(storeRootURL: rootURL2, to: snapshotDir2, maxChunkSize: 1024)
 
-        // Now race: bootstrap from one exchange while another replaces the snapshot
+        // Race: bootstrap from one exchange while another replaces the snapshot
         let rootURL3 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         let cacheURL3 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         defer {
@@ -525,41 +447,35 @@ class SnapshotExchangeTests: XCTestCase {
 
         let replacerExchange = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store2, usesFileCoordination: false)
 
-        let bootstrapExpect = expectation(description: "Bootstrap")
         var bootstrapError: Swift.Error?
 
-        coordinator3.bootstrapFromSnapshot { error in
-            bootstrapError = error
-            bootstrapExpect.fulfill()
-        }
+        async let bootstrapTask: () = {
+            do {
+                try await coordinator3.bootstrapFromSnapshot()
+            } catch {
+                bootstrapError = error
+            }
+        }()
 
-        // Simultaneously replace the snapshot
-        let replaceExpect = expectation(description: "Replace")
-        replacerExchange.sendSnapshot(manifest: manifest2, chunkProvider: { index in
-            let chunkFile = snapshotDir2.appendingPathComponent(String(format: "chunk-%03d", index))
-            return try Data(contentsOf: chunkFile)
-        }) { _ in
-            replaceExpect.fulfill()
-        }
+        async let replaceTask: () = {
+            try? await replacerExchange.sendSnapshot(manifest: manifest2, chunkProvider: { index in
+                let chunkFile = snapshotDir2.appendingPathComponent(String(format: "chunk-%03d", index))
+                return try Data(contentsOf: chunkFile)
+            })
+        }()
 
-        waitForExpectations(timeout: 10)
+        _ = await (bootstrapTask, replaceTask)
 
         // The key assertion: no crash, and the store is in a consistent state.
-        // The bootstrap may have succeeded (read the old snapshot before replacement)
-        // or failed (chunks disappeared mid-read). Either is acceptable.
         if bootstrapError != nil {
-            // Bootstrap failed due to race — this is the expected graceful recovery.
-            // Verify the store is still functional (not corrupted).
             var versionCount = 0
             coordinator3.store.queryHistory { history in
                 versionCount = history.allVersionIdentifiers.count
             }
-            // Should still have just the initial coordinator version (bootstrap didn't partially apply)
-            XCTAssertGreaterThanOrEqual(versionCount, 1)
+            #expect(versionCount >= 1)
         }
 
-        // Regardless of the race outcome, a fresh bootstrap with the current snapshot should work.
-        // Create a clean coordinator and try again.
+        // A fresh bootstrap with the current snapshot should work.
         let rootURL4 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         let cacheURL4 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         defer {
@@ -570,23 +486,17 @@ class SnapshotExchangeTests: XCTestCase {
         let coordinator4 = try StoreCoordinator(withStoreDirectoryAt: rootURL4, cacheDirectoryAt: cacheURL4)
         coordinator4.exchange = FileSystemExchange(rootDirectoryURL: exchangeURL, store: coordinator4.store, usesFileCoordination: false)
 
-        let retryExpect = expectation(description: "Retry bootstrap")
-        coordinator4.bootstrapFromSnapshot { error in
-            XCTAssertNil(error, "A clean bootstrap after the race should succeed")
-            retryExpect.fulfill()
-        }
-        waitForExpectations(timeout: 10)
+        try await coordinator4.bootstrapFromSnapshot()
 
-        // The second snapshot (from store2) should now be in effect
         var retryCount = 0
         coordinator4.store.queryHistory { history in
             retryCount = history.allVersionIdentifiers.count
         }
         // 20 versions from store2 snapshot + 1 initial from coordinator4
-        XCTAssertEqual(retryCount, 21)
+        #expect(retryCount == 21)
     }
 
-    func testBootstrapSkipsPopulatedStore() throws {
+    @Test func bootstrapSkipsPopulatedStore() async throws {
         makeLinearChain(count: 50)
 
         // Upload snapshot
@@ -595,15 +505,10 @@ class SnapshotExchangeTests: XCTestCase {
         defer { try? fm.removeItem(at: snapshotDir) }
         let manifest = try storage.writeSnapshotChunks(storeRootURL: rootURL1, to: snapshotDir, maxChunkSize: 5_000_000)
 
-        let uploadExpect = expectation(description: "Upload")
-        exchange1.sendSnapshot(manifest: manifest, chunkProvider: { index in
+        try await exchange1.sendSnapshot(manifest: manifest, chunkProvider: { index in
             let chunkFile = snapshotDir.appendingPathComponent(String(format: "chunk-%03d", index))
             return try Data(contentsOf: chunkFile)
-        }) { result in
-            if case .failure(let error) = result { XCTFail("Upload failed: \(error)") }
-            uploadExpect.fulfill()
-        }
-        waitForExpectations(timeout: 10)
+        })
 
         // Create coordinator2 with existing data (> 1 version)
         let rootURL2 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
@@ -614,7 +519,6 @@ class SnapshotExchangeTests: XCTestCase {
         }
 
         let coordinator2 = try StoreCoordinator(withStoreDirectoryAt: rootURL2, cacheDirectoryAt: cacheURL2)
-        // Make some versions so the store is populated
         try coordinator2.save(inserting: [value("existing1", "data1")])
         try coordinator2.save(inserting: [value("existing2", "data2")])
 
@@ -625,52 +529,45 @@ class SnapshotExchangeTests: XCTestCase {
             versionCountBefore = history.allVersionIdentifiers.count
         }
 
-        let bootstrapExpect = expectation(description: "Bootstrap")
-        coordinator2.bootstrapFromSnapshot { error in
-            XCTAssertNil(error)
-            bootstrapExpect.fulfill()
-        }
-        waitForExpectations(timeout: 10)
+        try await coordinator2.bootstrapFromSnapshot()
 
         // Version count should be unchanged (bootstrap was skipped)
         var versionCountAfter = 0
         coordinator2.store.queryHistory { history in
             versionCountAfter = history.allVersionIdentifiers.count
         }
-        XCTAssertEqual(versionCountBefore, versionCountAfter)
+        #expect(versionCountBefore == versionCountAfter)
     }
 }
 
 
 // MARK: - Policy Tests
 
-class SnapshotPolicyTests: XCTestCase {
+@Suite class SnapshotPolicyTests {
 
     let fm = FileManager.default
 
-    var rootURL: URL!
-    var cacheURL: URL!
-    var exchangeURL: URL!
+    let rootURL: URL
+    let cacheURL: URL
+    let exchangeURL: URL
 
-    override func setUp() {
-        super.setUp()
+    init() {
         rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         cacheURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         exchangeURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
     }
 
-    override func tearDown() {
+    deinit {
         try? fm.removeItem(at: rootURL)
         try? fm.removeItem(at: cacheURL)
         try? fm.removeItem(at: exchangeURL)
-        super.tearDown()
     }
 
     private func value(_ id: String, _ string: String) -> Value {
         Value(id: .init(id), data: string.data(using: .utf8)!)
     }
 
-    func testSnapshotNotUploadedWhenDisabled() throws {
+    @Test func snapshotNotUploadedWhenDisabled() async throws {
         let coordinator = try StoreCoordinator(withStoreDirectoryAt: rootURL, cacheDirectoryAt: cacheURL, snapshotPolicy: .disabled)
         let exchange = FileSystemExchange(rootDirectoryURL: exchangeURL, store: coordinator.store, usesFileCoordination: false)
         coordinator.exchange = exchange
@@ -681,19 +578,17 @@ class SnapshotPolicyTests: XCTestCase {
         }
 
         // Exchange
-        let expect = expectation(description: "Exchange")
-        coordinator.exchange { error in
-            XCTAssertNil(error)
-            expect.fulfill()
-        }
-        waitForExpectations(timeout: 10)
+        try await coordinator.exchange()
+
+        // Give async snapshot upload time to not happen
+        try await Task.sleep(nanoseconds: 1_000_000_000)
 
         // Verify no snapshot directory
         let snapshotsDir = exchangeURL.appendingPathComponent("snapshots")
-        XCTAssertFalse(fm.fileExists(atPath: snapshotsDir.appendingPathComponent("manifest.json").path))
+        #expect(!fm.fileExists(atPath: snapshotsDir.appendingPathComponent("manifest.json").path))
     }
 
-    func testSnapshotUploadedWhenPolicyMet() throws {
+    @Test func snapshotUploadedWhenPolicyMet() async throws {
         let policy = SnapshotPolicy(enabled: true, minimumInterval: 0, minimumNewVersions: 5)
         let coordinator = try StoreCoordinator(withStoreDirectoryAt: rootURL, cacheDirectoryAt: cacheURL, snapshotPolicy: policy)
         let exchange = FileSystemExchange(rootDirectoryURL: exchangeURL, store: coordinator.store, usesFileCoordination: false)
@@ -704,27 +599,18 @@ class SnapshotPolicyTests: XCTestCase {
             try coordinator.save(inserting: [value("val\(i)", "data\(i)")])
         }
 
-        // Sync to exchange first (so versions are in the exchange)
-        let sendExpect = expectation(description: "Exchange")
-        coordinator.exchange { error in
-            XCTAssertNil(error)
-            sendExpect.fulfill()
-        }
-        waitForExpectations(timeout: 10)
+        // Sync to exchange
+        try await coordinator.exchange()
 
         // Give the async snapshot upload time to complete
-        let uploadWait = expectation(description: "Wait")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            uploadWait.fulfill()
-        }
-        waitForExpectations(timeout: 5)
+        try await Task.sleep(nanoseconds: 2_000_000_000)
 
         // Verify snapshot was uploaded
         let snapshotsDir = exchangeURL.appendingPathComponent("snapshots")
-        XCTAssertTrue(fm.fileExists(atPath: snapshotsDir.appendingPathComponent("manifest.json").path), "Snapshot should be uploaded when policy is met")
+        #expect(fm.fileExists(atPath: snapshotsDir.appendingPathComponent("manifest.json").path), "Snapshot should be uploaded when policy is met")
     }
 
-    func testSnapshotNotReuploadedWhenRecentExists() throws {
+    @Test func snapshotNotReuploadedWhenRecentExists() async throws {
         let policy = SnapshotPolicy(enabled: true, minimumInterval: 3600, minimumNewVersions: 1)
         let coordinator = try StoreCoordinator(withStoreDirectoryAt: rootURL, cacheDirectoryAt: cacheURL, snapshotPolicy: policy)
         let exchange = FileSystemExchange(rootDirectoryURL: exchangeURL, store: coordinator.store, usesFileCoordination: false)
@@ -741,43 +627,25 @@ class SnapshotPolicyTests: XCTestCase {
         defer { try? fm.removeItem(at: snapshotDir) }
         let manifest = try storage.writeSnapshotChunks(storeRootURL: rootURL, to: snapshotDir, maxChunkSize: 5_000_000)
 
-        let uploadExpect = expectation(description: "Upload")
-        exchange.sendSnapshot(manifest: manifest, chunkProvider: { index in
+        try await exchange.sendSnapshot(manifest: manifest, chunkProvider: { index in
             let chunkFile = snapshotDir.appendingPathComponent(String(format: "chunk-%03d", index))
             return try Data(contentsOf: chunkFile)
-        }) { result in
-            if case .failure(let error) = result { XCTFail("Upload failed: \(error)") }
-            uploadExpect.fulfill()
-        }
-        waitForExpectations(timeout: 10)
+        })
 
         let originalSnapshotId = manifest.snapshotId
 
         // Exchange again — snapshot is recent, should not be re-uploaded
-        let exchangeExpect = expectation(description: "Exchange")
-        coordinator.exchange { error in
-            XCTAssertNil(error)
-            exchangeExpect.fulfill()
-        }
-        waitForExpectations(timeout: 10)
+        try await coordinator.exchange()
 
         // Wait for potential async upload
-        let waitExpect = expectation(description: "Wait")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { waitExpect.fulfill() }
-        waitForExpectations(timeout: 5)
+        try await Task.sleep(nanoseconds: 2_000_000_000)
 
         // Verify manifest is unchanged (same snapshotId)
-        let manifestCheckExpect = expectation(description: "ManifestCheck")
-        exchange.retrieveSnapshotManifest { result in
-            if case .success(let m) = result {
-                XCTAssertEqual(m?.snapshotId, originalSnapshotId, "Snapshot should not have been re-uploaded")
-            }
-            manifestCheckExpect.fulfill()
-        }
-        waitForExpectations(timeout: 10)
+        let downloadedManifest = try await exchange.retrieveSnapshotManifest()
+        #expect(downloadedManifest?.snapshotId == originalSnapshotId, "Snapshot should not have been re-uploaded")
     }
 
-    func testFormatCompatibilityCheck() throws {
+    @Test func formatCompatibilityCheck() async throws {
         // Upload a snapshot with a mismatched format string
         let coordinator = try StoreCoordinator(withStoreDirectoryAt: rootURL, cacheDirectoryAt: cacheURL)
         let exchange = FileSystemExchange(rootDirectoryURL: exchangeURL, store: coordinator.store, usesFileCoordination: false)
@@ -797,18 +665,13 @@ class SnapshotPolicyTests: XCTestCase {
         try data.write(to: snapshotsDir.appendingPathComponent("manifest.json"))
 
         // Bootstrap should gracefully skip (no error, no restore)
-        let bootstrapExpect = expectation(description: "Bootstrap")
-        coordinator.bootstrapFromSnapshot { error in
-            XCTAssertNil(error, "Mismatched format should not cause an error")
-            bootstrapExpect.fulfill()
-        }
-        waitForExpectations(timeout: 10)
+        try await coordinator.bootstrapFromSnapshot()
 
         // Store should still have just 1 version (the initial empty one created by StoreCoordinator)
         var versionCount = 0
         coordinator.store.queryHistory { history in
             versionCount = history.allVersionIdentifiers.count
         }
-        XCTAssertEqual(versionCount, 1)
+        #expect(versionCount == 1)
     }
 }

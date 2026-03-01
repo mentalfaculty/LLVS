@@ -5,18 +5,18 @@
 //  Created by Drew McCormack on 11/01/2019.
 //
 
-import XCTest
+import Testing
 import Foundation
 @testable import LLVS
 
-class DiffTests: XCTestCase {
+@Suite class DiffTests {
 
     let fm = FileManager.default
-    
-    var zone: Zone!
-    var rootURL: URL!
-    var map: Map!
-    
+
+    let zone: Zone
+    let rootURL: URL
+    let map: Map
+
     func add(values: [String], version: String, basedOn: String?) {
         let basedOnVersionId = basedOn.flatMap { Version.ID($0) }
         let versionId = Version.ID(version)
@@ -29,7 +29,7 @@ class DiffTests: XCTestCase {
         }
         try! map.addVersion(versionId, basedOn: basedOnVersionId, applying: deltas)
     }
-    
+
     func remove(values: [String], version: String, basedOn: String?) {
         let basedOnVersionId = basedOn.flatMap { Version.ID($0) }
         let versionId = Version.ID(version)
@@ -41,104 +41,91 @@ class DiffTests: XCTestCase {
         }
         try! map.addVersion(versionId, basedOn: basedOnVersionId, applying: deltas)
     }
-    
-    override func setUp() {
-        super.setUp()
-        
+
+    init() throws {
         rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         zone = FileZone(rootDirectory: rootURL, fileExtension: ".txt")
         map = Map(zone: zone)
     }
-    
-    override func tearDown() {
+
+    deinit {
         try? fm.removeItem(at: rootURL)
-        super.tearDown()
     }
-    
-    func testDisjointInserts() {
+
+    @Test func disjointInserts() throws {
         add(values: ["AB0000"], version: "0000", basedOn: nil)
         add(values: ["AB1111", "AB1155", "CD1111"], version: "1111", basedOn: "0000")
         add(values: ["AB2222", "AB1166", "CD2222"], version: "2222", basedOn: "0000")
-        let diffs = try! map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
-        XCTAssertEqual(diffs.count, 6)
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.inserted(.first) }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1155" && $0.valueFork == Value.Fork.inserted(.first) }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "CD1111" && $0.valueFork == Value.Fork.inserted(.first) }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB2222" && $0.valueFork == Value.Fork.inserted(.second) }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1166" && $0.valueFork == Value.Fork.inserted(.second) }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "CD2222" && $0.valueFork == Value.Fork.inserted(.second) }))
-        XCTAssertFalse(diffs.contains(where: { $0.valueId.rawValue == "CD2222" && $0.valueFork == Value.Fork.inserted(.first) }))
+        let diffs = try map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
+        #expect(diffs.count == 6)
+        #expect(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.inserted(.first) }))
+        #expect(diffs.contains(where: { $0.valueId.rawValue == "AB1155" && $0.valueFork == Value.Fork.inserted(.first) }))
+        #expect(diffs.contains(where: { $0.valueId.rawValue == "CD1111" && $0.valueFork == Value.Fork.inserted(.first) }))
+        #expect(diffs.contains(where: { $0.valueId.rawValue == "AB2222" && $0.valueFork == Value.Fork.inserted(.second) }))
+        #expect(diffs.contains(where: { $0.valueId.rawValue == "AB1166" && $0.valueFork == Value.Fork.inserted(.second) }))
+        #expect(diffs.contains(where: { $0.valueId.rawValue == "CD2222" && $0.valueFork == Value.Fork.inserted(.second) }))
+        #expect(!diffs.contains(where: { $0.valueId.rawValue == "CD2222" && $0.valueFork == Value.Fork.inserted(.first) }))
     }
-    
-    func testInserts() {
+
+    @Test func inserts() throws {
         add(values: [], version: "0000", basedOn: nil)
         add(values: ["AB1111", "MM1111"], version: "1111", basedOn: "0000")
         add(values: ["AB1111", "AB1112", "ZZ2222"], version: "2222", basedOn: "0000")
-        let diffs = try! map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
-        XCTAssertEqual(diffs.count, 4)
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.twiceInserted }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "MM1111" && $0.valueFork == Value.Fork.inserted(.first) }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "ZZ2222" && $0.valueFork == Value.Fork.inserted(.second) }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1112" && $0.valueFork == Value.Fork.inserted(.second) }))
+        let diffs = try map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
+        #expect(diffs.count == 4)
+        #expect(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.twiceInserted }))
+        #expect(diffs.contains(where: { $0.valueId.rawValue == "MM1111" && $0.valueFork == Value.Fork.inserted(.first) }))
+        #expect(diffs.contains(where: { $0.valueId.rawValue == "ZZ2222" && $0.valueFork == Value.Fork.inserted(.second) }))
+        #expect(diffs.contains(where: { $0.valueId.rawValue == "AB1112" && $0.valueFork == Value.Fork.inserted(.second) }))
     }
-    
-    func testUpdates() {
+
+    @Test func updates() throws {
         add(values: ["AB1111", "MM1111"], version: "0000", basedOn: nil)
         add(values: ["AB1111"], version: "1111", basedOn: "0000")
         add(values: ["AB1111", "MM1111", "ZZ2222"], version: "2222", basedOn: "0000")
-        let diffs = try! map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
-        XCTAssertEqual(diffs.count, 3)
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.twiceUpdated }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "MM1111" && $0.valueFork == Value.Fork.updated(.second) }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "ZZ2222" && $0.valueFork == Value.Fork.inserted(.second) }))
+        let diffs = try map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
+        #expect(diffs.count == 3)
+        #expect(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.twiceUpdated }))
+        #expect(diffs.contains(where: { $0.valueId.rawValue == "MM1111" && $0.valueFork == Value.Fork.updated(.second) }))
+        #expect(diffs.contains(where: { $0.valueId.rawValue == "ZZ2222" && $0.valueFork == Value.Fork.inserted(.second) }))
     }
-    
-    func testRemoves() {
+
+    @Test func removes() throws {
         add(values: ["AB1111", "MM1111", "ZZ2222"], version: "0000", basedOn: nil)
         remove(values: ["AB1111", "MM1111"], version: "1111", basedOn: "0000")
         remove(values: ["AB1111", "ZZ2222"], version: "2222", basedOn: "0000")
-        let diffs = try! map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
-        XCTAssertEqual(diffs.count, 3)
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.twiceRemoved }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "MM1111" && $0.valueFork == Value.Fork.removed(.first) }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "ZZ2222" && $0.valueFork == Value.Fork.removed(.second) }))
+        let diffs = try map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
+        #expect(diffs.count == 3)
+        #expect(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.twiceRemoved }))
+        #expect(diffs.contains(where: { $0.valueId.rawValue == "MM1111" && $0.valueFork == Value.Fork.removed(.first) }))
+        #expect(diffs.contains(where: { $0.valueId.rawValue == "ZZ2222" && $0.valueFork == Value.Fork.removed(.second) }))
     }
-    
-    func testUpdateRemove() {
+
+    @Test func updateRemove() throws {
         add(values: ["AB1111"], version: "0000", basedOn: nil)
         remove(values: ["AB1111"], version: "1111", basedOn: "0000")
         add(values: ["AB1111"], version: "2222", basedOn: "0000")
-        let diffs = try! map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
-        XCTAssertEqual(diffs.count, 1)
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.removedAndUpdated(removedOn: .first) }))
+        let diffs = try map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
+        #expect(diffs.count == 1)
+        #expect(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.removedAndUpdated(removedOn: .first) }))
     }
 
-    func testUnchangedBucketsProduceNoDiffs() {
+    @Test func unchangedBucketsProduceNoDiffs() throws {
         add(values: ["AB0000", "ZZ0000"], version: "0000", basedOn: nil)
         add(values: ["AB1111"], version: "1111", basedOn: "0000")
         add(values: ["AB2222"], version: "2222", basedOn: "0000")
-        let diffs = try! map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
+        let diffs = try map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
         // Only "AB" bucket changed; "ZZ" bucket is identical in both branches
-        XCTAssertTrue(diffs.allSatisfy({ $0.valueId.rawValue.hasPrefix("AB") }))
-        XCTAssertFalse(diffs.contains(where: { $0.valueId.rawValue == "ZZ0000" }))
+        #expect(diffs.allSatisfy({ $0.valueId.rawValue.hasPrefix("AB") }))
+        #expect(!diffs.contains(where: { $0.valueId.rawValue == "ZZ0000" }))
     }
 
-    func testOneBranchUnchangedBucket() {
+    @Test func oneBranchUnchangedBucket() throws {
         add(values: ["AB0000", "ZZ0000"], version: "0000", basedOn: nil)
         add(values: ["AB1111"], version: "1111", basedOn: "0000")
         add(values: ["ZZ2222"], version: "2222", basedOn: "0000")
-        let diffs = try! map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.inserted(.first) }))
-        XCTAssertTrue(diffs.contains(where: { $0.valueId.rawValue == "ZZ2222" && $0.valueFork == Value.Fork.inserted(.second) }))
+        let diffs = try map.differences(between: .init("1111"), and: .init("2222"), withCommonAncestor: .init("0000"))
+        #expect(diffs.contains(where: { $0.valueId.rawValue == "AB1111" && $0.valueFork == Value.Fork.inserted(.first) }))
+        #expect(diffs.contains(where: { $0.valueId.rawValue == "ZZ2222" && $0.valueFork == Value.Fork.inserted(.second) }))
     }
-
-    static var allTests = [
-        ("testDisjointInserts", testDisjointInserts),
-        ("testInserts", testInserts),
-        ("testUpdates", testUpdates),
-        ("testRemoves", testRemoves),
-        ("testUpdateRemove", testUpdateRemove),
-        ("testUnchangedBucketsProduceNoDiffs", testUnchangedBucketsProduceNoDiffs),
-        ("testOneBranchUnchangedBucket", testOneBranchUnchangedBucket),
-    ]
 }

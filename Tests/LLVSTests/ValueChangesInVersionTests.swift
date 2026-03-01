@@ -5,45 +5,35 @@
 //  Created by Drew McCormack on 13/03/2019.
 //
 
-import XCTest
+import Testing
 import Foundation
 @testable import LLVS
 
-class ValueChangesInVersionTests: XCTestCase {
+@Suite class ValueChangesInVersionTests {
 
     let fm = FileManager.default
-    
-    var store: Store!
-    var rootURL: URL!
-    var originalVersion: Version!
-    var branch1: Version!
-    var branch2: Version!
-    var originalValue: Value!
-    var newValue1: Value!
-    var newValue2: Value!
-    
-    var valueForMerge: Value!
-    
-    override func setUp() {
-        super.setUp()
+
+    let store: Store
+    let rootURL: URL
+
+    init() throws {
         rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
-        store = try! Store(rootDirectoryURL: rootURL)
+        store = try Store(rootDirectoryURL: rootURL)
     }
-    
-    override func tearDown() {
+
+    deinit {
         try? FileManager.default.removeItem(at: rootURL)
-        super.tearDown()
     }
-    
-    func testValuesConflictlessMerge() {
+
+    @Test func valuesConflictlessMerge() throws {
         let val1 = Value(id: .init("ABCDEF"), data: "Bob".data(using: .utf8)!)
         var val2 = Value(id: .init("ABCD"), data: "Tom".data(using: .utf8)!)
-        let origin = try! store.makeVersion(basedOn: nil, storing: [])
-        let ver1 = try! store.makeVersion(basedOnPredecessor: origin.id, storing: [.insert(val1)])
-        let ver2 = try! store.makeVersion(basedOnPredecessor: origin.id, storing: [.insert(val2)])
+        let origin = try store.makeVersion(basedOn: nil, storing: [])
+        let ver1 = try store.makeVersion(basedOnPredecessor: origin.id, storing: [.insert(val1)])
+        let ver2 = try store.makeVersion(basedOnPredecessor: origin.id, storing: [.insert(val2)])
         val2.storedVersionId = ver2.id
-        let ver3 = try! store.makeVersion(basedOn: .init(idOfFirst: ver1.id, idOfSecond: ver2.id), storing: [.preserve(val2.reference!)])
-        let valueChanges = try! store.valueChanges(madeInVersionIdentifiedBy: ver3.id)
+        let ver3 = try store.makeVersion(basedOn: .init(idOfFirst: ver1.id, idOfSecond: ver2.id), storing: [.preserve(val2.reference!)])
+        let valueChanges = try store.valueChanges(madeInVersionIdentifiedBy: ver3.id)
         let allPreserves = valueChanges.allSatisfy {
             if case .preserve = $0 {
                 return true
@@ -51,13 +41,6 @@ class ValueChangesInVersionTests: XCTestCase {
                 return false
             }
         }
-        XCTAssertTrue(allPreserves)
+        #expect(allPreserves)
     }
-    
-    static var allTests = [
-        ("testValuesConflictlessMerge", testValuesConflictlessMerge),
-    ]
 }
-
-
-

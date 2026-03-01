@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Synchronization
 
 
 // MARK:- Branch
@@ -56,8 +57,7 @@ public final class Store {
         return Map(zone: valuesMapZone)
     }()
     
-    private let history = History()
-    private let historyAccessQueue = DispatchQueue(label: "llvs.dispatchQueue.historyaccess")
+    private let history = Mutex(History())
 
     fileprivate let fileManager = FileManager()
     
@@ -82,7 +82,7 @@ public final class Store {
     /// changed by another process, calling this method will ensure the versions added by that process
     /// are loaded.
     public func reloadHistory() throws {
-        try historyAccessQueue.sync {
+        try history.withLock { history in
             var newVersions: Set<Version> = []
             for version in try storedVersions() where history.version(identifiedBy: version.id) == nil {
                 newVersions.insert(version)
@@ -97,8 +97,8 @@ public final class Store {
     /// Provides access to the history object in a serialized way, allowing access from any thread.
     /// Calls the block passed after getting exclusive history to the history object, and passes the history.
     public func queryHistory(in block: (History) throws ->Void) rethrows {
-        try historyAccessQueue.sync {
-            try block(self.history)
+        try history.withLock { history in
+            try block(history)
         }
     }
     
@@ -190,7 +190,7 @@ extension Store {
         try store(versionWithDataSize)
         
         // Add to history
-        try historyAccessQueue.sync {
+        try history.withLock { history in
             try history.add(version, updatingPredecessorVersions: true)
         }
     }
@@ -330,14 +330,14 @@ extension Store {
     public func mergeUnrelated(version firstVersionIdentifier: Version.ID, with secondVersionIdentifier: Version.ID, resolvingWith arbiter: MergeArbiter, metadata: Version.Metadata = [:]) throws -> Version {
         var firstVersion, secondVersion: Version?
         var fastForwardVersion: Version?
-        try historyAccessQueue.sync {
+        try history.withLock { history in
             firstVersion = history.version(identifiedBy: firstVersionIdentifier)
             secondVersion = history.version(identifiedBy: secondVersionIdentifier)
 
             guard firstVersion != nil, secondVersion != nil else {
                 throw Error.missingVersion
             }
-            
+
             // Check for fast forward
             if history.isAncestralLine(from: firstVersion!.id, to: secondVersion!.id) {
                 fastForwardVersion = secondVersion
@@ -358,7 +358,7 @@ extension Store {
     public func mergeRelated(version firstVersionIdentifier: Version.ID, with secondVersionIdentifier: Version.ID, resolvingWith arbiter: MergeArbiter, metadata: Version.Metadata = [:]) throws -> Version {
         var firstVersion, secondVersion, commonVersion: Version?
         var commonVersionIdentifier: Version.ID?
-        try historyAccessQueue.sync {
+        try history.withLock { history in
             commonVersionIdentifier = try history.greatestCommonAncestor(ofVersionsIdentifiedBy: (firstVersionIdentifier, secondVersionIdentifier))
             guard commonVersionIdentifier != nil else {
                 throw Error.noCommonAncestor(firstVersion: firstVersionIdentifier, secondVersion: secondVersionIdentifier)
@@ -367,7 +367,7 @@ extension Store {
             firstVersion = history.version(identifiedBy: firstVersionIdentifier)
             secondVersion = history.version(identifiedBy: secondVersionIdentifier)
             commonVersion = history.version(identifiedBy: commonVersionIdentifier!)
-            
+
             guard firstVersion != nil, secondVersion != nil else {
                 throw Error.missingVersion
             }

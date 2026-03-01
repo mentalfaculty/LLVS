@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Synchronization
 
 public extension Result {
     var value: Success? {
@@ -44,29 +45,21 @@ public extension ClosedRange where Bound == Int {
 }
 
 @propertyWrapper
-public struct Atomic<Value> {
+public struct Atomic<Value: Sendable> {
 
-    private var value: Value
-    private let lock = NSLock()
+    private final class Storage: @unchecked Sendable {
+        let mutex: Mutex<Value>
+        init(_ value: Value) { self.mutex = Mutex(value) }
+    }
+
+    private let storage: Storage
 
     public init(wrappedValue value: Value) {
-        self.value = value
+        self.storage = Storage(value)
     }
 
     public var wrappedValue: Value {
-      get { return load() }
-      set { store(newValue: newValue) }
-    }
-
-    private func load() -> Value {
-        lock.lock()
-        defer { lock.unlock() }
-        return value
-    }
-
-    private mutating func store(newValue: Value) {
-        lock.lock()
-        defer { lock.unlock() }
-        value = newValue
+      get { storage.mutex.withLock { $0 } }
+      set { storage.mutex.withLock { $0 = newValue } }
     }
 }
