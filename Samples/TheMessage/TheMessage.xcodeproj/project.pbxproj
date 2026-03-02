@@ -7,29 +7,26 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		07E880422350EDE5003471B4 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07E880412350EDE5003471B4 /* AppDelegate.swift */; };
-		07E880442350EDE5003471B4 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07E880432350EDE5003471B4 /* SceneDelegate.swift */; };
 		07E880462350EDE5003471B4 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07E880452350EDE5003471B4 /* ContentView.swift */; };
 		07E880482350EDE6003471B4 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 07E880472350EDE6003471B4 /* Assets.xcassets */; };
 		07E8804B2350EDE6003471B4 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 07E8804A2350EDE6003471B4 /* Preview Assets.xcassets */; };
-		07E8804E2350EDE6003471B4 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 07E8804C2350EDE6003471B4 /* LaunchScreen.storyboard */; };
 		07E880582350EE25003471B4 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 07E880572350EE25003471B4 /* CloudKit.framework */; };
 		07E8805E2350EF64003471B4 /* LLVS in Frameworks */ = {isa = PBXBuildFile; productRef = 07E8805D2350EF64003471B4 /* LLVS */; };
 		07E880602350EF64003471B4 /* LLVSCloudKit in Frameworks */ = {isa = PBXBuildFile; productRef = 07E8805F2350EF64003471B4 /* LLVSCloudKit */; };
+		07E880632350EF64003471B4 /* TheMessageApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07E880612350EF64003471B4 /* TheMessageApp.swift */; };
+		07E880642350EF64003471B4 /* MessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07E880622350EF64003471B4 /* MessageStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		07E8803E2350EDE5003471B4 /* TheMessage.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TheMessage.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		07E880412350EDE5003471B4 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		07E880432350EDE5003471B4 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		07E880452350EDE5003471B4 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		07E880472350EDE6003471B4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		07E8804A2350EDE6003471B4 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
-		07E8804D2350EDE6003471B4 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		07E8804F2350EDE6003471B4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		07E880552350EE21003471B4 /* TheMessage.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TheMessage.entitlements; sourceTree = "<group>"; };
 		07E880572350EE25003471B4 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
 		07E8805C2350EF12003471B4 /* llvs */ = {isa = PBXFileReference; lastKnownFileType = folder; name = llvs; path = ../..; sourceTree = "<group>"; };
+		07E880612350EF64003471B4 /* TheMessageApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMessageApp.swift; sourceTree = "<group>"; };
+		07E880622350EF64003471B4 /* MessageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -68,12 +65,10 @@
 			isa = PBXGroup;
 			children = (
 				07E880552350EE21003471B4 /* TheMessage.entitlements */,
-				07E880412350EDE5003471B4 /* AppDelegate.swift */,
-				07E880432350EDE5003471B4 /* SceneDelegate.swift */,
+				07E880612350EF64003471B4 /* TheMessageApp.swift */,
+				07E880622350EF64003471B4 /* MessageStore.swift */,
 				07E880452350EDE5003471B4 /* ContentView.swift */,
 				07E880472350EDE6003471B4 /* Assets.xcassets */,
-				07E8804C2350EDE6003471B4 /* LaunchScreen.storyboard */,
-				07E8804F2350EDE6003471B4 /* Info.plist */,
 				07E880492350EDE6003471B4 /* Preview Content */,
 			);
 			path = TheMessage;
@@ -157,7 +152,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				07E8804E2350EDE6003471B4 /* LaunchScreen.storyboard in Resources */,
 				07E8804B2350EDE6003471B4 /* Preview Assets.xcassets in Resources */,
 				07E880482350EDE6003471B4 /* Assets.xcassets in Resources */,
 			);
@@ -170,24 +164,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				07E880422350EDE5003471B4 /* AppDelegate.swift in Sources */,
-				07E880442350EDE5003471B4 /* SceneDelegate.swift in Sources */,
+				07E880632350EF64003471B4 /* TheMessageApp.swift in Sources */,
+				07E880642350EF64003471B4 /* MessageStore.swift in Sources */,
 				07E880462350EDE5003471B4 /* ContentView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin PBXVariantGroup section */
-		07E8804C2350EDE6003471B4 /* LaunchScreen.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-				07E8804D2350EDE6003471B4 /* Base */,
-			);
-			name = LaunchScreen.storyboard;
-			sourceTree = "<group>";
-		};
-/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
 		07E880502350EDE6003471B4 /* Debug */ = {
@@ -241,7 +224,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -296,7 +279,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
@@ -313,16 +296,15 @@
 				CODE_SIGN_ENTITLEMENTS = TheMessage/TheMessage.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_ASSET_PATHS = "\"TheMessage/Preview Content\"";
-				DEVELOPMENT_TEAM = P7BXV6PHLD;
 				ENABLE_PREVIEWS = YES;
-				INFOPLIST_FILE = TheMessage/Info.plist;
+				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.mentalfaculty.themessage;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
@@ -334,16 +316,15 @@
 				CODE_SIGN_ENTITLEMENTS = TheMessage/TheMessage.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_ASSET_PATHS = "\"TheMessage/Preview Content\"";
-				DEVELOPMENT_TEAM = P7BXV6PHLD;
 				ENABLE_PREVIEWS = YES;
-				INFOPLIST_FILE = TheMessage/Info.plist;
+				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.mentalfaculty.themessage;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
