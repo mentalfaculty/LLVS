@@ -5,6 +5,7 @@
 //  Created by Drew McCormack on 01/03/2026.
 //
 
+#if ForkedModel
 import Foundation
 import LLVS
 import Forked
@@ -108,3 +109,4 @@ public class MergeableArbiter: MergeArbiter {
         return changes
     }
 }
+#endif

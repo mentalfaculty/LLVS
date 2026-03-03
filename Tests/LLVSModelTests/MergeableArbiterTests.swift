@@ -5,6 +5,7 @@
 //  Created by Drew McCormack on 01/03/2026.
 //
 
+#if ForkedModel
 import XCTest
 import Foundation
 @testable import LLVS
@@ -242,3 +243,4 @@ class MergeableArbiterTests: XCTestCase {
         XCTAssertNil(instanceIdentifier(from: valueId))
     }
 }
+#endif

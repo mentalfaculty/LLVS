@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.1
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -24,6 +24,9 @@ let package = Package(
         .library(
             name: "LLVSModel",
             targets: ["LLVSModel"]),
+    ],
+    traits: [
+        "ForkedModel",
     ],
     dependencies: [
         .package(url: "https://github.com/drewmccormack/Forked.git", from: "0.5.9"),
@@ -52,7 +55,7 @@ let package = Package(
             name: "LLVSModel",
             dependencies: [
                 "LLVS",
-                .product(name: "ForkedModel", package: "Forked"),
+                .product(name: "ForkedModel", package: "Forked", condition: .when(traits: ["ForkedModel"])),
             ],
             swiftSettings: [.swiftLanguageMode(.v5)]),
         .testTarget(
@@ -61,9 +64,9 @@ let package = Package(
                 "LLVSModel",
                 "LLVS",
                 "LLVSSQLite",
-                .product(name: "Forked", package: "Forked"),
-                .product(name: "ForkedMerge", package: "Forked"),
-                .product(name: "ForkedModel", package: "Forked"),
+                .product(name: "Forked", package: "Forked", condition: .when(traits: ["ForkedModel"])),
+                .product(name: "ForkedMerge", package: "Forked", condition: .when(traits: ["ForkedModel"])),
+                .product(name: "ForkedModel", package: "Forked", condition: .when(traits: ["ForkedModel"])),
             ],
             swiftSettings: [.swiftLanguageMode(.v5)])
     ]
