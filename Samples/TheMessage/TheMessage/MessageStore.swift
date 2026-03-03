@@ -9,8 +9,8 @@ class MessageStore {
 
     private let storeCoordinator: StoreCoordinator
     private let messageId = Value.ID("MESSAGE")
-    private var versionTask: Task<Void, Never>?
-    private var pollingTask: Task<Void, Never>?
+    @ObservationIgnored nonisolated(unsafe) private var versionTask: Task<Void, Never>?
+    @ObservationIgnored nonisolated(unsafe) private var pollingTask: Task<Void, Never>?
 
     init() {
         LLVS.log.level = .verbose
