@@ -24,6 +24,15 @@ let package = Package(
         .library(
             name: "LLVSModel",
             targets: ["LLVSModel"]),
+        .library(
+            name: "LLVSWebDAV",
+            targets: ["LLVSWebDAV"]),
+        .library(
+            name: "LLVSGoogleDrive",
+            targets: ["LLVSGoogleDrive"]),
+        .library(
+            name: "LLVSOneDrive",
+            targets: ["LLVSOneDrive"]),
     ],
     traits: [
         "ForkedModel",
@@ -57,6 +66,18 @@ let package = Package(
                 "LLVS",
                 .product(name: "ForkedModel", package: "Forked", condition: .when(traits: ["ForkedModel"])),
             ],
+            swiftSettings: [.swiftLanguageMode(.v5)]),
+        .target(
+            name: "LLVSWebDAV",
+            dependencies: ["LLVS"],
+            swiftSettings: [.swiftLanguageMode(.v5)]),
+        .target(
+            name: "LLVSGoogleDrive",
+            dependencies: ["LLVS"],
+            swiftSettings: [.swiftLanguageMode(.v5)]),
+        .target(
+            name: "LLVSOneDrive",
+            dependencies: ["LLVS"],
             swiftSettings: [.swiftLanguageMode(.v5)]),
         .testTarget(
             name: "LLVSModelTests",
