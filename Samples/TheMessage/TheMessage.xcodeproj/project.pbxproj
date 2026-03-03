@@ -3,14 +3,13 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 52;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		07E880462350EDE5003471B4 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07E880452350EDE5003471B4 /* ContentView.swift */; };
 		07E880482350EDE6003471B4 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 07E880472350EDE6003471B4 /* Assets.xcassets */; };
 		07E8804B2350EDE6003471B4 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 07E8804A2350EDE6003471B4 /* Preview Assets.xcassets */; };
-		07E880582350EE25003471B4 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 07E880572350EE25003471B4 /* CloudKit.framework */; };
 		07E8805E2350EF64003471B4 /* LLVS in Frameworks */ = {isa = PBXBuildFile; productRef = 07E8805D2350EF64003471B4 /* LLVS */; };
 		07E880602350EF64003471B4 /* LLVSCloudKit in Frameworks */ = {isa = PBXBuildFile; productRef = 07E8805F2350EF64003471B4 /* LLVSCloudKit */; };
 		07E880632350EF64003471B4 /* TheMessageApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07E880612350EF64003471B4 /* TheMessageApp.swift */; };
@@ -23,8 +22,6 @@
 		07E880472350EDE6003471B4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		07E8804A2350EDE6003471B4 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		07E880552350EE21003471B4 /* TheMessage.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TheMessage.entitlements; sourceTree = "<group>"; };
-		07E880572350EE25003471B4 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
-		07E8805C2350EF12003471B4 /* llvs */ = {isa = PBXFileReference; lastKnownFileType = folder; name = llvs; path = ../..; sourceTree = "<group>"; };
 		07E880612350EF64003471B4 /* TheMessageApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMessageApp.swift; sourceTree = "<group>"; };
 		07E880622350EF64003471B4 /* MessageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -34,7 +31,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				07E880582350EE25003471B4 /* CloudKit.framework in Frameworks */,
 				07E8805E2350EF64003471B4 /* LLVS in Frameworks */,
 				07E880602350EF64003471B4 /* LLVSCloudKit in Frameworks */,
 			);
@@ -46,10 +42,8 @@
 		07E880352350EDE5003471B4 = {
 			isa = PBXGroup;
 			children = (
-				07E8805C2350EF12003471B4 /* llvs */,
 				07E880402350EDE5003471B4 /* TheMessage */,
 				07E8803F2350EDE5003471B4 /* Products */,
-				07E880562350EE25003471B4 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -82,14 +76,6 @@
 			path = "Preview Content";
 			sourceTree = "<group>";
 		};
-		07E880562350EE25003471B4 /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				07E880572350EE25003471B4 /* CloudKit.framework */,
-			);
-			name = Frameworks;
-			sourceTree = "<group>";
-		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -120,8 +106,9 @@
 		07E880362350EDE5003471B4 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastSwiftUpdateCheck = 1110;
-				LastUpgradeCheck = 1320;
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
 				ORGANIZATIONNAME = "Momenta B.V.";
 				TargetAttributes = {
 					07E8803D2350EDE5003471B4 = {
@@ -130,7 +117,7 @@
 				};
 			};
 			buildConfigurationList = 07E880392350EDE5003471B4 /* Build configuration list for PBXProject "TheMessage" */;
-			compatibilityVersion = "Xcode 9.3";
+			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -138,6 +125,9 @@
 				Base,
 			);
 			mainGroup = 07E880352350EDE5003471B4;
+			packageReferences = (
+				07E880652350EF64003471B4 /* XCLocalSwiftPackageReference "../.." */,
+			);
 			productRefGroup = 07E8803F2350EDE5003471B4 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -229,7 +219,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -296,16 +286,21 @@
 				CODE_SIGN_ENTITLEMENTS = TheMessage/TheMessage.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_ASSET_PATHS = "\"TheMessage/Preview Content\"";
+				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.mentalfaculty.themessage;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
@@ -316,16 +311,21 @@
 				CODE_SIGN_ENTITLEMENTS = TheMessage/TheMessage.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_ASSET_PATHS = "\"TheMessage/Preview Content\"";
+				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.mentalfaculty.themessage;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -352,13 +352,22 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		07E880652350EF64003471B4 /* XCLocalSwiftPackageReference "../.." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../..;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		07E8805D2350EF64003471B4 /* LLVS */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = 07E880652350EF64003471B4 /* XCLocalSwiftPackageReference "../.." */;
 			productName = LLVS;
 		};
 		07E8805F2350EF64003471B4 /* LLVSCloudKit */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = 07E880652350EF64003471B4 /* XCLocalSwiftPackageReference "../.." */;
 			productName = LLVSCloudKit;
 		};
 /* End XCSwiftPackageProductDependency section */
