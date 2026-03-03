@@ -1,6 +1,6 @@
 //
 //  DynamicTaskBatcherTests.swift
-//  
+//
 //
 //  Created by Drew McCormack on 06/03/2020.
 //
@@ -12,110 +12,83 @@ import Foundation
 @testable import LLVS
 
 class DynamicTaskBatcherTests: XCTestCase {
-    
+
     enum TestError: Swift.Error {
         case testError
     }
-    
-    func testFailure() {
+
+    func testFailure() async throws {
         var count = 0
-        let batcher = DynamicTaskBatcher(numberOfTasks: 10, taskCostEvaluator: { _ in 0.1 }) { range, finish in
+        let batcher = DynamicTaskBatcher(numberOfTasks: 10, taskCostEvaluator: { _ in 0.1 }) { range in
             count += 1
-            finish(.definitive(.failure(TestError.testError)))
+            return .definitive(.failure(TestError.testError))
         }
-        
-        let expect = self.expectation(description: "executing")
-        batcher.start { result in
-            XCTAssertFalse(result.isSuccess)
-            expect.fulfill()
+
+        do {
+            try await batcher.start()
+            XCTFail("Should have thrown")
+        } catch {
+            // Expected
         }
-        wait(for: [expect], timeout: 1.0)
         XCTAssertEqual(count, 1)
     }
-    
-    func testZeroTasks() {
-        let batcher = DynamicTaskBatcher(numberOfTasks: 0, taskCostEvaluator: { _ in 0.1 }, batchExecuter: { _, _ in })
-        let expect = self.expectation(description: "executing")
-        batcher.start { result in
-            XCTAssertTrue(result.isSuccess)
-            expect.fulfill()
+
+    func testZeroTasks() async throws {
+        let batcher = DynamicTaskBatcher(numberOfTasks: 0, taskCostEvaluator: { _ in 0.1 }) { _ in
+            return .definitive(.success(()))
         }
-        wait(for: [expect], timeout: 1.0)
+        try await batcher.start()
     }
-    
-    func testOneTask() {
+
+    func testOneTask() async throws {
         var count = 0
-        let batcher = DynamicTaskBatcher(numberOfTasks: 1, taskCostEvaluator: { _ in 0.1 }) { range, finish in
+        let batcher = DynamicTaskBatcher(numberOfTasks: 1, taskCostEvaluator: { _ in 0.1 }) { range in
             count += 1
             XCTAssertEqual(range, 0..<1)
-            finish(.definitive(.success(())))
+            return .definitive(.success(()))
         }
-        
-        let expect = self.expectation(description: "executing")
-        batcher.start { result in
-            XCTAssertTrue(result.isSuccess)
-            expect.fulfill()
-        }
-        wait(for: [expect], timeout: 1.0)
-        
+
+        try await batcher.start()
         XCTAssertEqual(count, 1)
     }
-    
-    func testOneLargeTask() {
+
+    func testOneLargeTask() async throws {
         var count = 0
-        let batcher = DynamicTaskBatcher(numberOfTasks: 1, taskCostEvaluator: { _ in 2.0 }) { range, finish in
+        let batcher = DynamicTaskBatcher(numberOfTasks: 1, taskCostEvaluator: { _ in 2.0 }) { range in
             count += 1
             XCTAssertEqual(range, 0..<1)
-            finish(.definitive(.success(())))
+            return .definitive(.success(()))
         }
-        
-        let expect = self.expectation(description: "executing")
-        batcher.start { result in
-            XCTAssertTrue(result.isSuccess)
-            expect.fulfill()
-        }
-        wait(for: [expect], timeout: 1.0)
-        
+
+        try await batcher.start()
         XCTAssertEqual(count, 1)
     }
-    
-    func testTwoSmallTasks() {
+
+    func testTwoSmallTasks() async throws {
         var count = 0
-        let batcher = DynamicTaskBatcher(numberOfTasks: 2, taskCostEvaluator: { _ in 0.1 }) { range, finish in
+        let batcher = DynamicTaskBatcher(numberOfTasks: 2, taskCostEvaluator: { _ in 0.1 }) { range in
             count += 1
             XCTAssertEqual(range, 0..<2)
-            finish(.definitive(.success(())))
+            return .definitive(.success(()))
         }
-        
-        let expect = self.expectation(description: "executing")
-        batcher.start { result in
-            XCTAssertTrue(result.isSuccess)
-            expect.fulfill()
-        }
-        wait(for: [expect], timeout: 1.0)
-        
+
+        try await batcher.start()
         XCTAssertEqual(count, 1)
     }
-    
-    func testTwoLargeTasks() {
+
+    func testTwoLargeTasks() async throws {
         var count = 0
-        let batcher = DynamicTaskBatcher(numberOfTasks: 2, taskCostEvaluator: { _ in 1.0 }) { range, finish in
+        let batcher = DynamicTaskBatcher(numberOfTasks: 2, taskCostEvaluator: { _ in 1.0 }) { range in
             count += 1
             XCTAssertEqual(range.count, 1)
-            finish(.definitive(.success(())))
+            return .definitive(.success(()))
         }
-        
-        let expect = self.expectation(description: "executing")
-        batcher.start { result in
-            XCTAssertTrue(result.isSuccess)
-            expect.fulfill()
-        }
-        wait(for: [expect], timeout: 1.0)
-        
+
+        try await batcher.start()
         XCTAssertEqual(count, 2)
     }
-    
-    func testAccumulatingCost() {
+
+    func testAccumulatingCost() async throws {
         var count = 0
         let batcher = DynamicTaskBatcher(numberOfTasks: 4, taskCostEvaluator: { index in
             switch index {
@@ -128,7 +101,7 @@ class DynamicTaskBatcherTests: XCTestCase {
             default:
                 return 0.1
             }
-        }) { range, finish in
+        }) { range in
             count += 1
             if range.lowerBound == 0 {
                 XCTAssertEqual(range.count, 1)
@@ -137,63 +110,51 @@ class DynamicTaskBatcherTests: XCTestCase {
             } else {
                 XCTAssertEqual(range.count, 1)
             }
-            finish(.definitive(.success(())))
+            return .definitive(.success(()))
         }
-        
-        let expect = self.expectation(description: "executing")
-        batcher.start { result in
-            XCTAssertTrue(result.isSuccess)
-            expect.fulfill()
-        }
-        wait(for: [expect], timeout: 1.0)
-        
+
+        try await batcher.start()
         XCTAssertEqual(count, 3)
     }
-    
-    func testGrowingAndRepeatingBatchesUntilFail() {
+
+    func testGrowingAndRepeatingBatchesUntilFail() async throws {
         var count = 0
-        let batcher = DynamicTaskBatcher(numberOfTasks: 2, taskCostEvaluator: { _ in 1.01 }) { range, finish in
+        let batcher = DynamicTaskBatcher(numberOfTasks: 2, taskCostEvaluator: { _ in 1.01 }) { range in
             count += 1
             XCTAssertEqual(range.lowerBound, 0)
-            finish(.growBatchAndReexecute)
+            return .growBatchAndReexecute
         }
-        
-        let expect = self.expectation(description: "executing")
-        batcher.start { result in
-            XCTAssertFalse(result.isSuccess)
-            expect.fulfill()
+
+        do {
+            try await batcher.start()
+            XCTFail("Should have thrown")
+        } catch {
+            // Expected
         }
-        wait(for: [expect], timeout: 1.0)
-        
         XCTAssertEqual(count, 2)
     }
-    
-    func testGrowingAndRepeatingBatchesWithSuccess() {
+
+    func testGrowingAndRepeatingBatchesWithSuccess() async throws {
         var count = 0
-        let batcher = DynamicTaskBatcher(numberOfTasks: 3, taskCostEvaluator: { _ in 1.01 }) { range, finish in
+        let batcher = DynamicTaskBatcher(numberOfTasks: 3, taskCostEvaluator: { _ in 1.01 }) { range in
             count += 1
             switch range {
             case 0..<1:
-                finish(.growBatchAndReexecute)
+                return .growBatchAndReexecute
             case 0..<2:
-                finish(.definitive(.success(())))
+                return .definitive(.success(()))
             case 2..<3:
-                finish(.definitive(.success(())))
+                return .definitive(.success(()))
             default:
                 XCTFail()
+                return .definitive(.failure(TestError.testError))
             }
         }
-        
-        let expect = self.expectation(description: "executing")
-        batcher.start { result in
-            XCTAssertTrue(result.isSuccess)
-            expect.fulfill()
-        }
-        wait(for: [expect], timeout: 1.0)
-        
+
+        try await batcher.start()
         XCTAssertEqual(count, 3)
     }
-    
+
     static var allTests = [
         ("testZeroTasks", testZeroTasks),
         ("testOneTask", testOneTask),

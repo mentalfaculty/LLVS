@@ -3,7 +3,6 @@ import XCTest
 #if !os(macOS) && !os(iOS)
 public func allTests() -> [XCTestCaseEntry] {
     return [
-        testCase(AsynchronousTaskTests.allTests),
         testCase(GeneralTests.allTests),
         testCase(StoreSetupTests.allTests),
         testCase(ValueTests.allTests),

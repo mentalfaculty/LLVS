@@ -2,15 +2,14 @@ import Foundation
 import LLVS
 import LLVSCloudKit
 import CloudKit
-import Combine
 
-@Observable
+@MainActor @Observable
 class MessageStore {
     var message: String = "Let there be light!"
 
     private let storeCoordinator: StoreCoordinator
     private let messageId = Value.ID("MESSAGE")
-    private var versionSubscriber: AnyCancellable?
+    private var versionTask: Task<Void, Never>?
     private var pollingTask: Task<Void, Never>?
 
     init() {
@@ -21,10 +20,12 @@ class MessageStore {
         coordinator.exchange = exchange
         self.storeCoordinator = coordinator
 
-        versionSubscriber = coordinator.currentVersionSubject
-            .map { [weak self] _ in self?.fetchMessage() ?? "Let there be light!" }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] msg in self?.message = msg }
+        versionTask = Task { [weak self] in
+            guard let self else { return }
+            for await _ in coordinator.currentVersionUpdates {
+                self.message = self.fetchMessage() ?? "Let there be light!"
+            }
+        }
 
         startPolling()
     }
@@ -42,21 +43,24 @@ class MessageStore {
     }
 
     func sync() {
-        storeCoordinator.exchange { _ in
-            self.storeCoordinator.merge()
+        Task {
+            try? await storeCoordinator.exchange()
+            storeCoordinator.merge()
         }
     }
 
     private func startPolling() {
-        pollingTask = Task { [weak self] in
+        pollingTask = Task {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(15))
-                self?.sync()
+                try? await storeCoordinator.exchange()
+                storeCoordinator.merge()
             }
         }
     }
 
     deinit {
+        versionTask?.cancel()
         pollingTask?.cancel()
     }
 }

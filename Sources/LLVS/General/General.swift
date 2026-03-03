@@ -32,8 +32,6 @@ public extension Result {
     }
 }
 
-public typealias CompletionHandler<T> = (Result<T, Error>)->Void
-
 public extension ClosedRange where Bound == Int {
     func split(intoRangesOfLength size: Bound) -> [ClosedRange] {
         let end = upperBound+1

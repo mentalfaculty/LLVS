@@ -8,7 +8,6 @@
 import Foundation
 import CloudKit
 import LLVS
-import Combine
 
 public class CloudKitExchange: Exchange {
 
@@ -60,11 +59,8 @@ public class CloudKitExchange: Exchange {
     public var store: Store
 
     /// Client to inform of updates
-    private let _newVersionsSubject = PassthroughSubject<Void, Never>()
-
-    public var newVersionsAvailable: AnyPublisher<Void, Never> {
-        _newVersionsSubject.eraseToAnyPublisher()
-    }
+    public let newVersionsAvailable: AsyncStream<Void>
+    private let newVersionsContinuation: AsyncStream<Void>.Continuation
 
     /// A store identifier identifies the store in the cloud. This allows multiple stores to use a shared zone like the public database.
     public let storeIdentifier: String
@@ -101,6 +97,7 @@ public class CloudKitExchange: Exchange {
         self.zoneIdentifier = cloudDatabaseDescription.zoneIdentifier
         self.database = cloudDatabaseDescription.database
         self.zone = zoneIdentifier.flatMap { CKRecordZone(zoneName: $0) }
+        (self.newVersionsAvailable, self.newVersionsContinuation) = AsyncStream<Void>.makeStream()
         if database.databaseScope == .private, let zone = self.zone {
             self.createZoneOperation = CKModifyRecordZonesOperation(recordZonesToSave: [zone], recordZoneIDsToDelete: nil)
             self.database.add(self.createZoneOperation!)
@@ -109,20 +106,25 @@ public class CloudKitExchange: Exchange {
         }
     }
 
+    deinit {
+        newVersionsContinuation.finish()
+    }
+
     /// Remove a zone, if there is one. Otherwise will give error.
-    public func removeZone(completionHandler completion: @escaping CompletionHandler<Void>) {
+    public func removeZone() async throws {
         log.trace("Removing zone")
         guard let zone = zone else {
-            completion(.failure(Error.noZoneFound))
-            return
+            throw Error.noZoneFound
         }
-        database.delete(withRecordZoneID: zone.zoneID) { zoneID, error in
-            if let error = error {
-                log.error("Removing zone failed: \(error)")
-                completion(.failure(error))
-            } else {
-                log.trace("Removed zone")
-                completion(.success(()))
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Swift.Error>) in
+            database.delete(withRecordZoneID: zone.zoneID) { zoneID, error in
+                if let error = error {
+                    log.error("Removing zone failed: \(error)")
+                    continuation.resume(throwing: error)
+                } else {
+                    log.trace("Removed zone")
+                    continuation.resume()
+                }
             }
         }
     }
@@ -134,42 +136,52 @@ public class CloudKitExchange: Exchange {
 fileprivate extension CloudKitExchange {
 
     /// Uses the zone changes API. Requires a custom zone.
-    func fetchCloudZoneChanges(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
+    func fetchCloudZoneChanges() async throws {
         log.trace("Fetching cloud changes")
 
-        let config = CKFetchRecordZoneChangesOperation.ZoneConfiguration()
-        config.desiredKeys = []
-        config.previousServerChangeToken = restoration.fetchRecordChangesToken
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Swift.Error>) in
+            let config = CKFetchRecordZoneChangesOperation.ZoneConfiguration()
+            config.desiredKeys = []
+            config.previousServerChangeToken = self.restoration.fetchRecordChangesToken
 
-        let operation = CKFetchRecordZoneChangesOperation()
-        operation.recordZoneIDs = [zoneID!]
-        operation.configurationsByRecordZoneID = [zoneID! : config]
-        operation.addDependency(createZoneOperation!)
-        operation.fetchAllChanges = true
-        operation.recordChangedBlock = { record in
-            let versionId = Version.ID(record.recordID.recordName)
-            self.restoration.versionsInCloud.insert(versionId)
-            log.verbose("Found record for version: \(versionId)")
-        }
-        operation.recordZoneFetchCompletionBlock = { zoneID, token, clientData, moreComing, error in
-            self.restoration.fetchRecordChangesToken = token
-            log.verbose("Stored iCloud token: \(String(describing: token))")
-        }
-        operation.fetchRecordZoneChangesCompletionBlock = { error in
-            if let error = error as? CKError, error.code == .changeTokenExpired || error.code == .partialFailure {
-                self.restoration.fetchRecordChangesToken = nil
-                self.restoration.versionsInCloud = []
-                self.fetchCloudZoneChanges(executingUponCompletion: completionHandler)
-                log.error("iCloud token expired. Cleared cached data")
-            } else if let error = error {
-                completionHandler(.failure(error))
-            } else {
-                log.trace("Fetched changes")
-                completionHandler(.success(()))
+            let operation = CKFetchRecordZoneChangesOperation()
+            operation.recordZoneIDs = [self.zoneID!]
+            operation.configurationsByRecordZoneID = [self.zoneID! : config]
+            operation.addDependency(self.createZoneOperation!)
+            operation.fetchAllChanges = true
+            operation.recordChangedBlock = { record in
+                let versionId = Version.ID(record.recordID.recordName)
+                self.restoration.versionsInCloud.insert(versionId)
+                log.verbose("Found record for version: \(versionId)")
             }
-        }
+            operation.recordZoneFetchCompletionBlock = { zoneID, token, clientData, moreComing, error in
+                self.restoration.fetchRecordChangesToken = token
+                log.verbose("Stored iCloud token: \(String(describing: token))")
+            }
+            operation.fetchRecordZoneChangesCompletionBlock = { error in
+                if let error = error as? CKError, error.code == .changeTokenExpired || error.code == .partialFailure {
+                    self.restoration.fetchRecordChangesToken = nil
+                    self.restoration.versionsInCloud = []
+                    log.error("iCloud token expired. Cleared cached data")
+                    // Retry
+                    Task {
+                        do {
+                            try await self.fetchCloudZoneChanges()
+                            continuation.resume()
+                        } catch {
+                            continuation.resume(throwing: error)
+                        }
+                    }
+                } else if let error = error {
+                    continuation.resume(throwing: error)
+                } else {
+                    log.trace("Fetched changes")
+                    continuation.resume()
+                }
+            }
 
-        database.add(operation)
+            self.database.add(operation)
+        }
     }
 
     enum QueryInfo {
@@ -197,54 +209,54 @@ fileprivate extension CloudKitExchange {
     }
 
     /// Get any new version identifiers in cloud
-    func queryDatabaseForNewVersions(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
+    func queryDatabaseForNewVersions() async throws {
         log.trace("Querying cloud for new versions")
         let query = makeRecordsQuery()
-        queryDatabase(with: .query(query)) { result in
-            switch result {
-            case .failure(let error as CKError) where error.code == .unknownItem:
-                // Probably don't have data in cloud yet. Ignore error
-                self.restoration.lastQueryDate = Date.distantPast
-                completionHandler(.success(()))
-            case .success(let records):
-                let versionIds = records.map { Version.ID($0.recordID.recordName) }
-                self.restoration.versionsInCloud.formUnion(versionIds)
-                let modificationDates = records.map { $0.modificationDate! }
-                self.restoration.lastQueryDate = max(self.restoration.lastQueryDate ?? Date.distantPast, modificationDates.max() ?? Date.distantPast )
-                completionHandler(.success(()))
-            case .failure(let error):
-                completionHandler(.failure(error))
-            }
+        do {
+            let records = try await queryDatabase(with: .query(query))
+            let versionIds = records.map { Version.ID($0.recordID.recordName) }
+            self.restoration.versionsInCloud.formUnion(versionIds)
+            let modificationDates = records.map { $0.modificationDate! }
+            self.restoration.lastQueryDate = max(self.restoration.lastQueryDate ?? Date.distantPast, modificationDates.max() ?? Date.distantPast )
+        } catch let error as CKError where error.code == .unknownItem {
+            // Probably don't have data in cloud yet. Ignore error
+            self.restoration.lastQueryDate = Date.distantPast
         }
     }
 
     /// Used when no zone is available. Eg. the public database.
-    func queryDatabase(with queryInfo: QueryInfo, executingUponCompletion completionHandler: @escaping CompletionHandler<[CKRecord]>) {
+    func queryDatabase(with queryInfo: QueryInfo) async throws -> [CKRecord] {
         log.trace("Querying cloud changes")
 
-        let operation = queryInfo.makeQueryOperation()
-        var records: [CKRecord] = []
-        operation.recordFetchedBlock = { record in
-            records.append(record)
-        }
-        operation.queryCompletionBlock = { cursor, error in
-            if let cursor = cursor {
-                self.queryDatabase(with: .cursor(cursor)) { result in
-                    switch result {
-                    case let .failure(error):
-                        completionHandler(.failure(error))
-                    case let .success(newRecords):
-                        completionHandler(.success(records + newRecords))
+        return try await withCheckedThrowingContinuation { continuation in
+            let operation = queryInfo.makeQueryOperation()
+            var records: [CKRecord] = []
+            operation.recordFetchedBlock = { record in
+                records.append(record)
+            }
+            operation.queryCompletionBlock = { cursor, error in
+                if let cursor = cursor {
+                    Task {
+                        do {
+                            let moreRecords = try await self.queryDatabase(with: .cursor(cursor))
+                            continuation.resume(returning: records + moreRecords)
+                        } catch {
+                            continuation.resume(throwing: error)
+                        }
+                    }
+                }
+                else {
+                    if let error = error {
+                        log.error("Failed to fetch new versions: \(error)")
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: records)
                     }
                 }
             }
-            else {
-                if let error = error { log.error("Failed to fetch new versions: \(error)") }
-                completionHandler(error != nil ? .failure(error!) : .success(records))
-            }
-        }
 
-        database.add(operation)
+            self.database.add(operation)
+        }
     }
 }
 
@@ -253,170 +265,131 @@ fileprivate extension CloudKitExchange {
 
 public extension CloudKitExchange {
 
-    func prepareToRetrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
+    func prepareToRetrieve() async throws {
         log.trace("Preparing to retrieve")
         if zone != nil {
-            fetchCloudZoneChanges(executingUponCompletion: completionHandler)
+            try await fetchCloudZoneChanges()
         } else {
-            queryDatabaseForNewVersions(executingUponCompletion: completionHandler)
+            try await queryDatabaseForNewVersions()
         }
     }
 
-    func retrieveVersions(identifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
+    func retrieveVersions(identifiedBy versionIds: [Version.ID]) async throws -> [Version] {
         log.trace("Retrieving versions: \(versionIds)")
 
         guard !versionIds.isEmpty else {
-            completionHandler(.success([]))
-            return
+            return []
         }
 
         // Use batches, because CloudKit will give limit error at 400 records
         let batchRanges = (0...versionIds.count-1).split(intoRangesOfLength: cloudKitFetchLimit)
         var versions: [Version] = []
-        let tasks = batchRanges.map { range in
-            AsynchronousTask { finish in
-                autoreleasepool {
-                    let batchVersionIds = Array(versionIds[range])
-                    self.retrieve(batchOfVersionsIdentifiedBy: batchVersionIds) { result in
-                        switch result {
-                        case .success(let batchVersions):
-                            versions.append(contentsOf: batchVersions)
-                            finish(.success(()))
-                        case .failure(let error):
-                            finish(.failure(error))
-                        }
-                    }
-                }
-            }
+        for range in batchRanges {
+            let batchVersionIds = Array(versionIds[range])
+            let batchVersions = try await retrieve(batchOfVersionsIdentifiedBy: batchVersionIds)
+            versions.append(contentsOf: batchVersions)
         }
-        tasks.executeInOrder { result in
-            switch result {
-            case .success:
-                completionHandler(.success(versions))
-            case .failure(let error):
-                completionHandler(.failure(error))
-            }
-        }
+        return versions
     }
 
     /// Assumes that the batch size is less than the limits imposed by CloudKit (ie 400)
-    private func retrieve(batchOfVersionsIdentifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version]>) {
+    private func retrieve(batchOfVersionsIdentifiedBy versionIds: [Version.ID]) async throws -> [Version] {
         log.trace("Retrieving versions")
-        let recordIDs = versionIds.map { CKRecord.ID(recordName: $0.rawValue, zoneID: zoneID ?? .default) }
-        let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
-        fetchOperation.desiredKeys = [CKRecord.ExchangeKey.version.rawValue]
-        fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
-            guard error == nil else {
-                completionHandler(.failure(error!))
-                return
-            }
-
-            do {
-                try autoreleasepool {
-                    var versions: [Version] = []
-                    for record in recordsByRecordID!.values {
-                        try autoreleasepool {
-                            if let data = record.exchangeValue(forKey: .version) as? Data, let version = try JSONDecoder().decode([Version].self, from: data).first {
-                                versions.append(version)
-                            } else {
-                                throw Error.couldNotGetVersionFromRecord
-                            }
-                        }
-                    }
-                    log.verbose("Retrieved versions: \(versions)")
-                    completionHandler(.success(versions))
-                }
-            } catch {
-                completionHandler(.failure(error))
-            }
-        }
-        database.add(fetchOperation)
-    }
-
-    func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>) {
-        log.verbose("Retrieved all versions: \(restoration.versionsInCloud.map({ $0.rawValue }))")
-        completionHandler(.success(Array(restoration.versionsInCloud)))
-    }
-
-    func retrieveValueChanges(forVersionsIdentifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID:[Value.Change]]>) {
-        log.trace("Retrieving value changes for versions: \(versionIds)")
-
-        guard !versionIds.isEmpty else {
-            completionHandler(.success([:]))
-            return
-        }
-
-        // Use batches of length 200, because CloudKit will give limit error at 400 records
-        let batchRanges = (0...versionIds.count-1).split(intoRangesOfLength: cloudKitFetchLimit)
-        var changesByVersionId: [Version.ID:[Value.Change]] = [:]
-        let tasks = batchRanges.map { range in
-            AsynchronousTask { finish in
-                autoreleasepool {
-                    let batchVersionIds = Array(versionIds[range])
-                    self.retrieve(batchOfValueChangesForVersionsIdentifiedBy: batchVersionIds) { result in
-                        autoreleasepool {
-                            switch result {
-                            case .success(let newChangesByVersionId):
-                                changesByVersionId.merge(newChangesByVersionId) { current, _ in current }
-                                finish(.success(()))
-                            case .failure(let error):
-                                finish(.failure(error))
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        tasks.executeInOrder { result in
-            autoreleasepool {
-                switch result {
-                case .success:
-                    completionHandler(.success(changesByVersionId))
-                case .failure(let error):
-                    completionHandler(.failure(error))
-                }
-            }
-        }
-    }
-
-    /// Retrieves a batch of value changes, assuming batch is smaller than the CloudKit limit
-    private func retrieve(batchOfValueChangesForVersionsIdentifiedBy versionIds: [Version.ID], executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID:[Value.Change]]>) {
-        log.trace("Retrieving value changes for versions: \(versionIds)")
-        let recordIDs = versionIds.map { CKRecord.ID(recordName: $0.rawValue, zoneID: zoneID ?? .default) }
-        let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
-        fetchOperation.desiredKeys = [CKRecord.ExchangeKey.valueChanges.rawValue, CKRecord.ExchangeKey.valueChangesAsset.rawValue]
-        fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
-            autoreleasepool {
-                guard error == nil, let recordsByRecordID = recordsByRecordID else {
-                    completionHandler(.failure(error!))
+        return try await withCheckedThrowingContinuation { continuation in
+            let recordIDs = versionIds.map { CKRecord.ID(recordName: $0.rawValue, zoneID: self.zoneID ?? .default) }
+            let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
+            fetchOperation.desiredKeys = [CKRecord.ExchangeKey.version.rawValue]
+            fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
+                guard error == nil else {
+                    continuation.resume(throwing: error!)
                     return
                 }
 
                 do {
-                    var changesByVersion: [(Version.ID, [Value.Change])]!
-                    changesByVersion = try recordsByRecordID.map { keyValue in
-                        let record = keyValue.value
-                        let recordID = keyValue.key
-                        let data: Data
-                        if let d = record.exchangeValue(forKey: .valueChanges) as? Data {
-                            data = d
-                        } else if let asset = record.exchangeValue(forKey: .valueChangesAsset) as? CKAsset, let url = asset.fileURL {
-                            data = try Data(contentsOf: url)
-                        } else {
-                            throw Error.invalidValueChangesDataInRecord
+                    try autoreleasepool {
+                        var versions: [Version] = []
+                        for record in recordsByRecordID!.values {
+                            try autoreleasepool {
+                                if let data = record.exchangeValue(forKey: .version) as? Data, let version = try JSONDecoder().decode([Version].self, from: data).first {
+                                    versions.append(version)
+                                } else {
+                                    throw Error.couldNotGetVersionFromRecord
+                                }
+                            }
                         }
-                        let valueChanges: [Value.Change] = try JSONDecoder().decode([Value.Change].self, from: data)
-                        log.verbose("Retrieved value changes for \(recordID.recordName): \(valueChanges)")
-                        return (Version.ID(recordID.recordName), valueChanges)
+                        log.verbose("Retrieved versions: \(versions)")
+                        continuation.resume(returning: versions)
                     }
-                    completionHandler(.success(.init(uniqueKeysWithValues: changesByVersion)))
                 } catch {
-                    log.error("Failed to retrieve: \(error)")
-                    completionHandler(.failure(error))
+                    continuation.resume(throwing: error)
                 }
             }
+            self.database.add(fetchOperation)
         }
-        database.add(fetchOperation)
+    }
+
+    func retrieveAllVersionIdentifiers() async throws -> [Version.ID] {
+        log.verbose("Retrieved all versions: \(restoration.versionsInCloud.map({ $0.rawValue }))")
+        return Array(restoration.versionsInCloud)
+    }
+
+    func retrieveValueChanges(forVersionsIdentifiedBy versionIds: [Version.ID]) async throws -> [Version.ID: [Value.Change]] {
+        log.trace("Retrieving value changes for versions: \(versionIds)")
+
+        guard !versionIds.isEmpty else {
+            return [:]
+        }
+
+        // Use batches of length 200, because CloudKit will give limit error at 400 records
+        let batchRanges = (0...versionIds.count-1).split(intoRangesOfLength: cloudKitFetchLimit)
+        var changesByVersionId: [Version.ID: [Value.Change]] = [:]
+        for range in batchRanges {
+            let batchVersionIds = Array(versionIds[range])
+            let newChanges = try await retrieve(batchOfValueChangesForVersionsIdentifiedBy: batchVersionIds)
+            changesByVersionId.merge(newChanges) { current, _ in current }
+        }
+        return changesByVersionId
+    }
+
+    /// Retrieves a batch of value changes, assuming batch is smaller than the CloudKit limit
+    private func retrieve(batchOfValueChangesForVersionsIdentifiedBy versionIds: [Version.ID]) async throws -> [Version.ID: [Value.Change]] {
+        log.trace("Retrieving value changes for versions: \(versionIds)")
+        return try await withCheckedThrowingContinuation { continuation in
+            let recordIDs = versionIds.map { CKRecord.ID(recordName: $0.rawValue, zoneID: self.zoneID ?? .default) }
+            let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
+            fetchOperation.desiredKeys = [CKRecord.ExchangeKey.valueChanges.rawValue, CKRecord.ExchangeKey.valueChangesAsset.rawValue]
+            fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
+                autoreleasepool {
+                    guard error == nil, let recordsByRecordID = recordsByRecordID else {
+                        continuation.resume(throwing: error!)
+                        return
+                    }
+
+                    do {
+                        let changesByVersion: [(Version.ID, [Value.Change])] = try recordsByRecordID.map { keyValue in
+                            let record = keyValue.value
+                            let recordID = keyValue.key
+                            let data: Data
+                            if let d = record.exchangeValue(forKey: .valueChanges) as? Data {
+                                data = d
+                            } else if let asset = record.exchangeValue(forKey: .valueChangesAsset) as? CKAsset, let url = asset.fileURL {
+                                data = try Data(contentsOf: url)
+                            } else {
+                                throw Error.invalidValueChangesDataInRecord
+                            }
+                            let valueChanges: [Value.Change] = try JSONDecoder().decode([Value.Change].self, from: data)
+                            log.verbose("Retrieved value changes for \(recordID.recordName): \(valueChanges)")
+                            return (Version.ID(recordID.recordName), valueChanges)
+                        }
+                        continuation.resume(returning: .init(uniqueKeysWithValues: changesByVersion))
+                    } catch {
+                        log.error("Failed to retrieve: \(error)")
+                        continuation.resume(throwing: error)
+                    }
+                }
+            }
+            self.database.add(fetchOperation)
+        }
     }
 }
 
@@ -425,82 +398,78 @@ public extension CloudKitExchange {
 
 public extension CloudKitExchange {
 
-    func prepareToSend(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
+    func prepareToSend() async throws {
         if zone != nil {
-            fetchCloudZoneChanges(executingUponCompletion: completionHandler)
+            try await fetchCloudZoneChanges()
         } else {
-            queryDatabaseForNewVersions(executingUponCompletion: completionHandler)
+            try await queryDatabaseForNewVersions()
         }
     }
 
-    func send(versionChanges: [VersionChanges], executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
+    func send(versionChanges: [VersionChanges]) async throws {
         log.trace("Sending versions: \(versionChanges.map({ $0.0.id }))")
         log.verbose("Value changes: \(versionChanges)")
 
         guard !versionChanges.isEmpty else {
-            completionHandler(.success(()))
             return
         }
 
         // Use batches of length 200, because CloudKit will give limit error at 400 records
         let batchRanges = (0...versionChanges.count-1).split(intoRangesOfLength: cloudKitFetchLimit)
-        let tasks = batchRanges.map { range in
-            AsynchronousTask { finish in
-                let batchChanges = versionChanges[range]
-                self.send(batchOfVersionChanges: batchChanges) { result in
-                    finish(result)
-                }
-            }
+        for range in batchRanges {
+            let batchChanges = versionChanges[range]
+            try await send(batchOfVersionChanges: batchChanges)
         }
-        tasks.executeInOrder(completingWith: completionHandler)
     }
 
-    private func send(batchOfVersionChanges versionChanges: ArraySlice<VersionChanges>, executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        do {
-            try autoreleasepool {
-                var tempFileURLs: [URL] = []
-                let records: [CKRecord] = try versionChanges.map { t in
-                    let version = t.version
-                    let valueChanges = t.valueChanges
-                    let recordID = CKRecord.ID(recordName: version.id.rawValue, zoneID: zoneID ?? .default)
-                    let record = CKRecord(recordType: .init(CKRecord.ExchangeType.Version.rawValue), recordID: recordID)
-                    let versionData = try JSONEncoder().encode([version]) // Use an array, because JSON needs root dict or array
-                    let changesData = try JSONEncoder().encode(valueChanges)
-                    record.setExchangeValue(versionData, forKey: .version)
-                    record.setExchangeValue(storeIdentifier, forKey: .storeIdentifier)
+    private func send(batchOfVersionChanges versionChanges: ArraySlice<VersionChanges>) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Swift.Error>) in
+            do {
+                try autoreleasepool {
+                    var tempFileURLs: [URL] = []
+                    let records: [CKRecord] = try versionChanges.map { t in
+                        let version = t.version
+                        let valueChanges = t.valueChanges
+                        let recordID = CKRecord.ID(recordName: version.id.rawValue, zoneID: zoneID ?? .default)
+                        let record = CKRecord(recordType: .init(CKRecord.ExchangeType.Version.rawValue), recordID: recordID)
+                        let versionData = try JSONEncoder().encode([version]) // Use an array, because JSON needs root dict or array
+                        let changesData = try JSONEncoder().encode(valueChanges)
+                        record.setExchangeValue(versionData, forKey: .version)
+                        record.setExchangeValue(storeIdentifier, forKey: .storeIdentifier)
 
-                    // Use an asset for bigger values (>10Kb)
-                    if changesData.count <= 10000 {
-                        record.setExchangeValue(changesData, forKey: .valueChanges)
-                    } else {
-                        let tempFileURL = temporaryDirectory.appendingPathComponent(UUID().uuidString)
-                        try changesData.write(to: tempFileURL)
-                        let asset = CKAsset(fileURL: tempFileURL)
-                        record.setExchangeValue(asset, forKey: .valueChangesAsset)
-                        tempFileURLs.append(tempFileURL)
+                        // Use an asset for bigger values (>10Kb)
+                        if changesData.count <= 10000 {
+                            record.setExchangeValue(changesData, forKey: .valueChanges)
+                        } else {
+                            let tempFileURL = temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                            try changesData.write(to: tempFileURL)
+                            let asset = CKAsset(fileURL: tempFileURL)
+                            record.setExchangeValue(asset, forKey: .valueChangesAsset)
+                            tempFileURLs.append(tempFileURL)
+                        }
+
+                        return record
                     }
 
-                    return record
-                }
-
-                let modifyOperation = CKModifyRecordsOperation(recordsToSave: records, recordIDsToDelete: nil)
-                modifyOperation.isAtomic = true
-                modifyOperation.savePolicy = .allKeys
-                modifyOperation.modifyRecordsCompletionBlock = { _, _, error in
-                    tempFileURLs.forEach { try? FileManager.default.removeItem(at: $0) }
-                    if let error = error {
-                        log.error("Failed to send: \(error)")
-                        completionHandler(.failure(error))
-                    } else {
-                        log.trace("Succeeded in sending")
-                        completionHandler(.success(()))
+                    let modifyOperation = CKModifyRecordsOperation(recordsToSave: records, recordIDsToDelete: nil)
+                    modifyOperation.isAtomic = true
+                    modifyOperation.savePolicy = .allKeys
+                    modifyOperation.modifyRecordsCompletionBlock = { _, _, error in
+                        tempFileURLs.forEach { try? FileManager.default.removeItem(at: $0) }
+                        if let error = error {
+                            log.error("Failed to send: \(error)")
+                            continuation.resume(throwing: error)
+                        } else {
+                            log.trace("Succeeded in sending")
+                            continuation.resume()
+                        }
                     }
+                    self.database.add(modifyOperation)
                 }
-                self.database.add(modifyOperation)
+            } catch {
+                log.error("Failed to send: \(error)")
+                continuation.resume(throwing: error)
             }
-        } catch {
-            log.error("Failed to send: \(error)")
-            completionHandler(.failure(error))
         }
     }
 
@@ -511,162 +480,137 @@ public extension CloudKitExchange {
 
 extension CloudKitExchange: SnapshotExchange {
 
-    public func retrieveSnapshotManifest(completionHandler: @escaping CompletionHandler<SnapshotManifest?>) {
+    public func retrieveSnapshotManifest() async throws -> SnapshotManifest? {
         log.trace("Retrieving snapshot manifest from CloudKit")
-        let recordName = "\(storeIdentifier)_snapshot_manifest"
-        let recordID = CKRecord.ID(recordName: recordName, zoneID: zoneID ?? .default)
-        let operation = CKFetchRecordsOperation(recordIDs: [recordID])
-        operation.desiredKeys = [CKRecord.ExchangeKey.snapshotManifest.rawValue]
-        if let createZoneOp = createZoneOperation {
-            operation.addDependency(createZoneOp)
-        }
-        operation.fetchRecordsCompletionBlock = { recordsByID, error in
-            if let ckError = error as? CKError {
-                if ckError.code == .unknownItem {
-                    completionHandler(.success(nil))
+        return try await withCheckedThrowingContinuation { continuation in
+            let recordName = "\(storeIdentifier)_snapshot_manifest"
+            let recordID = CKRecord.ID(recordName: recordName, zoneID: zoneID ?? .default)
+            let operation = CKFetchRecordsOperation(recordIDs: [recordID])
+            operation.desiredKeys = [CKRecord.ExchangeKey.snapshotManifest.rawValue]
+            if let createZoneOp = createZoneOperation {
+                operation.addDependency(createZoneOp)
+            }
+            operation.fetchRecordsCompletionBlock = { recordsByID, error in
+                if let ckError = error as? CKError {
+                    if ckError.code == .unknownItem {
+                        continuation.resume(returning: nil)
+                        return
+                    }
+                    if ckError.code == .partialFailure,
+                       let partialErrors = ckError.partialErrorsByItemID,
+                       partialErrors.values.contains(where: { ($0 as? CKError)?.code == .unknownItem }) {
+                        continuation.resume(returning: nil)
+                        return
+                    }
+                    continuation.resume(throwing: ckError)
                     return
                 }
-                if ckError.code == .partialFailure,
-                   let partialErrors = ckError.partialErrorsByItemID,
-                   partialErrors.values.contains(where: { ($0 as? CKError)?.code == .unknownItem }) {
-                    completionHandler(.success(nil))
+                guard let record = recordsByID?[recordID],
+                      let manifestData = record.exchangeValue(forKey: .snapshotManifest) as? Data else {
+                    continuation.resume(returning: nil)
                     return
                 }
-                completionHandler(.failure(ckError))
-                return
+                do {
+                    let manifest = try JSONDecoder().decode(SnapshotManifest.self, from: manifestData)
+                    log.trace("Retrieved snapshot manifest: \(manifest.snapshotId)")
+                    continuation.resume(returning: manifest)
+                } catch {
+                    log.error("Failed to decode snapshot manifest: \(error)")
+                    continuation.resume(throwing: Error.snapshotManifestDecodingFailed)
+                }
             }
-            guard let record = recordsByID?[recordID],
-                  let manifestData = record.exchangeValue(forKey: .snapshotManifest) as? Data else {
-                completionHandler(.success(nil))
-                return
-            }
-            do {
-                let manifest = try JSONDecoder().decode(SnapshotManifest.self, from: manifestData)
-                log.trace("Retrieved snapshot manifest: \(manifest.snapshotId)")
-                completionHandler(.success(manifest))
-            } catch {
-                log.error("Failed to decode snapshot manifest: \(error)")
-                completionHandler(.failure(Error.snapshotManifestDecodingFailed))
-            }
+            self.database.add(operation)
         }
-        database.add(operation)
     }
 
-    public func retrieveSnapshotChunk(index: Int, completionHandler: @escaping CompletionHandler<Data>) {
+    public func retrieveSnapshotChunk(index: Int) async throws -> Data {
         log.trace("Retrieving snapshot chunk \(index) from CloudKit")
-        let recordName = "\(storeIdentifier)_snapshot_chunk_\(index)"
-        let recordID = CKRecord.ID(recordName: recordName, zoneID: zoneID ?? .default)
-        let operation = CKFetchRecordsOperation(recordIDs: [recordID])
-        operation.desiredKeys = [CKRecord.ExchangeKey.snapshotChunkData.rawValue]
-        if let createZoneOp = createZoneOperation {
-            operation.addDependency(createZoneOp)
+        return try await withCheckedThrowingContinuation { continuation in
+            let recordName = "\(storeIdentifier)_snapshot_chunk_\(index)"
+            let recordID = CKRecord.ID(recordName: recordName, zoneID: zoneID ?? .default)
+            let operation = CKFetchRecordsOperation(recordIDs: [recordID])
+            operation.desiredKeys = [CKRecord.ExchangeKey.snapshotChunkData.rawValue]
+            if let createZoneOp = createZoneOperation {
+                operation.addDependency(createZoneOp)
+            }
+            operation.fetchRecordsCompletionBlock = { recordsByID, error in
+                if let error = error {
+                    log.error("Failed to retrieve snapshot chunk \(index): \(error)")
+                    continuation.resume(throwing: Error.snapshotChunkMissing(index))
+                    return
+                }
+                guard let record = recordsByID?[recordID],
+                      let asset = record.exchangeValue(forKey: .snapshotChunkData) as? CKAsset,
+                      let fileURL = asset.fileURL else {
+                    log.error("Snapshot chunk \(index) has no asset")
+                    continuation.resume(throwing: Error.snapshotChunkAssetMissing(index))
+                    return
+                }
+                do {
+                    let data = try Data(contentsOf: fileURL)
+                    log.trace("Retrieved snapshot chunk \(index): \(data.count) bytes")
+                    continuation.resume(returning: data)
+                } catch {
+                    log.error("Failed to read snapshot chunk \(index) asset: \(error)")
+                    continuation.resume(throwing: error)
+                }
+            }
+            self.database.add(operation)
         }
-        operation.fetchRecordsCompletionBlock = { recordsByID, error in
-            if let error = error {
-                log.error("Failed to retrieve snapshot chunk \(index): \(error)")
-                completionHandler(.failure(Error.snapshotChunkMissing(index)))
-                return
-            }
-            guard let record = recordsByID?[recordID],
-                  let asset = record.exchangeValue(forKey: .snapshotChunkData) as? CKAsset,
-                  let fileURL = asset.fileURL else {
-                log.error("Snapshot chunk \(index) has no asset")
-                completionHandler(.failure(Error.snapshotChunkAssetMissing(index)))
-                return
-            }
-            do {
-                let data = try Data(contentsOf: fileURL)
-                log.trace("Retrieved snapshot chunk \(index): \(data.count) bytes")
-                completionHandler(.success(data))
-            } catch {
-                log.error("Failed to read snapshot chunk \(index) asset: \(error)")
-                completionHandler(.failure(error))
-            }
-        }
-        database.add(operation)
     }
 
-    public func sendSnapshot(manifest: SnapshotManifest, chunkProvider: @escaping (Int) throws -> Data, completionHandler: @escaping CompletionHandler<Void>) {
+    public func sendSnapshot(manifest: SnapshotManifest, chunkProvider: @escaping @Sendable (Int) throws -> Data) async throws {
         log.trace("Sending snapshot to CloudKit: \(manifest.chunkCount) chunks")
 
-        let deleteExcess = AsynchronousTask { finish in
-            self.deleteExcessSnapshotChunks(keepingCount: manifest.chunkCount) { result in
-                finish(result)
-            }
-        }
-
-        let uploadChunks = AsynchronousTask { finish in
-            self.uploadSnapshotChunks(manifest: manifest, chunkProvider: chunkProvider) { result in
-                finish(result)
-            }
-        }
-
-        let uploadManifest = AsynchronousTask { finish in
-            self.uploadSnapshotManifest(manifest) { result in
-                finish(result)
-            }
-        }
-
-        [deleteExcess, uploadChunks, uploadManifest].executeInOrder(completingWith: completionHandler)
+        try await deleteExcessSnapshotChunks(keepingCount: manifest.chunkCount)
+        try await uploadSnapshotChunks(manifest: manifest, chunkProvider: chunkProvider)
+        try await uploadSnapshotManifest(manifest)
     }
 
     // MARK: Snapshot Helpers
 
-    private func deleteExcessSnapshotChunks(keepingCount: Int, completionHandler: @escaping CompletionHandler<Void>) {
+    private func deleteExcessSnapshotChunks(keepingCount: Int) async throws {
         log.trace("Querying for excess snapshot chunks beyond index \(keepingCount)")
         let predicate = NSPredicate(format: "storeIdentifier = %@ AND snapshotChunkIndex >= %d", storeIdentifier, keepingCount)
         let query = CKQuery(recordType: CKRecord.ExchangeType.SnapshotChunk.rawValue, predicate: predicate)
-        queryDatabase(with: .query(query)) { result in
-            switch result {
-            case .success(let records):
-                if records.isEmpty {
-                    log.trace("No excess snapshot chunks to delete")
-                    completionHandler(.success(()))
-                } else {
-                    log.trace("Deleting \(records.count) excess snapshot chunks")
-                    self.deleteRecords(records.map { $0.recordID }, completionHandler: completionHandler)
-                }
-            case .failure(let error as CKError) where error.code == .unknownItem:
-                completionHandler(.success(()))
-            case .failure(let error):
-                log.error("Failed to query excess snapshot chunks: \(error)")
-                completionHandler(.failure(error))
+        do {
+            let records = try await queryDatabase(with: .query(query))
+            if records.isEmpty {
+                log.trace("No excess snapshot chunks to delete")
+            } else {
+                log.trace("Deleting \(records.count) excess snapshot chunks")
+                try await deleteRecords(records.map { $0.recordID })
             }
+        } catch let error as CKError where error.code == .unknownItem {
+            // No records to delete
         }
     }
 
-    private func deleteRecords(_ recordIDs: [CKRecord.ID], completionHandler: @escaping CompletionHandler<Void>) {
-        guard !recordIDs.isEmpty else {
-            completionHandler(.success(()))
-            return
-        }
+    private func deleteRecords(_ recordIDs: [CKRecord.ID]) async throws {
+        guard !recordIDs.isEmpty else { return }
         let batchRanges = (0...recordIDs.count-1).split(intoRangesOfLength: cloudKitFetchLimit)
-        let tasks = batchRanges.map { range in
-            AsynchronousTask { finish in
-                let batchIDs = Array(recordIDs[range])
+        for range in batchRanges {
+            let batchIDs = Array(recordIDs[range])
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Swift.Error>) in
                 let operation = CKModifyRecordsOperation(recordsToSave: nil, recordIDsToDelete: batchIDs)
                 operation.modifyRecordsCompletionBlock = { _, _, error in
                     if let error = error {
                         log.error("Failed to delete records: \(error)")
-                        finish(.failure(error))
+                        continuation.resume(throwing: error)
                     } else {
-                        finish(.success(()))
+                        continuation.resume()
                     }
                 }
                 self.database.add(operation)
             }
         }
-        tasks.executeInOrder(completingWith: completionHandler)
     }
 
-    private func uploadSnapshotChunks(manifest: SnapshotManifest, chunkProvider: @escaping (Int) throws -> Data, completionHandler: @escaping CompletionHandler<Void>) {
-        guard manifest.chunkCount > 0 else {
-            completionHandler(.success(()))
-            return
-        }
+    private func uploadSnapshotChunks(manifest: SnapshotManifest, chunkProvider: @escaping (Int) throws -> Data) async throws {
+        guard manifest.chunkCount > 0 else { return }
         let batchRanges = (0...manifest.chunkCount-1).split(intoRangesOfLength: cloudKitFetchLimit)
-        let tasks = batchRanges.map { range in
-            AsynchronousTask { finish in
+        for range in batchRanges {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Swift.Error>) in
                 do {
                     var tempFileURLs: [URL] = []
                     let records: [CKRecord] = try range.map { index in
@@ -691,45 +635,46 @@ extension CloudKitExchange: SnapshotExchange {
                         tempFileURLs.forEach { try? FileManager.default.removeItem(at: $0) }
                         if let error = error {
                             log.error("Failed to upload snapshot chunks: \(error)")
-                            finish(.failure(error))
+                            continuation.resume(throwing: error)
                         } else {
                             log.trace("Uploaded snapshot chunks \(range)")
-                            finish(.success(()))
+                            continuation.resume()
                         }
                     }
                     self.database.add(operation)
                 } catch {
                     log.error("Failed to prepare snapshot chunks: \(error)")
-                    finish(.failure(error))
+                    continuation.resume(throwing: error)
                 }
             }
         }
-        tasks.executeInOrder(completingWith: completionHandler)
     }
 
-    private func uploadSnapshotManifest(_ manifest: SnapshotManifest, completionHandler: @escaping CompletionHandler<Void>) {
-        do {
-            let manifestData = try JSONEncoder().encode(manifest)
-            let recordName = "\(storeIdentifier)_snapshot_manifest"
-            let recordID = CKRecord.ID(recordName: recordName, zoneID: zoneID ?? .default)
-            let record = CKRecord(recordType: .init(CKRecord.ExchangeType.SnapshotManifest.rawValue), recordID: recordID)
-            record.setExchangeValue(manifestData, forKey: .snapshotManifest)
-            record.setExchangeValue(storeIdentifier, forKey: .storeIdentifier)
-            let operation = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
-            operation.savePolicy = .allKeys
-            operation.modifyRecordsCompletionBlock = { _, _, error in
-                if let error = error {
-                    log.error("Failed to upload snapshot manifest: \(error)")
-                    completionHandler(.failure(error))
-                } else {
-                    log.trace("Uploaded snapshot manifest")
-                    completionHandler(.success(()))
+    private func uploadSnapshotManifest(_ manifest: SnapshotManifest) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Swift.Error>) in
+            do {
+                let manifestData = try JSONEncoder().encode(manifest)
+                let recordName = "\(storeIdentifier)_snapshot_manifest"
+                let recordID = CKRecord.ID(recordName: recordName, zoneID: zoneID ?? .default)
+                let record = CKRecord(recordType: .init(CKRecord.ExchangeType.SnapshotManifest.rawValue), recordID: recordID)
+                record.setExchangeValue(manifestData, forKey: .snapshotManifest)
+                record.setExchangeValue(storeIdentifier, forKey: .storeIdentifier)
+                let operation = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
+                operation.savePolicy = .allKeys
+                operation.modifyRecordsCompletionBlock = { _, _, error in
+                    if let error = error {
+                        log.error("Failed to upload snapshot manifest: \(error)")
+                        continuation.resume(throwing: error)
+                    } else {
+                        log.trace("Uploaded snapshot manifest")
+                        continuation.resume()
+                    }
                 }
+                self.database.add(operation)
+            } catch {
+                log.error("Failed to encode snapshot manifest: \(error)")
+                continuation.resume(throwing: error)
             }
-            database.add(operation)
-        } catch {
-            log.error("Failed to encode snapshot manifest: \(error)")
-            completionHandler(.failure(error))
         }
     }
 }
