@@ -7,10 +7,15 @@
 //
 
 import Foundation
+import Synchronization
 
 /// A `StoreCoordinator` takes care of all aspects of setting up a syncing store.
 /// It's the simplest way to get started, though you may want more control for advanced use cases.
-public class StoreCoordinator {
+///
+/// Thread-safety: `currentVersion` is protected by a `Mutex`. Other mutable properties
+/// (`exchange`, `mergeArbiter`, `defaultMetadataForNewVersions`, `isExchanging`) are
+/// set during initialization or within the serialized exchange flow.
+public class StoreCoordinator: @unchecked Sendable {
 
     private struct CachedData: Codable {
         var exchangeRestorationData: Data?
@@ -19,7 +24,7 @@ public class StoreCoordinator {
 
     public let store: Store
     public let snapshotPolicy: SnapshotPolicy
-    public var exchange: Exchange? {
+    public var exchange: (any Exchange)? {
         didSet {
             exchange?.restorationState = cachedData?.exchangeRestorationData
         }
@@ -37,14 +42,24 @@ public class StoreCoordinator {
         return exchange?.restorationState
     }
 
-    public let currentVersionUpdates: AsyncStream<Version.ID>
-    private let currentVersionContinuation: AsyncStream<Version.ID>.Continuation
+    public private(set) var currentVersionUpdates: AsyncStream<Version.ID>
+    private var currentVersionContinuation: AsyncStream<Version.ID>.Continuation?
 
-    public private(set) var currentVersion: Version.ID {
-        didSet {
-            guard self.currentVersion != oldValue else { return }
+    private let _currentVersion: Mutex<Version.ID>
+
+    public var currentVersion: Version.ID {
+        _currentVersion.withLock { $0 }
+    }
+
+    private func updateCurrentVersion(_ newValue: Version.ID) {
+        let changed = _currentVersion.withLock { current -> Bool in
+            guard current != newValue else { return false }
+            current = newValue
+            return true
+        }
+        if changed {
             persist()
-            currentVersionContinuation.yield(self.currentVersion)
+            currentVersionContinuation?.yield(newValue)
         }
     }
 
@@ -78,10 +93,12 @@ public class StoreCoordinator {
         try FileManager.default.createDirectory(at: coordinatorCacheURL, withIntermediateDirectories: true, attributes: nil)
 
         self.store = try Store(rootDirectoryURL: storeURL)
-        self.currentVersion = Version.ID() // Set a temporary version. Final is in cache
-        let (stream, continuation) = AsyncStream<Version.ID>.makeStream()
-        self.currentVersionUpdates = stream
+        self._currentVersion = Mutex(Version.ID()) // Set a temporary version. Final is in cache
+
+        var continuation: AsyncStream<Version.ID>.Continuation?
+        self.currentVersionUpdates = AsyncStream { continuation = $0 }
         self.currentVersionContinuation = continuation
+
         try loadCache()
     }
 
@@ -104,7 +121,7 @@ public class StoreCoordinator {
         }
 
         // Set properties from cache
-        self.currentVersion = cachedData.currentVersionIdentifier
+        updateCurrentVersion(cachedData.currentVersionIdentifier)
         if shouldPersist { persist() }
     }
 
@@ -149,14 +166,14 @@ public class StoreCoordinator {
         guard !changes.isEmpty || metadata != nil else { return }
         var metadata = metadata ?? defaultMetadataForNewVersions
         if let branch = branch { metadata[.branch] = .init(branch.rawValue) }
-        currentVersion = try store.makeVersion(basedOnPredecessor: versionForBranchOrCurrentHead(for: branch), storing: changes, metadata: metadata).id
+        updateCurrentVersion(try store.makeVersion(basedOnPredecessor: versionForBranchOrCurrentHead(for: branch), storing: changes, metadata: metadata).id)
     }
 
     public func save(inserting inserts: [Value] = [], updating updates: [Value] = [], removing removals: [Value.ID] = [], in branch: Branch? = nil, metadata: Version.Metadata? = nil) throws {
         guard !inserts.isEmpty || !updates.isEmpty || !removals.isEmpty || metadata != nil else { return }
         var metadata = metadata ?? defaultMetadataForNewVersions
         if let branch = branch { metadata[.branch] = .init(branch.rawValue) }
-        currentVersion = try store.makeVersion(basedOnPredecessor: versionForBranchOrCurrentHead(for: branch), inserting: inserts, updating: updates, removing: removals, metadata: metadata).id
+        updateCurrentVersion(try store.makeVersion(basedOnPredecessor: versionForBranchOrCurrentHead(for: branch), inserting: inserts, updating: updates, removing: removals, metadata: metadata).id)
     }
 
 
@@ -192,21 +209,15 @@ public class StoreCoordinator {
 
     // MARK: Sync
 
-    public var isExchanging = false
+    public private(set) var isExchanging = false
 
-    /// Ensures only one exchange runs at a time.
-    private actor ExchangeSerializer {
-        func run<T>(_ work: @Sendable () async throws -> T) async throws -> T {
-            try await work()
-        }
-    }
-
-    private let exchangeSerializer = ExchangeSerializer()
+    /// Serializer to ensure one exchange at a time.
+    private var exchangeSerializer = ExchangeSerializer()
 
     /// This transfers data between cloud and local store, but does not alter the current branch or do any merging.
     /// It's a bit like a two-way version of Git's fetch.
     public func exchange() async throws {
-        try await exchangeSerializer.run {
+        try await exchangeSerializer.enqueue { [self] in
             try await self.performExchange()
         }
     }
@@ -217,10 +228,8 @@ public class StoreCoordinator {
 
         guard let exchange = exchange else { return }
 
-        _ = try await exchange.retrieve()
-        _ = try await exchange.send()
-
-        log.trace("Sync successful")
+        let _ = try await exchange.retrieve()
+        let _ = try await exchange.send()
 
         // Upload snapshot if policy allows (fire and forget)
         Task { [weak self] in
@@ -235,7 +244,7 @@ public class StoreCoordinator {
         let metadata = metadata ?? defaultMetadataForNewVersions
         let newVersion = self.store.mergeHeads(into: self.currentVersion, resolvingWith: self.mergeArbiter, headSelection: headSelection, metadata: metadata)
         if let newVersion = newVersion {
-            self.currentVersion = newVersion
+            updateCurrentVersion(newVersion)
             return true
         } else {
             return false
@@ -260,9 +269,7 @@ public class StoreCoordinator {
         }
         guard versionCount <= 1 else { return }
 
-        guard let manifest = try await snapshotExchange.retrieveSnapshotManifest() else {
-            return
-        }
+        guard let manifest = try await snapshotExchange.retrieveSnapshotManifest() else { return }
 
         // Check format matches
         guard manifest.format == snapshotStorage.snapshotFormat else { return }
@@ -279,15 +286,15 @@ public class StoreCoordinator {
         }
 
         try snapshotStorage.restoreFromSnapshotChunks(
-            storeRootURL: store.rootDirectoryURL,
+            storeRootURL: self.store.rootDirectoryURL,
             from: tempDir,
             manifest: manifest
         )
-        try store.reloadHistory()
+        try self.store.reloadHistory()
 
         // Update currentVersion to the latest head
-        if let head = store.mostRecentHead {
-            currentVersion = head.id
+        if let head = self.store.mostRecentHead {
+            updateCurrentVersion(head.id)
         }
     }
 
@@ -308,11 +315,11 @@ public class StoreCoordinator {
 
         if let manifest = existingManifest {
             // Skip if recent enough
-            if manifest.createdAt.timeIntervalSinceNow > -snapshotPolicy.minimumInterval {
+            if manifest.createdAt.timeIntervalSinceNow > -self.snapshotPolicy.minimumInterval {
                 return
             }
             // Skip if not enough new versions
-            if currentVersionCount - manifest.versionCount < snapshotPolicy.minimumNewVersions {
+            if currentVersionCount - manifest.versionCount < self.snapshotPolicy.minimumNewVersions {
                 return
             }
         }
@@ -323,7 +330,7 @@ public class StoreCoordinator {
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
         let manifest = try snapshotStorage.writeSnapshotChunks(
-            storeRootURL: store.rootDirectoryURL,
+            storeRootURL: self.store.rootDirectoryURL,
             to: tempDir,
             maxChunkSize: 5_000_000
         )
@@ -332,5 +339,37 @@ public class StoreCoordinator {
             let chunkFile = tempDir.appendingPathComponent(String(format: "chunk-%03d", index))
             return try Data(contentsOf: chunkFile)
         })
+    }
+}
+
+
+// MARK: - ExchangeSerializer
+
+/// Ensures only one exchange runs at a time using an AsyncStream as a FIFO queue.
+private final class ExchangeSerializer: @unchecked Sendable {
+    private typealias Work = @Sendable () async throws -> Void
+    private let stream: AsyncStream<Work>
+    private let continuation: AsyncStream<Work>.Continuation
+
+    init() {
+        (stream, continuation) = AsyncStream<Work>.makeStream()
+        Task { [stream] in
+            for await work in stream {
+                try? await work()
+            }
+        }
+    }
+
+    func enqueue(_ work: @escaping @Sendable () async throws -> Void) async throws {
+        try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, Error>) in
+            continuation.yield {
+                do {
+                    try await work()
+                    done.resume()
+                } catch {
+                    done.resume(throwing: error)
+                }
+            }
+        }
     }
 }

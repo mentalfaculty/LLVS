@@ -18,7 +18,7 @@ public typealias VersionChanges = (version: Version, valueChanges: [Value.Change
 public protocol SnapshotExchange {
     func retrieveSnapshotManifest() async throws -> SnapshotManifest?
     func retrieveSnapshotChunk(index: Int) async throws -> Data
-    func sendSnapshot(manifest: SnapshotManifest, chunkProvider: @escaping (Int) throws -> Data) async throws
+    func sendSnapshot(manifest: SnapshotManifest, chunkProvider: @escaping @Sendable (Int) throws -> Data) async throws
 }
 
 public protocol Exchange: AnyObject {
@@ -47,17 +47,16 @@ public extension Exchange {
     func retrieve() async throws -> [Version.ID] {
         log.trace("Retrieving")
 
-        try await prepareToRetrieve()
+        try await self.prepareToRetrieve()
 
-        let remoteIds = try await retrieveAllVersionIdentifiers()
+        let remoteIds = try await self.retrieveAllVersionIdentifiers()
 
-        let toRetrieveIds = versionIdsMissingFromHistory(forRemoteIdentifiers: remoteIds)
+        let toRetrieveIds = self.versionIdsMissingFromHistory(forRemoteIdentifiers: remoteIds)
         log.verbose("Version identifiers to retrieve: \(toRetrieveIds.idStrings)")
-
-        let remoteVersions = try await retrieveVersions(identifiedBy: toRetrieveIds)
+        let remoteVersions = try await self.retrieveVersions(identifiedBy: toRetrieveIds)
 
         log.verbose("Adding to history versions: \(remoteVersions.idStrings)")
-        try await addToHistory(remoteVersions)
+        try await self.addToHistory(remoteVersions)
 
         log.trace("Retrieved")
         return remoteIds
@@ -88,44 +87,50 @@ public extension Exchange {
 
         let dynamicBatcher = DynamicTaskBatcher(numberOfTasks: sortedVersions.count, taskCostEvaluator: batchSizeCostEvaluator) { range in
             let batchVersions = Array(sortedVersions[range])
-            let valueChangesByVersionIdentifier = try await self.retrieveValueChanges(forVersionsIdentifiedBy: batchVersions.ids)
+            let valueChangesByVersionIdentifier: [Version.ID: [Value.Change]]
+            do {
+                valueChangesByVersionIdentifier = try await self.retrieveValueChanges(forVersionsIdentifiedBy: batchVersions.ids)
+            } catch {
+                log.error("Failed adding to history: \(error)")
+                return .definitive(.failure(error))
+            }
 
             let valueChangesByVersionID: [Version.ID: [Value.Change]] = valueChangesByVersionIdentifier.reduce(into: [:]) { result, keyValue in
                 var version = versionsByIdentifier[keyValue.key]!
-                let decompressedChanges = DataCompression.decompressValueChanges(keyValue.value)
-                if version.valueDataSize == nil { version.valueDataSize = decompressedChanges.valueDataSize }
-                result[version.id] = decompressedChanges
+                if version.valueDataSize == nil { version.valueDataSize = keyValue.value.valueDataSize }
+                result[version.id] = keyValue.value
             }
 
             do {
-                try self.addToHistory(sortedVersions: batchVersions, valueChangesByVersionID: valueChangesByVersionID)
-                return .completed
+                try self.addToHistorySync(sortedVersions: batchVersions, valueChangesByVersionID: valueChangesByVersionID)
+                return .definitive(.success(()))
             } catch let error as ExchangeError where error.isUnknownPredecessors {
-                return .growBatchAndRetry
+                return .growBatchAndReexecute
+            } catch {
+                return .definitive(.failure(error))
             }
         }
         try await dynamicBatcher.start()
     }
 
-    private func addToHistory(sortedVersions: [Version], valueChangesByVersionID: [Version.ID: [Value.Change]]) throws {
+    /// Synchronously add sorted versions to history, iterating until all appendable versions are consumed.
+    private func addToHistorySync(sortedVersions: [Version], valueChangesByVersionID: [Version.ID: [Value.Change]]) throws {
         var remaining = sortedVersions
         while !remaining.isEmpty {
             guard let version = appendableVersion(from: remaining) else {
+                log.error("Failed to add to history due to missing predecessors")
                 throw ExchangeError.remoteVersionsWithUnknownPredecessors
             }
-            autoreleasepool {
-                let valueChanges = valueChangesByVersionID[version.id]!
-                log.trace("Adding version to store: \(version.id.rawValue)")
-                log.verbose("Value changes for \(version.id.rawValue): \(valueChanges)")
+            let valueChanges = valueChangesByVersionID[version.id]!
+            log.trace("Adding version to store: \(version.id.rawValue)")
+            log.verbose("Value changes for \(version.id.rawValue): \(valueChanges)")
 
-                do {
-                    try self.store.addVersion(version, storing: valueChanges)
-                } catch Store.Error.attemptToAddExistingVersion {
-                    log.error("Failed adding to history because version already exists. Ignoring error")
-                } catch {
-                    log.error("Failed adding to history: \(error)")
-                }
+            do {
+                try self.store.addVersion(version, storing: valueChanges)
+            } catch Store.Error.attemptToAddExistingVersion {
+                log.error("Failed adding to history because version already exists. Ignoring error")
             }
+
             remaining = remaining.filter { $0.id != version.id }
         }
     }
@@ -143,10 +148,11 @@ public extension Exchange {
 public extension Exchange {
 
     func send() async throws -> [Version.ID] {
-        try await prepareToSend()
+        try await self.prepareToSend()
 
-        let remoteIds = try await retrieveAllVersionIdentifiers()
-        let toSendIds = versionIdsMissingRemotely(forRemoteIdentifiers: remoteIds)
+        let remoteIds = try await self.retrieveAllVersionIdentifiers()
+
+        let toSendIds = self.versionIdsMissingRemotely(forRemoteIdentifiers: remoteIds)
 
         func batchSizeCostEvaluator(index: Int) -> Float {
             let batchDataSizeLimit: Int64 = 5000000 // 5MB
@@ -159,21 +165,24 @@ public extension Exchange {
         }
 
         let taskBatcher = DynamicTaskBatcher(numberOfTasks: toSendIds.count, taskCostEvaluator: batchSizeCostEvaluator) { range in
-            let versionChanges: [VersionChanges] = try toSendIds[range].map { versionId in
-                guard let version = try self.store.version(identifiedBy: versionId) else {
-                    throw ExchangeError.missingVersion
+            do {
+                let versionChanges: [VersionChanges] = try toSendIds[range].map { versionId in
+                    guard let version = try self.store.version(identifiedBy: versionId) else {
+                        throw ExchangeError.missingVersion
+                    }
+                    let changes = try self.store.valueChanges(madeInVersionIdentifiedBy: versionId)
+                    return (version, changes)
                 }
-                let changes = try self.store.valueChanges(madeInVersionIdentifiedBy: versionId)
-                let compressedChanges = DataCompression.compressValueChanges(changes)
-                return (version, compressedChanges)
-            }
 
-            guard !versionChanges.isEmpty else {
-                return .completed
-            }
+                guard !versionChanges.isEmpty else {
+                    return .definitive(.success(()))
+                }
 
-            try await self.send(versionChanges: versionChanges)
-            return .completed
+                try await self.send(versionChanges: versionChanges)
+                return .definitive(.success(()))
+            } catch {
+                return .definitive(.failure(error))
+            }
         }
         try await taskBatcher.start()
 
@@ -191,9 +200,9 @@ public extension Exchange {
     }
 }
 
-// MARK: - Helpers
+// MARK:- ExchangeError helper
 
-extension ExchangeError {
+fileprivate extension ExchangeError {
     var isUnknownPredecessors: Bool {
         if case .remoteVersionsWithUnknownPredecessors = self { return true }
         return false

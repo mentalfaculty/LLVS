@@ -41,9 +41,7 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter, SnapshotEx
         self.rootDirectoryURL = rootDirectoryURL
         self.store = store
         self.usesFileCoordination = usesFileCoordination
-        let (stream, continuation) = AsyncStream<Void>.makeStream()
-        self.newVersionsAvailable = stream
-        self.newVersionsContinuation = continuation
+        (self.newVersionsAvailable, self.newVersionsContinuation) = AsyncStream<Void>.makeStream()
         super.init()
         try? fileManager.createDirectory(at: rootDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: versionsDirectory, withIntermediateDirectories: true, attributes: nil)
@@ -57,6 +55,7 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter, SnapshotEx
         if self.usesFileCoordination {
             NSFileCoordinator.removeFilePresenter(self)
         }
+        newVersionsContinuation.finish()
     }
 
     public func prepareToRetrieve() async throws {
@@ -74,7 +73,7 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter, SnapshotEx
             try versionIds.map { versionId in
                 let url = self.versionsDirectory.appendingPathComponent(versionId.rawValue)
                 let data = try Data(contentsOf: url)
-                if let version = try JSONDecoder().decode([String: Version].self, from: data)["version"] {
+                if let version = try JSONDecoder().decode([String:Version].self, from: data)["version"] {
                     return version
                 } else {
                     throw Error.versionFileInvalid
@@ -105,7 +104,7 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter, SnapshotEx
                 try changesData.write(to: changesURL)
 
                 let versionURL = self.versionsDirectory.appendingPathComponent(version.id.rawValue)
-                let versionData = try JSONEncoder().encode(["version": version])
+                let versionData = try JSONEncoder().encode(["version":version])
                 try versionData.write(to: versionURL)
             }
         }
@@ -120,9 +119,9 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter, SnapshotEx
             queue.addOperation {
                 if self.usesFileCoordination {
                     let coordinator = NSFileCoordinator(filePresenter: self)
-                    var coordinatorError: NSError?
+                    var coordError: NSError?
 
-                    let accessor: (URL) -> Void = { url in
+                    let accessor: (URL) -> Void = { _ in
                         do {
                             let result = try block()
                             continuation.resume(returning: result)
@@ -133,12 +132,12 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter, SnapshotEx
 
                     switch access {
                     case .read:
-                        coordinator.coordinate(readingItemAt: self.rootDirectoryURL, options: [], error: &coordinatorError, byAccessor: accessor)
+                        coordinator.coordinate(readingItemAt: self.rootDirectoryURL, options: [], error: &coordError, byAccessor: accessor)
                     case .write:
-                        coordinator.coordinate(writingItemAt: self.rootDirectoryURL, options: [], error: &coordinatorError, byAccessor: accessor)
+                        coordinator.coordinate(writingItemAt: self.rootDirectoryURL, options: [], error: &coordError, byAccessor: accessor)
                     }
 
-                    if let error = coordinatorError {
+                    if let error = coordError {
                         continuation.resume(throwing: error)
                     }
                 } else {
@@ -192,26 +191,29 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter, SnapshotEx
         }
     }
 
-    public func sendSnapshot(manifest: SnapshotManifest, chunkProvider: @escaping (Int) throws -> Data) async throws {
+    public func sendSnapshot(manifest: SnapshotManifest, chunkProvider: @escaping @Sendable (Int) throws -> Data) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Swift.Error>) in
             queue.addOperation {
                 do {
+                    // Remove previous snapshot if any
                     if self.fileManager.fileExists(atPath: self.snapshotsDirectory.path) {
                         try self.fileManager.removeItem(at: self.snapshotsDirectory)
                     }
                     try self.fileManager.createDirectory(at: self.snapshotsDirectory, withIntermediateDirectories: true, attributes: nil)
 
+                    // Write chunks
                     for i in 0..<manifest.chunkCount {
                         let chunkData = try chunkProvider(i)
                         let chunkURL = self.snapshotsDirectory.appendingPathComponent(String(format: "chunk-%03d", i))
                         try chunkData.write(to: chunkURL)
                     }
 
+                    // Write manifest
                     let manifestData = try JSONEncoder().encode(manifest)
                     let manifestURL = self.snapshotsDirectory.appendingPathComponent("manifest.json")
                     try manifestData.write(to: manifestURL)
 
-                    continuation.resume(returning: ())
+                    continuation.resume()
                 } catch {
                     continuation.resume(throwing: error)
                 }
@@ -230,6 +232,6 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter, SnapshotEx
     }
 
     public func presentedItemDidChange() {
-        newVersionsContinuation.yield(())
+        self.newVersionsContinuation.yield(())
     }
 }

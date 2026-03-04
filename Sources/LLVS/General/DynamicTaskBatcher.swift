@@ -17,13 +17,17 @@ public final class DynamicTaskBatcher {
     }
 
     /// The outcome of a single batch execution.
-    public enum BatchOutcome {
-        case completed
-        case growBatchAndRetry
+    public enum BatchCompletionOutcome {
+        /// Definitively succeeded or failed. Failure causes completion block to be called with error
+        case definitive(Result<Void, Swift.Error>)
+
+        /// A half failure. Use this to indicate the batch did not succeed, but should be retried after growing.
+        /// If it is not possible to grow the batch further, completion is called with error.
+        case growBatchAndReexecute
     }
 
     public typealias TaskCostEvaluator = (_ index: Int) -> Float
-    public typealias BatchExecuter = (_ batchIndexRange: Range<Int>) async throws -> BatchOutcome
+    public typealias BatchExecuter = @Sendable (_ batchIndexRange: Range<Int>) async throws -> BatchCompletionOutcome
 
     public let numberOfTasks: Int
 
@@ -48,34 +52,19 @@ public final class DynamicTaskBatcher {
     private var previousBatchNeedsReexecutionAfterGrowth = false
 
     public func start() async throws {
-        currentBatchSize = -1
-        completedCount = 0
-        previousBatchNeedsReexecutionAfterGrowth = false
-
-        while completedCount < numberOfTasks {
-            if previousBatchNeedsReexecutionAfterGrowth, completedCount + currentBatchSize == numberOfTasks {
-                throw Error.couldNotFurtherGrowFailingBatch
-            }
-
-            currentBatchSize = calculateNextBatchSize()
-
-            let outcome = try await batchExecuter(completedCount..<completedCount + currentBatchSize)
-            switch outcome {
-            case .completed:
-                completedCount += currentBatchSize
-            case .growBatchAndRetry:
-                previousBatchNeedsReexecutionAfterGrowth = true
-            }
-        }
+        self.currentBatchSize = -1
+        self.completedCount = 0
+        self.previousBatchNeedsReexecutionAfterGrowth = false
+        try await startNextBatch()
     }
 
     private func calculateNextBatchSize() -> Int {
-        let numberRemaining = numberOfTasks - completedCount
+        let numberRemaining = numberOfTasks-completedCount
         defer { previousBatchNeedsReexecutionAfterGrowth = false }
 
         guard completedCount < numberOfTasks else { return 0 }
         guard !previousBatchNeedsReexecutionAfterGrowth else {
-            return min(currentBatchSize + 1, numberRemaining)
+            return min(currentBatchSize+1, numberRemaining)
         }
 
         // Increase index until the accumulated cost is greater than 1
@@ -87,7 +76,38 @@ public final class DynamicTaskBatcher {
             i += 1
         }
 
-        let newBatchSize = max(1, i - completedCount)
+        let newBatchSize = max(1, i-completedCount)
         return min(newBatchSize, numberRemaining)
     }
+
+    private func startNextBatch() async throws {
+        let numberRemaining = numberOfTasks-completedCount
+
+        guard numberRemaining > 0 else {
+            return
+        }
+
+        if previousBatchNeedsReexecutionAfterGrowth, completedCount + currentBatchSize == numberOfTasks  {
+            // Can't grow the batch anymore, and it is still failing. So fail outright
+            throw Error.couldNotFurtherGrowFailingBatch
+        }
+
+        currentBatchSize = calculateNextBatchSize()
+
+        let outcome = try await batchExecuter(completedCount..<completedCount+currentBatchSize)
+        switch outcome {
+        case .definitive(let result):
+            switch result {
+            case .success:
+                self.completedCount += self.currentBatchSize
+                try await self.startNextBatch()
+            case .failure(let error):
+                throw error
+            }
+        case .growBatchAndReexecute:
+            self.previousBatchNeedsReexecutionAfterGrowth = true
+            try await self.startNextBatch()
+        }
+    }
+
 }

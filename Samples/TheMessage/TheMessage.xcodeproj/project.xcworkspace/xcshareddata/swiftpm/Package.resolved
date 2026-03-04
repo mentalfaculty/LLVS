@@ -1,0 +1,33 @@
+{
+  "originHash" : "f4a70bfec161b7a721e7d74b93d235919ca6ac538faba366ba9f5a37aa6aaf01",
+  "pins" : [
+    {
+      "identity" : "box-ios-sdk",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/box/box-ios-sdk.git",
+      "state" : {
+        "revision" : "dd085d5612ddf738bff84b34983ef11c02b0aa3e",
+        "version" : "10.4.0"
+      }
+    },
+    {
+      "identity" : "pcloud-sdk-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pCloud/pcloud-sdk-swift.git",
+      "state" : {
+        "revision" : "cc81e0250a9f378019470c78ce9a8bb501dcaeda",
+        "version" : "3.2.3"
+      }
+    },
+    {
+      "identity" : "zipfoundation",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/weichsel/ZIPFoundation.git",
+      "state" : {
+        "revision" : "22787ffb59de99e5dc1fbfe80b19c97a904ad48d",
+        "version" : "0.9.20"
+      }
+    }
+  ],
+  "version" : 3
+}

@@ -90,22 +90,24 @@ public class CloudKitExchange: Exchange {
     private let cloudKitFetchLimit = 200
 
     /// For single user syncing, it is best to use a zone. In that case, pass in the private database and a zone identifier.
-    /// Otherwise, you will be using the default zone in whichever database you pass.
+    /// Otherwise, you will be using the default  zone in whichever database you pass.
     public init(with store: Store, storeIdentifier: String, cloudDatabaseDescription: CloudDatabaseDescription) {
         self.store = store
         self.storeIdentifier = storeIdentifier
         self.zoneIdentifier = cloudDatabaseDescription.zoneIdentifier
         self.database = cloudDatabaseDescription.database
         self.zone = zoneIdentifier.flatMap { CKRecordZone(zoneName: $0) }
-        let (stream, continuation) = AsyncStream<Void>.makeStream()
-        self.newVersionsAvailable = stream
-        self.newVersionsContinuation = continuation
+        (self.newVersionsAvailable, self.newVersionsContinuation) = AsyncStream<Void>.makeStream()
         if database.databaseScope == .private, let zone = self.zone {
             self.createZoneOperation = CKModifyRecordZonesOperation(recordZonesToSave: [zone], recordZoneIDsToDelete: nil)
             self.database.add(self.createZoneOperation!)
         } else {
             self.createZoneOperation = nil
         }
+    }
+
+    deinit {
+        newVersionsContinuation.finish()
     }
 
     /// Remove a zone, if there is one. Otherwise will give error.
@@ -121,7 +123,7 @@ public class CloudKitExchange: Exchange {
                     continuation.resume(throwing: error)
                 } else {
                     log.trace("Removed zone")
-                    continuation.resume(returning: ())
+                    continuation.resume()
                 }
             }
         }
@@ -136,15 +138,16 @@ fileprivate extension CloudKitExchange {
     /// Uses the zone changes API. Requires a custom zone.
     func fetchCloudZoneChanges() async throws {
         log.trace("Fetching cloud changes")
+
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Swift.Error>) in
             let config = CKFetchRecordZoneChangesOperation.ZoneConfiguration()
             config.desiredKeys = []
-            config.previousServerChangeToken = restoration.fetchRecordChangesToken
+            config.previousServerChangeToken = self.restoration.fetchRecordChangesToken
 
             let operation = CKFetchRecordZoneChangesOperation()
-            operation.recordZoneIDs = [zoneID!]
-            operation.configurationsByRecordZoneID = [zoneID!: config]
-            operation.addDependency(createZoneOperation!)
+            operation.recordZoneIDs = [self.zoneID!]
+            operation.configurationsByRecordZoneID = [self.zoneID! : config]
+            operation.addDependency(self.createZoneOperation!)
             operation.fetchAllChanges = true
             operation.recordChangedBlock = { record in
                 let versionId = Version.ID(record.recordID.recordName)
@@ -164,7 +167,7 @@ fileprivate extension CloudKitExchange {
                     Task {
                         do {
                             try await self.fetchCloudZoneChanges()
-                            continuation.resume(returning: ())
+                            continuation.resume()
                         } catch {
                             continuation.resume(throwing: error)
                         }
@@ -173,11 +176,11 @@ fileprivate extension CloudKitExchange {
                     continuation.resume(throwing: error)
                 } else {
                     log.trace("Fetched changes")
-                    continuation.resume(returning: ())
+                    continuation.resume()
                 }
             }
 
-            database.add(operation)
+            self.database.add(operation)
         }
     }
 
@@ -214,7 +217,7 @@ fileprivate extension CloudKitExchange {
             let versionIds = records.map { Version.ID($0.recordID.recordName) }
             self.restoration.versionsInCloud.formUnion(versionIds)
             let modificationDates = records.map { $0.modificationDate! }
-            self.restoration.lastQueryDate = max(self.restoration.lastQueryDate ?? Date.distantPast, modificationDates.max() ?? Date.distantPast)
+            self.restoration.lastQueryDate = max(self.restoration.lastQueryDate ?? Date.distantPast, modificationDates.max() ?? Date.distantPast )
         } catch let error as CKError where error.code == .unknownItem {
             // Probably don't have data in cloud yet. Ignore error
             self.restoration.lastQueryDate = Date.distantPast
@@ -224,6 +227,7 @@ fileprivate extension CloudKitExchange {
     /// Used when no zone is available. Eg. the public database.
     func queryDatabase(with queryInfo: QueryInfo) async throws -> [CKRecord] {
         log.trace("Querying cloud changes")
+
         return try await withCheckedThrowingContinuation { continuation in
             let operation = queryInfo.makeQueryOperation()
             var records: [CKRecord] = []
@@ -240,7 +244,8 @@ fileprivate extension CloudKitExchange {
                             continuation.resume(throwing: error)
                         }
                     }
-                } else {
+                }
+                else {
                     if let error = error {
                         log.error("Failed to fetch new versions: \(error)")
                         continuation.resume(throwing: error)
@@ -250,7 +255,7 @@ fileprivate extension CloudKitExchange {
                 }
             }
 
-            database.add(operation)
+            self.database.add(operation)
         }
     }
 }
@@ -291,7 +296,7 @@ public extension CloudKitExchange {
     private func retrieve(batchOfVersionsIdentifiedBy versionIds: [Version.ID]) async throws -> [Version] {
         log.trace("Retrieving versions")
         return try await withCheckedThrowingContinuation { continuation in
-            let recordIDs = versionIds.map { CKRecord.ID(recordName: $0.rawValue, zoneID: zoneID ?? .default) }
+            let recordIDs = versionIds.map { CKRecord.ID(recordName: $0.rawValue, zoneID: self.zoneID ?? .default) }
             let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
             fetchOperation.desiredKeys = [CKRecord.ExchangeKey.version.rawValue]
             fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
@@ -319,7 +324,7 @@ public extension CloudKitExchange {
                     continuation.resume(throwing: error)
                 }
             }
-            database.add(fetchOperation)
+            self.database.add(fetchOperation)
         }
     }
 
@@ -340,8 +345,8 @@ public extension CloudKitExchange {
         var changesByVersionId: [Version.ID: [Value.Change]] = [:]
         for range in batchRanges {
             let batchVersionIds = Array(versionIds[range])
-            let newChangesByVersionId = try await retrieve(batchOfValueChangesForVersionsIdentifiedBy: batchVersionIds)
-            changesByVersionId.merge(newChangesByVersionId) { current, _ in current }
+            let newChanges = try await retrieve(batchOfValueChangesForVersionsIdentifiedBy: batchVersionIds)
+            changesByVersionId.merge(newChanges) { current, _ in current }
         }
         return changesByVersionId
     }
@@ -350,7 +355,7 @@ public extension CloudKitExchange {
     private func retrieve(batchOfValueChangesForVersionsIdentifiedBy versionIds: [Version.ID]) async throws -> [Version.ID: [Value.Change]] {
         log.trace("Retrieving value changes for versions: \(versionIds)")
         return try await withCheckedThrowingContinuation { continuation in
-            let recordIDs = versionIds.map { CKRecord.ID(recordName: $0.rawValue, zoneID: zoneID ?? .default) }
+            let recordIDs = versionIds.map { CKRecord.ID(recordName: $0.rawValue, zoneID: self.zoneID ?? .default) }
             let fetchOperation = CKFetchRecordsOperation(recordIDs: recordIDs)
             fetchOperation.desiredKeys = [CKRecord.ExchangeKey.valueChanges.rawValue, CKRecord.ExchangeKey.valueChangesAsset.rawValue]
             fetchOperation.fetchRecordsCompletionBlock = { recordsByRecordID, error in
@@ -383,7 +388,7 @@ public extension CloudKitExchange {
                     }
                 }
             }
-            database.add(fetchOperation)
+            self.database.add(fetchOperation)
         }
     }
 }
@@ -427,11 +432,12 @@ public extension CloudKitExchange {
                         let valueChanges = t.valueChanges
                         let recordID = CKRecord.ID(recordName: version.id.rawValue, zoneID: zoneID ?? .default)
                         let record = CKRecord(recordType: .init(CKRecord.ExchangeType.Version.rawValue), recordID: recordID)
-                        let versionData = try JSONEncoder().encode([version])
+                        let versionData = try JSONEncoder().encode([version]) // Use an array, because JSON needs root dict or array
                         let changesData = try JSONEncoder().encode(valueChanges)
                         record.setExchangeValue(versionData, forKey: .version)
                         record.setExchangeValue(storeIdentifier, forKey: .storeIdentifier)
 
+                        // Use an asset for bigger values (>10Kb)
                         if changesData.count <= 10000 {
                             record.setExchangeValue(changesData, forKey: .valueChanges)
                         } else {
@@ -455,7 +461,7 @@ public extension CloudKitExchange {
                             continuation.resume(throwing: error)
                         } else {
                             log.trace("Succeeded in sending")
-                            continuation.resume(returning: ())
+                            continuation.resume()
                         }
                     }
                     self.database.add(modifyOperation)
@@ -513,7 +519,7 @@ extension CloudKitExchange: SnapshotExchange {
                     continuation.resume(throwing: Error.snapshotManifestDecodingFailed)
                 }
             }
-            database.add(operation)
+            self.database.add(operation)
         }
     }
 
@@ -549,11 +555,11 @@ extension CloudKitExchange: SnapshotExchange {
                     continuation.resume(throwing: error)
                 }
             }
-            database.add(operation)
+            self.database.add(operation)
         }
     }
 
-    public func sendSnapshot(manifest: SnapshotManifest, chunkProvider: @escaping (Int) throws -> Data) async throws {
+    public func sendSnapshot(manifest: SnapshotManifest, chunkProvider: @escaping @Sendable (Int) throws -> Data) async throws {
         log.trace("Sending snapshot to CloudKit: \(manifest.chunkCount) chunks")
 
         try await deleteExcessSnapshotChunks(keepingCount: manifest.chunkCount)
@@ -569,11 +575,11 @@ extension CloudKitExchange: SnapshotExchange {
         let query = CKQuery(recordType: CKRecord.ExchangeType.SnapshotChunk.rawValue, predicate: predicate)
         do {
             let records = try await queryDatabase(with: .query(query))
-            if !records.isEmpty {
+            if records.isEmpty {
+                log.trace("No excess snapshot chunks to delete")
+            } else {
                 log.trace("Deleting \(records.count) excess snapshot chunks")
                 try await deleteRecords(records.map { $0.recordID })
-            } else {
-                log.trace("No excess snapshot chunks to delete")
             }
         } catch let error as CKError where error.code == .unknownItem {
             // No records to delete
@@ -592,7 +598,7 @@ extension CloudKitExchange: SnapshotExchange {
                         log.error("Failed to delete records: \(error)")
                         continuation.resume(throwing: error)
                     } else {
-                        continuation.resume(returning: ())
+                        continuation.resume()
                     }
                 }
                 self.database.add(operation)
@@ -632,7 +638,7 @@ extension CloudKitExchange: SnapshotExchange {
                             continuation.resume(throwing: error)
                         } else {
                             log.trace("Uploaded snapshot chunks \(range)")
-                            continuation.resume(returning: ())
+                            continuation.resume()
                         }
                     }
                     self.database.add(operation)
@@ -661,10 +667,10 @@ extension CloudKitExchange: SnapshotExchange {
                         continuation.resume(throwing: error)
                     } else {
                         log.trace("Uploaded snapshot manifest")
-                        continuation.resume(returning: ())
+                        continuation.resume()
                     }
                 }
-                database.add(operation)
+                self.database.add(operation)
             } catch {
                 log.error("Failed to encode snapshot manifest: \(error)")
                 continuation.resume(throwing: error)
