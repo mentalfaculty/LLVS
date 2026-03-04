@@ -191,7 +191,11 @@ extension Store {
         
         // Add to history
         try history.withLock { history in
-            try history.add(version, updatingPredecessorVersions: true)
+            do {
+                try history.add(version, updatingPredecessorVersions: true)
+            } catch History.Error.attemptToAddPreexistingVersion {
+                throw Error.attemptToAddExistingVersion(version.id)
+            }
         }
     }
     
