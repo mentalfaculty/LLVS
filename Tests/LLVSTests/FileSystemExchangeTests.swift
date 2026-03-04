@@ -5,38 +5,39 @@
 //  Created by Drew McCormack on 08/03/2019.
 //
 
-import XCTest
+import Testing
 import Foundation
 @testable import LLVS
 
-class FileSystemExchangeTests: XCTestCase {
+@Suite class FileSystemExchangeTests {
 
     let fm = FileManager.default
 
-    var store1, store2: Store!
-    var rootURL1, rootURL2: URL!
-    var exchangeURL: URL!
-    var exchange1, exchange2: FileSystemExchange!
+    let store1: Store
+    let store2: Store
+    let rootURL1: URL
+    let rootURL2: URL
+    let exchangeURL: URL
+    var exchange1: FileSystemExchange
+    var exchange2: FileSystemExchange
 
-    var recentChangeArbiter: MostRecentChangeFavoringArbiter!
+    let recentChangeArbiter: MostRecentChangeFavoringArbiter
 
-    override func setUp() {
-        super.setUp()
+    init() throws {
         rootURL1 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         rootURL2 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
-        store1 = try! Store(rootDirectoryURL: rootURL1)
-        store2 = try! Store(rootDirectoryURL: rootURL2)
+        store1 = try Store(rootDirectoryURL: rootURL1)
+        store2 = try Store(rootDirectoryURL: rootURL2)
         recentChangeArbiter = MostRecentChangeFavoringArbiter()
         exchangeURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         exchange1 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store1, usesFileCoordination: false)
         exchange2 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store2, usesFileCoordination: false)
     }
 
-    override func tearDown() {
+    deinit {
         try? FileManager.default.removeItem(at: rootURL1)
         try? FileManager.default.removeItem(at: rootURL2)
         try? FileManager.default.removeItem(at: exchangeURL)
-        super.tearDown()
     }
 
     private func value(_ identifier: String, stringData: String) -> Value {
@@ -51,28 +52,28 @@ class FileSystemExchangeTests: XCTestCase {
         return try! fm.contentsOfDirectory(at: exchangeURL.appendingPathComponent("versions"), includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
     }
 
-    func testSendFiles() async throws {
+    @Test func sendFiles() async throws {
         let val = value("CDEFGH", stringData: "Origin")
         let ver = try store1.makeVersion(basedOnPredecessor: nil, storing: [.insert(val)])
-        XCTAssertEqual(changeFiles.count, 0)
-        XCTAssertEqual(versionFiles.count, 0)
+        #expect(changeFiles.count == 0)
+        #expect(versionFiles.count == 0)
         let versionIds = try await exchange1.send()
-        XCTAssert(versionIds.contains(ver.id))
-        XCTAssertEqual(self.changeFiles.count, 1)
-        XCTAssertEqual(self.versionFiles.count, 1)
+        #expect(versionIds.contains(ver.id))
+        #expect(self.changeFiles.count == 1)
+        #expect(self.versionFiles.count == 1)
     }
 
-    func testReceiveFiles() async throws {
+    @Test func receiveFiles() async throws {
         let val = value("CDEFGH", stringData: "Origin")
         let ver = try store1.makeVersion(basedOnPredecessor: nil, storing: [.insert(val)])
         let _ = try await exchange1.send()
         let versionIds = try await exchange2.retrieve()
-        XCTAssert(versionIds.contains(ver.id))
-        XCTAssertEqual(ver, try self.store2.version(identifiedBy: ver.id))
-        XCTAssertNotNil(try self.store2.value(id: val.id, at: ver.id))
+        #expect(versionIds.contains(ver.id))
+        #expect(try ver == self.store2.version(identifiedBy: ver.id))
+        #expect(try self.store2.value(id: val.id, at: ver.id) != nil)
     }
 
-    func testConcurrentChanges() async throws {
+    @Test func concurrentChanges() async throws {
         let origin = try store1.makeVersion(basedOnPredecessor: nil, storing: [])
         let _ = try await exchange1.send()
         let _ = try await exchange2.retrieve()
@@ -98,28 +99,28 @@ class FileSystemExchangeTests: XCTestCase {
         let _ = try await exchange2.send()
         let _ = try await exchange1.retrieve()
 
-        versions1.forEach { XCTAssertNotNil(try! self.store2.version(identifiedBy: $0.id)) }
-        versions2.forEach { XCTAssertNotNil(try! self.store1.version(identifiedBy: $0.id)) }
+        versions1.forEach { #expect(try! self.store2.version(identifiedBy: $0.id) != nil) }
+        versions2.forEach { #expect(try! self.store1.version(identifiedBy: $0.id) != nil) }
         for (ver, val) in zip(versions1, values1) {
             let val2 = try self.store2.value(id: val.id, storedAt: ver.id)!
-            XCTAssertEqual(val.data, val2.data)
+            #expect(val.data == val2.data)
         }
         for (ver, val) in zip(versions2, values2) {
             let val1 = try self.store1.value(id: val.id, storedAt: ver.id)!
-            XCTAssertEqual(val.data, val1.data)
+            #expect(val.data == val1.data)
         }
 
         let merge = try store1.mergeRelated(version: versions1.last!.id, with: versions2.last!.id, resolvingWith: MostRecentBranchFavoringArbiter())
         let _ = try await exchange1.send()
         let _ = try await exchange2.retrieve()
-        XCTAssertNotNil(try self.store2.version(identifiedBy: merge.id))
+        #expect(try self.store2.version(identifiedBy: merge.id) != nil)
         for val in values1 + values2 {
             let val2 = try self.store2.value(id: val.id, at: merge.id)!
-            XCTAssertEqual(val.data, val2.data)
+            #expect(val.data == val2.data)
         }
     }
 
-    func testNewVersionAvailableNotification() async throws {
+    @Test func newVersionAvailableNotification() async throws {
         exchange1 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store1, usesFileCoordination: true)
         exchange2 = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store2, usesFileCoordination: true)
 
@@ -146,18 +147,8 @@ class FileSystemExchangeTests: XCTestCase {
             let result = await group.next()!
             group.cancelAll()
             if !result {
-                XCTFail("Timed out waiting for newVersionsAvailable notification")
+                Issue.record("Timed out waiting for newVersionsAvailable notification")
             }
         }
-    }
-
-    static var allTests: [(String, (FileSystemExchangeTests) -> () async throws -> ())] {
-        var result: [(String, (FileSystemExchangeTests) -> () async throws -> ())] = [
-            ("testSendFiles", testSendFiles),
-            ("testReceiveFiles", testReceiveFiles),
-            ("testConcurrentChanges", testConcurrentChanges),
-        ]
-        result.append(("testNewVersionAvailableNotification", testNewVersionAvailableNotification))
-        return result
     }
 }

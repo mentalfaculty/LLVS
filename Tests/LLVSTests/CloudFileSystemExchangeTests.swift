@@ -5,7 +5,7 @@
 //  Created by Drew McCormack on 03/03/2026.
 //
 
-import XCTest
+import Testing
 import Foundation
 @testable import LLVS
 
@@ -63,28 +63,29 @@ final class MockCloudFileSystem: CloudFileSystem, @unchecked Sendable {
 
 // MARK: - Tests
 
-class CloudFileSystemExchangeTests: XCTestCase {
+@Suite class CloudFileSystemExchangeTests {
 
-    var store1, store2: Store!
-    var rootURL1, rootURL2: URL!
-    var mockFS: MockCloudFileSystem!
-    var exchange1, exchange2: CloudFileSystemExchange!
+    let store1: Store
+    let store2: Store
+    let rootURL1: URL
+    let rootURL2: URL
+    let mockFS: MockCloudFileSystem
+    let exchange1: CloudFileSystemExchange
+    let exchange2: CloudFileSystemExchange
 
-    override func setUp() {
-        super.setUp()
+    init() throws {
         rootURL1 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         rootURL2 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
-        store1 = try! Store(rootDirectoryURL: rootURL1)
-        store2 = try! Store(rootDirectoryURL: rootURL2)
+        store1 = try Store(rootDirectoryURL: rootURL1)
+        store2 = try Store(rootDirectoryURL: rootURL2)
         mockFS = MockCloudFileSystem()
         exchange1 = CloudFileSystemExchange(cloudFileSystem: mockFS, store: store1)
         exchange2 = CloudFileSystemExchange(cloudFileSystem: mockFS, store: store2)
     }
 
-    override func tearDown() {
+    deinit {
         try? FileManager.default.removeItem(at: rootURL1)
         try? FileManager.default.removeItem(at: rootURL2)
-        super.tearDown()
     }
 
     private func value(_ identifier: String, stringData: String) -> Value {
@@ -93,36 +94,36 @@ class CloudFileSystemExchangeTests: XCTestCase {
 
     // MARK: - Exchange Tests
 
-    func testSendFiles() async throws {
+    @Test func sendFiles() async throws {
         let val = value("CDEFGH", stringData: "Origin")
         let ver = try store1.makeVersion(basedOnPredecessor: nil, storing: [.insert(val)])
 
         // Nothing in the cloud yet
         let pathsBefore = mockFS.storedPaths
-        XCTAssertTrue(pathsBefore.isEmpty)
+        #expect(pathsBefore.isEmpty)
 
         let versionIds = try await exchange1.send()
-        XCTAssert(versionIds.contains(ver.id))
+        #expect(versionIds.contains(ver.id))
 
         // Verify files were uploaded
         let pathsAfter = mockFS.storedPaths
-        XCTAssertTrue(pathsAfter.contains { $0.contains("versions/\(ver.id.rawValue)") })
-        XCTAssertTrue(pathsAfter.contains { $0.contains("changes/\(ver.id.rawValue)") })
+        #expect(pathsAfter.contains { $0.contains("versions/\(ver.id.rawValue)") })
+        #expect(pathsAfter.contains { $0.contains("changes/\(ver.id.rawValue)") })
     }
 
-    func testReceiveFiles() async throws {
+    @Test func receiveFiles() async throws {
         let val = value("CDEFGH", stringData: "Origin")
         let ver = try store1.makeVersion(basedOnPredecessor: nil, storing: [.insert(val)])
 
         let _ = try await exchange1.send()
         let versionIds = try await exchange2.retrieve()
 
-        XCTAssert(versionIds.contains(ver.id))
-        XCTAssertEqual(ver, try store2.version(identifiedBy: ver.id))
-        XCTAssertNotNil(try store2.value(id: val.id, at: ver.id))
+        #expect(versionIds.contains(ver.id))
+        #expect(try ver == store2.version(identifiedBy: ver.id))
+        #expect(try store2.value(id: val.id, at: ver.id) != nil)
     }
 
-    func testConcurrentChanges() async throws {
+    @Test func concurrentChanges() async throws {
         let origin = try store1.makeVersion(basedOnPredecessor: nil, storing: [])
         let _ = try await exchange1.send()
         let _ = try await exchange2.retrieve()
@@ -148,29 +149,29 @@ class CloudFileSystemExchangeTests: XCTestCase {
         let _ = try await exchange2.send()
         let _ = try await exchange1.retrieve()
 
-        versions1.forEach { XCTAssertNotNil(try! store2.version(identifiedBy: $0.id)) }
-        versions2.forEach { XCTAssertNotNil(try! store1.version(identifiedBy: $0.id)) }
+        versions1.forEach { #expect(try! store2.version(identifiedBy: $0.id) != nil) }
+        versions2.forEach { #expect(try! store1.version(identifiedBy: $0.id) != nil) }
 
         for (ver, val) in zip(versions1, values1) {
             let val2 = try store2.value(id: val.id, storedAt: ver.id)!
-            XCTAssertEqual(val.data, val2.data)
+            #expect(val.data == val2.data)
         }
         for (ver, val) in zip(versions2, values2) {
             let val1 = try store1.value(id: val.id, storedAt: ver.id)!
-            XCTAssertEqual(val.data, val1.data)
+            #expect(val.data == val1.data)
         }
 
         let merge = try store1.mergeRelated(version: versions1.last!.id, with: versions2.last!.id, resolvingWith: MostRecentBranchFavoringArbiter())
         let _ = try await exchange1.send()
         let _ = try await exchange2.retrieve()
-        XCTAssertNotNil(try store2.version(identifiedBy: merge.id))
+        #expect(try store2.version(identifiedBy: merge.id) != nil)
         for val in values1 + values2 {
             let val2 = try store2.value(id: val.id, at: merge.id)!
-            XCTAssertEqual(val.data, val2.data)
+            #expect(val.data == val2.data)
         }
     }
 
-    func testSnapshotRoundTrip() async throws {
+    @Test func snapshotRoundTrip() async throws {
         let manifest = SnapshotManifest(
             format: "test",
             latestVersionId: Version.ID(UUID().uuidString),
@@ -186,18 +187,18 @@ class CloudFileSystemExchangeTests: XCTestCase {
 
         // Retrieve manifest
         let retrieved = try await exchange2.retrieveSnapshotManifest()
-        XCTAssertNotNil(retrieved)
-        XCTAssertEqual(retrieved?.chunkCount, 3)
-        XCTAssertEqual(retrieved?.latestVersionId, manifest.latestVersionId)
+        #expect(retrieved != nil)
+        #expect(retrieved?.chunkCount == 3)
+        #expect(retrieved?.latestVersionId == manifest.latestVersionId)
 
         // Retrieve chunks
         for i in 0..<3 {
             let chunkData = try await exchange2.retrieveSnapshotChunk(index: i)
-            XCTAssertEqual(chunkData, chunks[i])
+            #expect(chunkData == chunks[i])
         }
     }
 
-    func testBasePathIsolation() async throws {
+    @Test func basePathIsolation() async throws {
         let mockFS2 = MockCloudFileSystem()
         let exchangeA = CloudFileSystemExchange(cloudFileSystem: mockFS2, store: store1, basePath: "storeA")
         let exchangeB = CloudFileSystemExchange(cloudFileSystem: mockFS2, store: store2, basePath: "storeB")
@@ -214,15 +215,15 @@ class CloudFileSystemExchangeTests: XCTestCase {
         // Verify files are under different paths
         let pathsA = mockFS2.storedPaths.filter { $0.hasPrefix("storeA/") }
         let pathsB = mockFS2.storedPaths.filter { $0.hasPrefix("storeB/") }
-        XCTAssertFalse(pathsA.isEmpty)
-        XCTAssertFalse(pathsB.isEmpty)
+        #expect(!pathsA.isEmpty)
+        #expect(!pathsB.isEmpty)
 
         // Verify no overlap
         let overlapPaths = Set(pathsA).intersection(Set(pathsB))
-        XCTAssertTrue(overlapPaths.isEmpty)
+        #expect(overlapPaths.isEmpty)
 
         // Store2 should not see storeA's versions via exchangeB
         let idsFromB = try await exchangeB.retrieveAllVersionIdentifiers()
-        XCTAssertEqual(idsFromB.count, 1) // Only storeB's version
+        #expect(idsFromB.count == 1) // Only storeB's version
     }
 }

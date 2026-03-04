@@ -6,7 +6,7 @@
 //
 
 #if ForkedModel
-import XCTest
+import Testing
 import Foundation
 @testable import LLVS
 @testable import LLVSModel
@@ -35,20 +35,18 @@ typealias LLVSVersion = LLVS.Version
 
 // MARK: - Tests
 
-class MergeableArbiterTests: XCTestCase {
+@Suite class MergeableArbiterTests {
 
-    var store: Store!
-    var rootURL: URL!
+    let store: Store
+    let rootURL: URL
 
-    override func setUp() {
-        super.setUp()
+    init() throws {
         rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
-        store = try! Store(rootDirectoryURL: rootURL)
+        store = try Store(rootDirectoryURL: rootURL)
     }
 
-    override func tearDown() {
+    deinit {
         try? FileManager.default.removeItem(at: rootURL)
-        super.tearDown()
     }
 
     // MARK: - Helpers
@@ -63,7 +61,7 @@ class MergeableArbiterTests: XCTestCase {
 
     // MARK: - Property-wise 3-way Merge
 
-    func testThreeWayMergeResolvesPropertyWise() throws {
+    @Test func threeWayMergeResolvesPropertyWise() throws {
         let arbiter = MergeableArbiter()
         arbiter.register(Contact.self)
 
@@ -88,14 +86,14 @@ class MergeableArbiterTests: XCTestCase {
         let result = try store.value(id: valueId, at: merged.id)!
         let contact = try JSONDecoder().decode(Contact.self, from: result.data)
 
-        XCTAssertEqual(contact.name, "Bob")
-        XCTAssertEqual(contact.age, 31)
-        XCTAssertEqual(contact.notes, "Hello")
+        #expect(contact.name == "Bob")
+        #expect(contact.age == 31)
+        #expect(contact.notes == "Hello")
     }
 
     // MARK: - Text Merge
 
-    func testTextMergeOnNotesProperty() throws {
+    @Test func textMergeOnNotesProperty() throws {
         let arbiter = MergeableArbiter()
         arbiter.register(Contact.self)
 
@@ -119,12 +117,12 @@ class MergeableArbiterTests: XCTestCase {
         let result = try store.value(id: valueId, at: merged.id)!
         let contact = try JSONDecoder().decode(Contact.self, from: result.data)
 
-        XCTAssertEqual(contact.notes, "Changed1\nLine2\nChanged3")
+        #expect(contact.notes == "Changed1\nLine2\nChanged3")
     }
 
     // MARK: - Twice Inserted (salvaging)
 
-    func testTwiceInsertedUsesSalvaging() throws {
+    @Test func twiceInsertedUsesSalvaging() throws {
         let arbiter = MergeableArbiter()
         arbiter.register(Contact.self)
 
@@ -144,12 +142,12 @@ class MergeableArbiterTests: XCTestCase {
         let contact = try JSONDecoder().decode(Contact.self, from: result.data)
 
         // Default salvaging returns self (dominant/first), so first branch wins
-        XCTAssertEqual(contact.name, "Alice")
+        #expect(contact.name == "Alice")
     }
 
     // MARK: - Removed and Updated
 
-    func testRemovedAndUpdatedFavorsUpdate() throws {
+    @Test func removedAndUpdatedFavorsUpdate() throws {
         let arbiter = MergeableArbiter()
         arbiter.register(Contact.self)
 
@@ -168,15 +166,15 @@ class MergeableArbiterTests: XCTestCase {
 
         let merged = try store.mergeRelated(version: v1.id, with: v2.id, resolvingWith: arbiter)
         let result = try store.value(id: valueId, at: merged.id)
-        XCTAssertNotNil(result, "Value should be preserved (update wins over remove)")
+        #expect(result != nil, "Value should be preserved (update wins over remove)")
 
         let contact = try JSONDecoder().decode(Contact.self, from: result!.data)
-        XCTAssertEqual(contact.name, "Bob")
+        #expect(contact.name == "Bob")
     }
 
     // MARK: - Fallback Arbiter
 
-    func testUnregisteredTypeFallsBackToDefaultArbiter() throws {
+    @Test func unregisteredTypeFallsBackToDefaultArbiter() throws {
         let arbiter = MergeableArbiter()
         // Intentionally do NOT register any types
 
@@ -190,12 +188,12 @@ class MergeableArbiterTests: XCTestCase {
         // Should not throw — fallback arbiter resolves it
         let merged = try store.mergeRelated(version: v1.id, with: v2.id, resolvingWith: arbiter)
         let result = try store.value(id: valueId, at: merged.id)
-        XCTAssertNotNil(result)
+        #expect(result != nil)
     }
 
     // MARK: - StoreCoordinator Typed Save/Fetch
 
-    func testStoreCoordinatorSaveAndFetchRoundTrip() throws {
+    @Test func storeCoordinatorSaveAndFetchRoundTrip() throws {
         let cacheURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         let coordinator = try StoreCoordinator(withStoreDirectoryAt: rootURL, cacheDirectoryAt: cacheURL)
         defer { try? FileManager.default.removeItem(at: cacheURL) }
@@ -204,14 +202,14 @@ class MergeableArbiterTests: XCTestCase {
         try coordinator.save(contact, instanceIdentifier: "abc")
 
         let fetched: Contact? = try coordinator.fetchModel(Contact.self, instanceIdentifier: "abc")
-        XCTAssertEqual(fetched?.name, "Alice")
-        XCTAssertEqual(fetched?.notes, "Met at WWDC")
-        XCTAssertEqual(fetched?.age, 30)
+        #expect(fetched?.name == "Alice")
+        #expect(fetched?.notes == "Met at WWDC")
+        #expect(fetched?.age == 30)
     }
 
     // MARK: - fetchAllModels
 
-    func testFetchAllModelsReturnsCorrectTypeSubset() throws {
+    @Test func fetchAllModelsReturnsCorrectTypeSubset() throws {
         let cacheURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         let coordinator = try StoreCoordinator(withStoreDirectoryAt: rootURL, cacheDirectoryAt: cacheURL)
         defer { try? FileManager.default.removeItem(at: cacheURL) }
@@ -221,26 +219,26 @@ class MergeableArbiterTests: XCTestCase {
         try coordinator.save(Tag(label: "VIP"), instanceIdentifier: "t1")
 
         let contacts: [Contact] = try coordinator.fetchAllModels(Contact.self)
-        XCTAssertEqual(contacts.count, 2)
+        #expect(contacts.count == 2)
 
         let tags: [Tag] = try coordinator.fetchAllModels(Tag.self)
-        XCTAssertEqual(tags.count, 1)
-        XCTAssertEqual(tags.first?.label, "VIP")
+        #expect(tags.count == 1)
+        #expect(tags.first?.label == "VIP")
     }
 
     // MARK: - Value.ID Helpers
 
-    func testModelValueIDHelpers() {
+    @Test func modelValueIDHelpers() {
         let valueId = modelValueID(typeIdentifier: "Contact", instanceIdentifier: "abc-123")
-        XCTAssertEqual(valueId.rawValue, "Contact/abc-123")
-        XCTAssertEqual(modelTypeIdentifier(from: valueId), "Contact")
-        XCTAssertEqual(instanceIdentifier(from: valueId), "abc-123")
+        #expect(valueId.rawValue == "Contact/abc-123")
+        #expect(modelTypeIdentifier(from: valueId) == "Contact")
+        #expect(instanceIdentifier(from: valueId) == "abc-123")
     }
 
-    func testHelperReturnsNilForNoSlash() {
+    @Test func helperReturnsNilForNoSlash() {
         let valueId = Value.ID("noslash")
-        XCTAssertNil(modelTypeIdentifier(from: valueId))
-        XCTAssertNil(instanceIdentifier(from: valueId))
+        #expect(modelTypeIdentifier(from: valueId) == nil)
+        #expect(instanceIdentifier(from: valueId) == nil)
     }
 }
 #endif
