@@ -5,33 +5,26 @@
 //  Created by Drew McCormack on 01/03/2026.
 //
 
-#if ForkedModel
 import Testing
 import Foundation
 @testable import LLVS
 @testable import LLVSModel
-import Forked
-import ForkedMerge
-import ForkedModel
 
 // MARK: - Test Model Types
 
-@ForkedModel
+@MergeableModel
 struct Contact: ModelValue, Equatable {
     static let modelTypeIdentifier = "Contact"
     var name: String = ""
-    @Merged(using: .textMerge) var notes: String = ""
+    var notes: String = ""
     var age: Int = 0
 }
 
-@ForkedModel
+@MergeableModel
 struct Tag: ModelValue, Equatable {
     static let modelTypeIdentifier = "Tag"
     var label: String = ""
 }
-
-// Disambiguate LLVS.Version from Forked.Version
-typealias LLVSVersion = LLVS.Version
 
 // MARK: - Tests
 
@@ -51,7 +44,7 @@ typealias LLVSVersion = LLVS.Version
 
     // MARK: - Helpers
 
-    private func makeVersion(basedOn predecessor: LLVSVersion.ID?, changes: [Value.Change]) -> LLVSVersion {
+    private func makeVersion(basedOn predecessor: Version.ID?, changes: [Value.Change]) -> Version {
         try! store.makeVersion(basedOnPredecessor: predecessor, storing: changes)
     }
 
@@ -89,35 +82,6 @@ typealias LLVSVersion = LLVS.Version
         #expect(contact.name == "Bob")
         #expect(contact.age == 31)
         #expect(contact.notes == "Hello")
-    }
-
-    // MARK: - Text Merge
-
-    @Test func textMergeOnNotesProperty() throws {
-        let arbiter = MergeableArbiter()
-        arbiter.register(Contact.self)
-
-        let valueId = modelValueID(typeIdentifier: "Contact", instanceIdentifier: "text")
-
-        // Ancestor
-        let ancestor = Contact(name: "Alice", notes: "Line1\nLine2\nLine3", age: 30)
-        let v0 = makeVersion(basedOn: nil, changes: [.insert(Value(id: valueId, data: encode(ancestor)))])
-
-        // Branch 1: change first line
-        var b1 = ancestor
-        b1.notes = "Changed1\nLine2\nLine3"
-        let v1 = makeVersion(basedOn: v0.id, changes: [.update(Value(id: valueId, data: encode(b1)))])
-
-        // Branch 2: change last line
-        var b2 = ancestor
-        b2.notes = "Line1\nLine2\nChanged3"
-        let v2 = makeVersion(basedOn: v0.id, changes: [.update(Value(id: valueId, data: encode(b2)))])
-
-        let merged = try store.mergeRelated(version: v1.id, with: v2.id, resolvingWith: arbiter)
-        let result = try store.value(id: valueId, at: merged.id)!
-        let contact = try JSONDecoder().decode(Contact.self, from: result.data)
-
-        #expect(contact.notes == "Changed1\nLine2\nChanged3")
     }
 
     // MARK: - Twice Inserted (salvaging)
@@ -241,4 +205,3 @@ typealias LLVSVersion = LLVS.Version
         #expect(instanceIdentifier(from: valueId) == nil)
     }
 }
-#endif

@@ -3,427 +3,178 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 52;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
-		071697F32295CCEE006B3BF3 /* DeveloperViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 071697F22295CCEE006B3BF3 /* DeveloperViewController.swift */; };
-		0717C7F122B11B4300D4FC60 /* LLVS in Resources */ = {isa = PBXBuildFile; fileRef = 0717C7F022B11B4200D4FC60 /* LLVS */; };
-		0717C7F222B11B4300D4FC60 /* LLVS in Resources */ = {isa = PBXBuildFile; fileRef = 0717C7F022B11B4200D4FC60 /* LLVS */; };
-		0717C7F422B11B5000D4FC60 /* LLVS in Frameworks */ = {isa = PBXBuildFile; productRef = 0717C7F322B11B5000D4FC60 /* LLVS */; };
-		0717C7F622B11B5000D4FC60 /* LLVSCloudKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0717C7F522B11B5000D4FC60 /* LLVSCloudKit */; };
-		0717C7F822B11B5B00D4FC60 /* LLVS in Frameworks */ = {isa = PBXBuildFile; productRef = 0717C7F722B11B5B00D4FC60 /* LLVS */; };
-		0717C7FA22B11B5B00D4FC60 /* LLVSCloudKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0717C7F922B11B5B00D4FC60 /* LLVSCloudKit */; };
-		071E25F4228A0598007BCFB3 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 071E25F3228A0598007BCFB3 /* ShareViewController.swift */; };
-		071E25F7228A0598007BCFB3 /* MainInterface.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 071E25F5228A0598007BCFB3 /* MainInterface.storyboard */; };
-		071E25FB228A0598007BCFB3 /* AvatarSharingExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 071E25F1228A0598007BCFB3 /* AvatarSharingExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		0722CE93228C8DB80087BDC8 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0787521622441ACB0041780E /* CloudKit.framework */; };
-		0722CE94228C8E320087BDC8 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0787521622441ACB0041780E /* CloudKit.framework */; };
-		07354031228C7E3F0055EA28 /* ContactBook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EEF21F5140800BB9EFA /* ContactBook.swift */; };
-		07354032228C7E3F0055EA28 /* Contact.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EDE21F10CC300BB9EFA /* Contact.swift */; };
-		07354033228C7E3F0055EA28 /* Fault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 079D143F21F6482B0091BCA9 /* Fault.swift */; };
-		07354034228C7E580055EA28 /* PropertiesContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EE221F11EC200BB9EFA /* PropertiesContainer.swift */; };
-		0754AA2E228DDB1400DCF659 /* Defines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0754AA2D228DDB1400DCF659 /* Defines.swift */; };
-		0754AA2F228DDB1400DCF659 /* Defines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0754AA2D228DDB1400DCF659 /* Defines.swift */; };
-		07734EA821F109D100BB9EFA /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EA721F109D100BB9EFA /* AppDelegate.swift */; };
-		07734EAA21F109D100BB9EFA /* ContactsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EA921F109D100BB9EFA /* ContactsViewController.swift */; };
-		07734EAC21F109D100BB9EFA /* ContactViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EAB21F109D100BB9EFA /* ContactViewController.swift */; };
-		07734EAF21F109D100BB9EFA /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 07734EAD21F109D100BB9EFA /* Main.storyboard */; };
-		07734EB121F109D300BB9EFA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 07734EB021F109D300BB9EFA /* Assets.xcassets */; };
-		07734EB421F109D300BB9EFA /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 07734EB221F109D300BB9EFA /* LaunchScreen.storyboard */; };
-		07734EDF21F10CC300BB9EFA /* Contact.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EDE21F10CC300BB9EFA /* Contact.swift */; };
-		07734EE321F11EC200BB9EFA /* PropertiesContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EE221F11EC200BB9EFA /* PropertiesContainer.swift */; };
-		07734EF021F5140800BB9EFA /* ContactBook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07734EEF21F5140800BB9EFA /* ContactBook.swift */; };
-		079D144021F6482B0091BCA9 /* Fault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 079D143F21F6482B0091BCA9 /* Fault.swift */; };
+		AA0001012D97B1E200000001 /* LoCoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002022D97B1E200000001 /* LoCoApp.swift */; };
+		AA0001022D97B1E200000001 /* Contact.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002032D97B1E200000001 /* Contact.swift */; };
+		AA0001042D97B1E200000001 /* ContactStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002052D97B1E200000001 /* ContactStore.swift */; };
+		AA0001052D97B1E200000001 /* ContactsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002062D97B1E200000001 /* ContactsView.swift */; };
+		AA0001062D97B1E200000001 /* ContactView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002072D97B1E200000001 /* ContactView.swift */; };
+		AA0001072D97B1E200000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0002082D97B1E200000001 /* Assets.xcassets */; };
+		AA0001082D97B1E200000001 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0002092D97B1E200000001 /* Preview Assets.xcassets */; };
+		AA0001092D97B1E200000001 /* LLVS in Frameworks */ = {isa = PBXBuildFile; productRef = AA000A012D97B1E200000001 /* LLVS */; };
+		AA00010A2D97B1E200000001 /* LLVSCloudKit in Frameworks */ = {isa = PBXBuildFile; productRef = AA000A022D97B1E200000001 /* LLVSCloudKit */; };
+		AA00010B2D97B1E200000001 /* LLVSModel in Frameworks */ = {isa = PBXBuildFile; productRef = AA000A032D97B1E200000001 /* LLVSModel */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXContainerItemProxy section */
-		071E25F9228A0598007BCFB3 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 07734E9C21F109D100BB9EFA /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 071E25F0228A0598007BCFB3;
-			remoteInfo = AvatarSharingExtension;
-		};
-/* End PBXContainerItemProxy section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		071E2603228A0598007BCFB3 /* Embed App Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				071E25FB228A0598007BCFB3 /* AvatarSharingExtension.appex in Embed App Extensions */,
-			);
-			name = "Embed App Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		07734EDD21F10BBC00BB9EFA /* Embed Frameworks */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 10;
-			files = (
-			);
-			name = "Embed Frameworks";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
-
 /* Begin PBXFileReference section */
-		071697F22295CCEE006B3BF3 /* DeveloperViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperViewController.swift; sourceTree = "<group>"; };
-		0717C7F022B11B4200D4FC60 /* LLVS */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LLVS; path = ../..; sourceTree = "<group>"; };
-		071E25F1228A0598007BCFB3 /* AvatarSharingExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AvatarSharingExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		071E25F3228A0598007BCFB3 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
-		071E25F6228A0598007BCFB3 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/MainInterface.storyboard; sourceTree = "<group>"; };
-		071E25F8228A0598007BCFB3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		071E2604228A0747007BCFB3 /* AvatarSharingExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AvatarSharingExtension.entitlements; sourceTree = "<group>"; };
-		0754AA2D228DDB1400DCF659 /* Defines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Defines.swift; sourceTree = "<group>"; };
-		07734EA421F109D100BB9EFA /* LoCo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LoCo.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		07734EA721F109D100BB9EFA /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		07734EA921F109D100BB9EFA /* ContactsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsViewController.swift; sourceTree = "<group>"; };
-		07734EAB21F109D100BB9EFA /* ContactViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactViewController.swift; sourceTree = "<group>"; };
-		07734EAE21F109D100BB9EFA /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
-		07734EB021F109D300BB9EFA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		07734EB321F109D300BB9EFA /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		07734EB521F109D300BB9EFA /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		07734EDE21F10CC300BB9EFA /* Contact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contact.swift; sourceTree = "<group>"; };
-		07734EE221F11EC200BB9EFA /* PropertiesContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PropertiesContainer.swift; sourceTree = "<group>"; };
-		07734EEF21F5140800BB9EFA /* ContactBook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactBook.swift; sourceTree = "<group>"; };
-		0787521422441AC90041780E /* LoCo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LoCo.entitlements; sourceTree = "<group>"; };
-		0787521622441ACB0041780E /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
-		079D143F21F6482B0091BCA9 /* Fault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fault.swift; sourceTree = "<group>"; };
+		AA0002012D97B1E200000001 /* LoCo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LoCo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0002022D97B1E200000001 /* LoCoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoCoApp.swift; sourceTree = "<group>"; };
+		AA0002032D97B1E200000001 /* Contact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contact.swift; sourceTree = "<group>"; };
+		AA0002052D97B1E200000001 /* ContactStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactStore.swift; sourceTree = "<group>"; };
+		AA0002062D97B1E200000001 /* ContactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsView.swift; sourceTree = "<group>"; };
+		AA0002072D97B1E200000001 /* ContactView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactView.swift; sourceTree = "<group>"; };
+		AA0002082D97B1E200000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AA0002092D97B1E200000001 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		AA00020A2D97B1E200000001 /* LoCo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LoCo.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		071E25EE228A0598007BCFB3 /* Frameworks */ = {
+		AA0004012D97B1E200000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				0722CE93228C8DB80087BDC8 /* CloudKit.framework in Frameworks */,
-				0717C7F822B11B5B00D4FC60 /* LLVS in Frameworks */,
-				0717C7FA22B11B5B00D4FC60 /* LLVSCloudKit in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		07734EA121F109D100BB9EFA /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				0722CE94228C8E320087BDC8 /* CloudKit.framework in Frameworks */,
-				0717C7F422B11B5000D4FC60 /* LLVS in Frameworks */,
-				0717C7F622B11B5000D4FC60 /* LLVSCloudKit in Frameworks */,
+				AA0001092D97B1E200000001 /* LLVS in Frameworks */,
+				AA00010A2D97B1E200000001 /* LLVSCloudKit in Frameworks */,
+				AA00010B2D97B1E200000001 /* LLVSModel in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		071E25F2228A0598007BCFB3 /* AvatarSharingExtension */ = {
+		AA0003012D97B1E200000001 = {
 			isa = PBXGroup;
 			children = (
-				071E2604228A0747007BCFB3 /* AvatarSharingExtension.entitlements */,
-				071E25F3228A0598007BCFB3 /* ShareViewController.swift */,
-				071E25F5228A0598007BCFB3 /* MainInterface.storyboard */,
-				071E25F8228A0598007BCFB3 /* Info.plist */,
-			);
-			path = AvatarSharingExtension;
-			sourceTree = "<group>";
-		};
-		07734E9B21F109D100BB9EFA = {
-			isa = PBXGroup;
-			children = (
-				0717C7F022B11B4200D4FC60 /* LLVS */,
-				07734EA621F109D100BB9EFA /* LoCo */,
-				071E25F2228A0598007BCFB3 /* AvatarSharingExtension */,
-				07734EA521F109D100BB9EFA /* Products */,
-				0787521522441ACB0041780E /* Frameworks */,
+				AA0003032D97B1E200000001 /* LoCo */,
+				AA0003022D97B1E200000001 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		07734EA521F109D100BB9EFA /* Products */ = {
+		AA0003022D97B1E200000001 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				07734EA421F109D100BB9EFA /* LoCo.app */,
-				071E25F1228A0598007BCFB3 /* AvatarSharingExtension.appex */,
+				AA0002012D97B1E200000001 /* LoCo.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		07734EA621F109D100BB9EFA /* LoCo */ = {
+		AA0003032D97B1E200000001 /* LoCo */ = {
 			isa = PBXGroup;
 			children = (
-				0787521422441AC90041780E /* LoCo.entitlements */,
-				0754AA2D228DDB1400DCF659 /* Defines.swift */,
-				07734EA721F109D100BB9EFA /* AppDelegate.swift */,
-				07734EA921F109D100BB9EFA /* ContactsViewController.swift */,
-				07734EAB21F109D100BB9EFA /* ContactViewController.swift */,
-				071697F22295CCEE006B3BF3 /* DeveloperViewController.swift */,
-				07734EEF21F5140800BB9EFA /* ContactBook.swift */,
-				07734EDE21F10CC300BB9EFA /* Contact.swift */,
-				079D143F21F6482B0091BCA9 /* Fault.swift */,
-				07734EE221F11EC200BB9EFA /* PropertiesContainer.swift */,
-				07734EAD21F109D100BB9EFA /* Main.storyboard */,
-				07734EB021F109D300BB9EFA /* Assets.xcassets */,
-				07734EB221F109D300BB9EFA /* LaunchScreen.storyboard */,
-				07734EB521F109D300BB9EFA /* Info.plist */,
+				AA00020A2D97B1E200000001 /* LoCo.entitlements */,
+				AA0002022D97B1E200000001 /* LoCoApp.swift */,
+				AA0002032D97B1E200000001 /* Contact.swift */,
+				AA0002052D97B1E200000001 /* ContactStore.swift */,
+				AA0002062D97B1E200000001 /* ContactsView.swift */,
+				AA0002072D97B1E200000001 /* ContactView.swift */,
+				AA0002082D97B1E200000001 /* Assets.xcassets */,
+				AA0003042D97B1E200000001 /* Preview Content */,
 			);
 			path = LoCo;
 			sourceTree = "<group>";
 		};
-		0787521522441ACB0041780E /* Frameworks */ = {
+		AA0003042D97B1E200000001 /* Preview Content */ = {
 			isa = PBXGroup;
 			children = (
-				0787521622441ACB0041780E /* CloudKit.framework */,
+				AA0002092D97B1E200000001 /* Preview Assets.xcassets */,
 			);
-			name = Frameworks;
+			path = "Preview Content";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		071E25F0228A0598007BCFB3 /* AvatarSharingExtension */ = {
+		AA0005012D97B1E200000001 /* LoCo */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 071E2602228A0598007BCFB3 /* Build configuration list for PBXNativeTarget "AvatarSharingExtension" */;
+			buildConfigurationList = AA0008022D97B1E200000001 /* Build configuration list for PBXNativeTarget "LoCo" */;
 			buildPhases = (
-				071E25ED228A0598007BCFB3 /* Sources */,
-				071E25EE228A0598007BCFB3 /* Frameworks */,
-				071E25EF228A0598007BCFB3 /* Resources */,
+				AA0004032D97B1E200000001 /* Sources */,
+				AA0004012D97B1E200000001 /* Frameworks */,
+				AA0004022D97B1E200000001 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-			);
-			name = AvatarSharingExtension;
-			packageProductDependencies = (
-				0717C7F722B11B5B00D4FC60 /* LLVS */,
-				0717C7F922B11B5B00D4FC60 /* LLVSCloudKit */,
-			);
-			productName = AvatarSharingExtension;
-			productReference = 071E25F1228A0598007BCFB3 /* AvatarSharingExtension.appex */;
-			productType = "com.apple.product-type.app-extension";
-		};
-		07734EA321F109D100BB9EFA /* LoCo */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 07734EB821F109D300BB9EFA /* Build configuration list for PBXNativeTarget "LoCo" */;
-			buildPhases = (
-				07734EA021F109D100BB9EFA /* Sources */,
-				07734EA121F109D100BB9EFA /* Frameworks */,
-				07734EA221F109D100BB9EFA /* Resources */,
-				07734EDD21F10BBC00BB9EFA /* Embed Frameworks */,
-				071E2603228A0598007BCFB3 /* Embed App Extensions */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				071E25FA228A0598007BCFB3 /* PBXTargetDependency */,
 			);
 			name = LoCo;
 			packageProductDependencies = (
-				0717C7F322B11B5000D4FC60 /* LLVS */,
-				0717C7F522B11B5000D4FC60 /* LLVSCloudKit */,
+				AA000A012D97B1E200000001 /* LLVS */,
+				AA000A022D97B1E200000001 /* LLVSCloudKit */,
+				AA000A032D97B1E200000001 /* LLVSModel */,
 			);
 			productName = LoCo;
-			productReference = 07734EA421F109D100BB9EFA /* LoCo.app */;
+			productReference = AA0002012D97B1E200000001 /* LoCo.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		07734E9C21F109D100BB9EFA /* Project object */ = {
+		AA0006012D97B1E200000001 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastSwiftUpdateCheck = 1020;
-				LastUpgradeCheck = 1320;
-				ORGANIZATIONNAME = "The Mental Faculty B.V.";
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 2630;
+				ORGANIZATIONNAME = "Momenta B.V.";
 				TargetAttributes = {
-					071E25F0228A0598007BCFB3 = {
-						CreatedOnToolsVersion = 10.2.1;
-						SystemCapabilities = {
-							com.apple.ApplicationGroups.iOS = {
-								enabled = 1;
-							};
-							com.apple.Push = {
-								enabled = 1;
-							};
-							com.apple.iCloud = {
-								enabled = 1;
-							};
-						};
-					};
-					07734EA321F109D100BB9EFA = {
-						CreatedOnToolsVersion = 10.1;
-						SystemCapabilities = {
-							com.apple.ApplicationGroups.iOS = {
-								enabled = 1;
-							};
-							com.apple.BackgroundModes = {
-								enabled = 1;
-							};
-							com.apple.Push = {
-								enabled = 1;
-							};
-							com.apple.iCloud = {
-								enabled = 1;
-							};
-						};
+					AA0005012D97B1E200000001 = {
+						CreatedOnToolsVersion = 16.0;
 					};
 				};
 			};
-			buildConfigurationList = 07734E9F21F109D100BB9EFA /* Build configuration list for PBXProject "LoCo" */;
-			compatibilityVersion = "Xcode 9.3";
+			buildConfigurationList = AA0008012D97B1E200000001 /* Build configuration list for PBXProject "LoCo" */;
+			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
 				Base,
 			);
-			mainGroup = 07734E9B21F109D100BB9EFA;
-			productRefGroup = 07734EA521F109D100BB9EFA /* Products */;
+			mainGroup = AA0003012D97B1E200000001;
+			packageReferences = (
+				AA0009012D97B1E200000001 /* XCLocalSwiftPackageReference "../.." */,
+			);
+			productRefGroup = AA0003022D97B1E200000001 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				07734EA321F109D100BB9EFA /* LoCo */,
-				071E25F0228A0598007BCFB3 /* AvatarSharingExtension */,
+				AA0005012D97B1E200000001 /* LoCo */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		071E25EF228A0598007BCFB3 /* Resources */ = {
+		AA0004022D97B1E200000001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				071E25F7228A0598007BCFB3 /* MainInterface.storyboard in Resources */,
-				0717C7F222B11B4300D4FC60 /* LLVS in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		07734EA221F109D100BB9EFA /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				07734EB421F109D300BB9EFA /* LaunchScreen.storyboard in Resources */,
-				0717C7F122B11B4300D4FC60 /* LLVS in Resources */,
-				07734EB121F109D300BB9EFA /* Assets.xcassets in Resources */,
-				07734EAF21F109D100BB9EFA /* Main.storyboard in Resources */,
+				AA0001082D97B1E200000001 /* Preview Assets.xcassets in Resources */,
+				AA0001072D97B1E200000001 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		071E25ED228A0598007BCFB3 /* Sources */ = {
+		AA0004032D97B1E200000001 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				07354034228C7E580055EA28 /* PropertiesContainer.swift in Sources */,
-				07354032228C7E3F0055EA28 /* Contact.swift in Sources */,
-				0754AA2F228DDB1400DCF659 /* Defines.swift in Sources */,
-				071E25F4228A0598007BCFB3 /* ShareViewController.swift in Sources */,
-				07354033228C7E3F0055EA28 /* Fault.swift in Sources */,
-				07354031228C7E3F0055EA28 /* ContactBook.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		07734EA021F109D100BB9EFA /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				07734EDF21F10CC300BB9EFA /* Contact.swift in Sources */,
-				07734EE321F11EC200BB9EFA /* PropertiesContainer.swift in Sources */,
-				07734EAC21F109D100BB9EFA /* ContactViewController.swift in Sources */,
-				07734EAA21F109D100BB9EFA /* ContactsViewController.swift in Sources */,
-				07734EA821F109D100BB9EFA /* AppDelegate.swift in Sources */,
-				07734EF021F5140800BB9EFA /* ContactBook.swift in Sources */,
-				0754AA2E228DDB1400DCF659 /* Defines.swift in Sources */,
-				079D144021F6482B0091BCA9 /* Fault.swift in Sources */,
-				071697F32295CCEE006B3BF3 /* DeveloperViewController.swift in Sources */,
+				AA0001012D97B1E200000001 /* LoCoApp.swift in Sources */,
+				AA0001022D97B1E200000001 /* Contact.swift in Sources */,
+				AA0001042D97B1E200000001 /* ContactStore.swift in Sources */,
+				AA0001052D97B1E200000001 /* ContactsView.swift in Sources */,
+				AA0001062D97B1E200000001 /* ContactView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin PBXTargetDependency section */
-		071E25FA228A0598007BCFB3 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 071E25F0228A0598007BCFB3 /* AvatarSharingExtension */;
-			targetProxy = 071E25F9228A0598007BCFB3 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
-
-/* Begin PBXVariantGroup section */
-		071E25F5228A0598007BCFB3 /* MainInterface.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-				071E25F6228A0598007BCFB3 /* Base */,
-			);
-			name = MainInterface.storyboard;
-			sourceTree = "<group>";
-		};
-		07734EAD21F109D100BB9EFA /* Main.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-				07734EAE21F109D100BB9EFA /* Base */,
-			);
-			name = Main.storyboard;
-			sourceTree = "<group>";
-		};
-		07734EB221F109D300BB9EFA /* LaunchScreen.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-				07734EB321F109D300BB9EFA /* Base */,
-			);
-			name = LaunchScreen.storyboard;
-			sourceTree = "<group>";
-		};
-/* End PBXVariantGroup section */
-
 /* Begin XCBuildConfiguration section */
-		071E25FC228A0598007BCFB3 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = AvatarSharingExtension/AvatarSharingExtension.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = P7BXV6PHLD;
-				INFOPLIST_FILE = AvatarSharingExtension/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.2;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.mentalfaculty.LoCo.AvatarSharingExtension;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		071E25FD228A0598007BCFB3 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = AvatarSharingExtension/AvatarSharingExtension.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = P7BXV6PHLD;
-				INFOPLIST_FILE = AvatarSharingExtension/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.2;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.mentalfaculty.LoCo.AvatarSharingExtension;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
-		07734EB621F109D300BB9EFA /* Debug */ = {
+		AA0007012D97B1E200000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -456,11 +207,11 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -475,18 +226,18 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
 		};
-		07734EB721F109D300BB9EFA /* Release */ = {
+		AA0007022D97B1E200000001 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -519,11 +270,11 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -532,57 +283,73 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_VERSION = 5.0;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
 		};
-		07734EB921F109D300BB9EFA /* Debug */ = {
+		AA0007032D97B1E200000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LoCo/LoCo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = P7BXV6PHLD;
-				IBSC_NOTICES = NO;
-				IBSC_WARNINGS = NO;
-				INFOPLIST_FILE = LoCo/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				DEVELOPMENT_ASSET_PATHS = "\"LoCo/Preview Content\"";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.mentalfaculty.LoCo;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mentalfaculty.loco;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
-		07734EBA21F109D300BB9EFA /* Release */ = {
+		AA0007042D97B1E200000001 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LoCo/LoCo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = P7BXV6PHLD;
-				IBSC_NOTICES = NO;
-				IBSC_WARNINGS = NO;
-				INFOPLIST_FILE = LoCo/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				DEVELOPMENT_ASSET_PATHS = "\"LoCo/Preview Content\"";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.mentalfaculty.LoCo;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mentalfaculty.loco;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
@@ -590,53 +357,50 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		071E2602228A0598007BCFB3 /* Build configuration list for PBXNativeTarget "AvatarSharingExtension" */ = {
+		AA0008012D97B1E200000001 /* Build configuration list for PBXProject "LoCo" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				071E25FC228A0598007BCFB3 /* Debug */,
-				071E25FD228A0598007BCFB3 /* Release */,
+				AA0007012D97B1E200000001 /* Debug */,
+				AA0007022D97B1E200000001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		07734E9F21F109D100BB9EFA /* Build configuration list for PBXProject "LoCo" */ = {
+		AA0008022D97B1E200000001 /* Build configuration list for PBXNativeTarget "LoCo" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				07734EB621F109D300BB9EFA /* Debug */,
-				07734EB721F109D300BB9EFA /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		07734EB821F109D300BB9EFA /* Build configuration list for PBXNativeTarget "LoCo" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				07734EB921F109D300BB9EFA /* Debug */,
-				07734EBA21F109D300BB9EFA /* Release */,
+				AA0007032D97B1E200000001 /* Debug */,
+				AA0007042D97B1E200000001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		AA0009012D97B1E200000001 /* XCLocalSwiftPackageReference "../.." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../..;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
-		0717C7F322B11B5000D4FC60 /* LLVS */ = {
+		AA000A012D97B1E200000001 /* LLVS */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = AA0009012D97B1E200000001 /* XCLocalSwiftPackageReference "../.." */;
 			productName = LLVS;
 		};
-		0717C7F522B11B5000D4FC60 /* LLVSCloudKit */ = {
+		AA000A022D97B1E200000001 /* LLVSCloudKit */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = AA0009012D97B1E200000001 /* XCLocalSwiftPackageReference "../.." */;
 			productName = LLVSCloudKit;
 		};
-		0717C7F722B11B5B00D4FC60 /* LLVS */ = {
+		AA000A032D97B1E200000001 /* LLVSModel */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = LLVS;
-		};
-		0717C7F922B11B5B00D4FC60 /* LLVSCloudKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = LLVSCloudKit;
+			package = AA0009012D97B1E200000001 /* XCLocalSwiftPackageReference "../.." */;
+			productName = LLVSModel;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
-	rootObject = 07734E9C21F109D100BB9EFA /* Project object */;
+	rootObject = AA0006012D97B1E200000001 /* Project object */;
 }

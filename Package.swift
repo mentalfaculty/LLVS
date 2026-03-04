@@ -2,6 +2,7 @@
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
+import CompilerPluginSupport
 
 let package = Package(
     name: "LLVS",
@@ -40,14 +41,11 @@ let package = Package(
             name: "LLVSOneDrive",
             targets: ["LLVSOneDrive"]),
     ],
-    traits: [
-        "ForkedModel",
-    ],
     dependencies: [
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", .upToNextMajor(from: "0.9.0")),
         .package(url: "https://github.com/pCloud/pcloud-sdk-swift.git", from: "3.0.0"),
         .package(url: "https://github.com/box/box-ios-sdk.git", from: "10.0.0"),
-        .package(url: "https://github.com/drewmccormack/Forked.git", from: "0.5.9"),
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0"),
     ],
     targets: [
         .systemLibrary(
@@ -85,11 +83,17 @@ let package = Package(
                 .product(name: "BoxSDK", package: "box-ios-sdk")
             ],
             swiftSettings: [.swiftLanguageMode(.v5)]),
+        .macro(
+            name: "LLVSModelMacros",
+            dependencies: [
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+                .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+            ]),
         .target(
             name: "LLVSModel",
             dependencies: [
                 "LLVS",
-                .product(name: "ForkedModel", package: "Forked", condition: .when(traits: ["ForkedModel"])),
+                "LLVSModelMacros",
             ],
             swiftSettings: [.swiftLanguageMode(.v5)]),
         .target(
@@ -110,9 +114,6 @@ let package = Package(
                 "LLVSModel",
                 "LLVS",
                 "LLVSSQLite",
-                .product(name: "Forked", package: "Forked", condition: .when(traits: ["ForkedModel"])),
-                .product(name: "ForkedMerge", package: "Forked", condition: .when(traits: ["ForkedModel"])),
-                .product(name: "ForkedModel", package: "Forked", condition: .when(traits: ["ForkedModel"])),
             ],
             swiftSettings: [.swiftLanguageMode(.v5)])
     ]

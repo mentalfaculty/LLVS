@@ -5,12 +5,10 @@
 //  Created by Drew McCormack on 01/03/2026.
 //
 
-#if ForkedModel
 import Foundation
 import LLVS
-import Forked
 
-/// A `MergeArbiter` that bridges LLVS merge conflicts to Forked's
+/// A `MergeArbiter` that bridges LLVS merge conflicts to
 /// `Mergeable.merged(withSubordinate:commonAncestor:)` for property-wise resolution.
 ///
 /// Register each `ModelValue & Mergeable` type before merging. Unregistered
@@ -109,4 +107,3 @@ public class MergeableArbiter: MergeArbiter {
         return changes
     }
 }
-#endif

@@ -1,5 +1,5 @@
 {
-  "originHash" : "5844517ae19bd893d3b9a68e8c57dc9a4f25d0565671c9aacba0aed744994022",
+  "originHash" : "8ebfbeb565677cf10bf49c97d2e35db77bb29438328eddec9c5971b109b648cc",
   "pins" : [
     {
       "identity" : "box-ios-sdk",
@@ -17,6 +17,15 @@
       "state" : {
         "revision" : "cc81e0250a9f378019470c78ce9a8bb501dcaeda",
         "version" : "3.2.3"
+      }
+    },
+    {
+      "identity" : "swift-syntax",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-syntax.git",
+      "state" : {
+        "revision" : "0687f71944021d616d34d922343dcef086855920",
+        "version" : "600.0.1"
       }
     },
     {
