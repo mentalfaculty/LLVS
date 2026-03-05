@@ -64,10 +64,17 @@ public struct MergeableModelMacro: ExtensionMacro {
 
         var mergedStatements = ["var result = self"]
         for prop in storedProperties {
-            mergedStatements.append("if self.\(prop) == commonAncestor.\(prop) { result.\(prop) = other.\(prop) }")
+            mergedStatements.append("result.\(prop) = try mergeProperty(self.\(prop), other.\(prop), commonAncestor.\(prop))")
         }
         mergedStatements.append("return result")
         let mergedBody = mergedStatements.joined(separator: "\n        ")
+
+        var salvagingStatements = ["var result = self"]
+        for prop in storedProperties {
+            salvagingStatements.append("result.\(prop) = try salvageProperty(self.\(prop), other.\(prop))")
+        }
+        salvagingStatements.append("return result")
+        let salvagingBody = salvagingStatements.joined(separator: "\n        ")
 
         let extensionDecl: DeclSyntax = """
         extension \(type.trimmed): LLVSModel.Mergeable {
@@ -75,7 +82,7 @@ public struct MergeableModelMacro: ExtensionMacro {
                 \(raw: mergedBody)
             }
             func salvaging(from other: Self) throws -> Self {
-                self
+                \(raw: salvagingBody)
             }
         }
         """

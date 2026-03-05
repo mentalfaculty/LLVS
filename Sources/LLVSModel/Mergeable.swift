@@ -26,3 +26,47 @@ public extension Mergeable {
         self
     }
 }
+
+// MARK: - Property Merge Helpers
+
+public func mergeProperty<T: Equatable>(_ dominant: T, _ subordinate: T, _ ancestor: T) throws -> T {
+    dominant == ancestor ? subordinate : dominant
+}
+
+public func mergeProperty<T: Mergeable>(_ dominant: T, _ subordinate: T, _ ancestor: T) throws -> T {
+    try dominant.merged(withSubordinate: subordinate, commonAncestor: ancestor)
+}
+
+public func salvageProperty<T: Equatable>(_ dominant: T, _ subordinate: T) throws -> T {
+    dominant
+}
+
+public func salvageProperty<T: Mergeable>(_ dominant: T, _ subordinate: T) throws -> T {
+    try dominant.salvaging(from: subordinate)
+}
+
+// MARK: - Optional Mergeable
+
+extension Optional: Mergeable where Wrapped: Mergeable {
+    public func merged(withSubordinate other: Self, commonAncestor: Self) throws -> Self {
+        switch (self, other, commonAncestor) {
+        case let (.some(d), .some(s), .some(a)):
+            return try .some(d.merged(withSubordinate: s, commonAncestor: a))
+        case (.some(let d), .none, .some(let a)):
+            return d == a ? other : self
+        case (.none, _, .some):
+            return self
+        case (_, _, .none):
+            return self
+        }
+    }
+
+    public func salvaging(from other: Self) throws -> Self {
+        switch (self, other) {
+        case let (.some(d), .some(s)):
+            return try .some(d.salvaging(from: s))
+        default:
+            return self
+        }
+    }
+}

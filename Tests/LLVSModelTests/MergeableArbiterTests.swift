@@ -26,6 +26,26 @@ struct Tag: ModelValue, Equatable {
     var label: String = ""
 }
 
+@MergeableModel
+struct InnerModel: Codable, Equatable {
+    var x: Int = 0
+    var y: Int = 0
+}
+
+@MergeableModel
+struct OuterModel: ModelValue, Equatable {
+    static let modelTypeIdentifier = "OuterModel"
+    var inner: InnerModel = InnerModel()
+    var label: String = ""
+}
+
+@MergeableModel
+struct OuterOptionalModel: ModelValue, Equatable {
+    static let modelTypeIdentifier = "OuterOptionalModel"
+    var inner: InnerModel? = nil
+    var label: String = ""
+}
+
 // MARK: - Tests
 
 @Suite class MergeableArbiterTests {
@@ -203,5 +223,115 @@ struct Tag: ModelValue, Equatable {
         let valueId = Value.ID("noslash")
         #expect(modelTypeIdentifier(from: valueId) == nil)
         #expect(instanceIdentifier(from: valueId) == nil)
+    }
+
+    // MARK: - Nested Mergeable
+
+    @Test func nestedMergeablePreservesBothBranchChanges() throws {
+        let arbiter = MergeableArbiter()
+        arbiter.register(OuterModel.self)
+
+        let valueId = modelValueID(typeIdentifier: "OuterModel", instanceIdentifier: "o1")
+
+        let ancestor = OuterModel(inner: InnerModel(x: 1, y: 2), label: "start")
+        let v0 = makeVersion(basedOn: nil, changes: [.insert(Value(id: valueId, data: encode(ancestor)))])
+
+        // Branch 1: change inner.x
+        var b1 = ancestor
+        b1.inner.x = 10
+        let v1 = makeVersion(basedOn: v0.id, changes: [.update(Value(id: valueId, data: encode(b1)))])
+
+        // Branch 2: change inner.y
+        var b2 = ancestor
+        b2.inner.y = 20
+        let v2 = makeVersion(basedOn: v0.id, changes: [.update(Value(id: valueId, data: encode(b2)))])
+
+        let merged = try store.mergeRelated(version: v1.id, with: v2.id, resolvingWith: arbiter)
+        let result = try store.value(id: valueId, at: merged.id)!
+        let outer = try JSONDecoder().decode(OuterModel.self, from: result.data)
+
+        #expect(outer.inner.x == 10)
+        #expect(outer.inner.y == 20)
+        #expect(outer.label == "start")
+    }
+
+    // MARK: - Optional Mergeable
+
+    @Test func optionalMergeableBothSomePreservesSubproperties() throws {
+        let arbiter = MergeableArbiter()
+        arbiter.register(OuterOptionalModel.self)
+
+        let valueId = modelValueID(typeIdentifier: "OuterOptionalModel", instanceIdentifier: "om1")
+
+        let ancestor = OuterOptionalModel(inner: InnerModel(x: 1, y: 2), label: "start")
+        let v0 = makeVersion(basedOn: nil, changes: [.insert(Value(id: valueId, data: encode(ancestor)))])
+
+        // Branch 1: change inner.x
+        var b1 = ancestor
+        b1.inner!.x = 10
+        let v1 = makeVersion(basedOn: v0.id, changes: [.update(Value(id: valueId, data: encode(b1)))])
+
+        // Branch 2: change inner.y
+        var b2 = ancestor
+        b2.inner!.y = 20
+        let v2 = makeVersion(basedOn: v0.id, changes: [.update(Value(id: valueId, data: encode(b2)))])
+
+        let merged = try store.mergeRelated(version: v1.id, with: v2.id, resolvingWith: arbiter)
+        let result = try store.value(id: valueId, at: merged.id)!
+        let outer = try JSONDecoder().decode(OuterOptionalModel.self, from: result.data)
+
+        #expect(outer.inner?.x == 10)
+        #expect(outer.inner?.y == 20)
+    }
+
+    @Test func optionalMergeableNilToSome() throws {
+        let arbiter = MergeableArbiter()
+        arbiter.register(OuterOptionalModel.self)
+
+        let valueId = modelValueID(typeIdentifier: "OuterOptionalModel", instanceIdentifier: "om2")
+
+        let ancestor = OuterOptionalModel(inner: nil, label: "start")
+        let v0 = makeVersion(basedOn: nil, changes: [.insert(Value(id: valueId, data: encode(ancestor)))])
+
+        // Branch 1: set inner
+        var b1 = ancestor
+        b1.inner = InnerModel(x: 5, y: 6)
+        let v1 = makeVersion(basedOn: v0.id, changes: [.update(Value(id: valueId, data: encode(b1)))])
+
+        // Branch 2: no change to inner
+        let v2 = makeVersion(basedOn: v0.id, changes: [.update(Value(id: valueId, data: encode(ancestor)))])
+
+        let merged = try store.mergeRelated(version: v1.id, with: v2.id, resolvingWith: arbiter)
+        let result = try store.value(id: valueId, at: merged.id)!
+        let outer = try JSONDecoder().decode(OuterOptionalModel.self, from: result.data)
+
+        // Dominant (v1) inserted inner, ancestor was nil → dominant wins
+        #expect(outer.inner?.x == 5)
+        #expect(outer.inner?.y == 6)
+    }
+
+    @Test func optionalMergeableSomeToNil() throws {
+        let arbiter = MergeableArbiter()
+        arbiter.register(OuterOptionalModel.self)
+
+        let valueId = modelValueID(typeIdentifier: "OuterOptionalModel", instanceIdentifier: "om3")
+
+        let ancestor = OuterOptionalModel(inner: InnerModel(x: 1, y: 2), label: "start")
+        let v0 = makeVersion(basedOn: nil, changes: [.insert(Value(id: valueId, data: encode(ancestor)))])
+
+        // Branch 1: no change
+        let v1 = makeVersion(basedOn: v0.id, changes: [.update(Value(id: valueId, data: encode(ancestor)))])
+
+        // Branch 2: remove inner
+        var b2 = ancestor
+        b2.inner = nil
+        let v2 = makeVersion(basedOn: v0.id, changes: [.update(Value(id: valueId, data: encode(b2)))])
+
+        let merged = try store.mergeRelated(version: v1.id, with: v2.id, resolvingWith: arbiter)
+        let result = try store.value(id: valueId, at: merged.id)!
+        let outer = try JSONDecoder().decode(OuterOptionalModel.self, from: result.data)
+
+        // Dominant unchanged from ancestor, subordinate removed → accept removal
+        #expect(outer.inner == nil)
     }
 }
