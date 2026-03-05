@@ -13,7 +13,7 @@ import LLVS
 /// Conforming types get a stable `modelTypeIdentifier` (e.g. `"Contact"`)
 /// used as a prefix in the LLVS `Value.ID`: `"Contact/uuid-string"`.
 ///
-/// Does not require `Mergeable` — the `@ForkedModel` macro adds that
+/// Does not require `Mergeable` — the `@MergeableModel` macro adds that
 /// conformance separately.
 public protocol StorableModel: Codable {
     static var modelTypeIdentifier: String { get }
