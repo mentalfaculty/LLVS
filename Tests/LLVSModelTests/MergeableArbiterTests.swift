@@ -13,7 +13,7 @@ import Foundation
 // MARK: - Test Model Types
 
 @MergeableModel
-struct Contact: ModelValue, Equatable {
+struct Contact: StorableModel, Equatable {
     static let modelTypeIdentifier = "Contact"
     var name: String = ""
     var notes: String = ""
@@ -21,7 +21,7 @@ struct Contact: ModelValue, Equatable {
 }
 
 @MergeableModel
-struct Tag: ModelValue, Equatable {
+struct Tag: StorableModel, Equatable {
     static let modelTypeIdentifier = "Tag"
     var label: String = ""
 }
@@ -33,14 +33,14 @@ struct InnerModel: Codable, Equatable {
 }
 
 @MergeableModel
-struct OuterModel: ModelValue, Equatable {
+struct OuterModel: StorableModel, Equatable {
     static let modelTypeIdentifier = "OuterModel"
     var inner: InnerModel = InnerModel()
     var label: String = ""
 }
 
 @MergeableModel
-struct OuterOptionalModel: ModelValue, Equatable {
+struct OuterOptionalModel: StorableModel, Equatable {
     static let modelTypeIdentifier = "OuterOptionalModel"
     var inner: InnerModel? = nil
     var label: String = ""

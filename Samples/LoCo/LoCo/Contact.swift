@@ -10,7 +10,7 @@ import LLVS
 import LLVSModel
 
 @MergeableModel
-struct Contact: ModelValue, Equatable, Identifiable, Codable {
+struct Contact: StorableModel, Equatable, Identifiable, Codable {
     static let modelTypeIdentifier = "Contact"
     var id: UUID = .init()
     var firstName: String = ""

@@ -11,7 +11,7 @@ import LLVS
 public extension StoreCoordinator {
 
     /// Save a model value, inserting or updating as appropriate.
-    func save<T: ModelValue>(_ model: T, instanceIdentifier: String, in branch: Branch? = nil) throws {
+    func save<T: StorableModel>(_ model: T, instanceIdentifier: String, in branch: Branch? = nil) throws {
         let valueId = modelValueID(typeIdentifier: T.modelTypeIdentifier, instanceIdentifier: instanceIdentifier)
         let data = try JSONEncoder().encode(model)
         let existing = try value(id: valueId, on: branch)
@@ -23,20 +23,20 @@ public extension StoreCoordinator {
     }
 
     /// Fetch a single model value by its instance identifier.
-    func fetchModel<T: ModelValue>(_ type: T.Type, instanceIdentifier: String, on branch: Branch? = nil) throws -> T? {
+    func fetchModel<T: StorableModel>(_ type: T.Type, instanceIdentifier: String, on branch: Branch? = nil) throws -> T? {
         let valueId = modelValueID(typeIdentifier: T.modelTypeIdentifier, instanceIdentifier: instanceIdentifier)
         guard let value = try value(id: valueId, on: branch) else { return nil }
         return try JSONDecoder().decode(T.self, from: value.data)
     }
 
     /// Remove a model value.
-    func removeModel<T: ModelValue>(_ type: T.Type, instanceIdentifier: String, in branch: Branch? = nil) throws {
+    func removeModel<T: StorableModel>(_ type: T.Type, instanceIdentifier: String, in branch: Branch? = nil) throws {
         let valueId = modelValueID(typeIdentifier: T.modelTypeIdentifier, instanceIdentifier: instanceIdentifier)
         try save(removing: [valueId], in: branch)
     }
 
     /// Fetch all model values of a given type by scanning value references for matching prefixes.
-    func fetchAllModels<T: ModelValue>(_ type: T.Type, at version: Version.ID? = nil) throws -> [T] {
+    func fetchAllModels<T: StorableModel>(_ type: T.Type, at version: Version.ID? = nil) throws -> [T] {
         let prefix = T.modelTypeIdentifier + "/"
         let refs = try valueReferences(at: version)
         let decoder = JSONDecoder()

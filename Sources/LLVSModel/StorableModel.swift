@@ -1,5 +1,5 @@
 //
-//  ModelValue.swift
+//  StorableModel.swift
 //  LLVS
 //
 //  Created by Drew McCormack on 01/03/2026.
@@ -15,7 +15,7 @@ import LLVS
 ///
 /// Does not require `Mergeable` — the `@ForkedModel` macro adds that
 /// conformance separately.
-public protocol ModelValue: Codable {
+public protocol StorableModel: Codable {
     static var modelTypeIdentifier: String { get }
 }
 

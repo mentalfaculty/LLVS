@@ -48,9 +48,13 @@ public struct MergeableModelMacro: ExtensionMacro {
                 return nil
             }
 
-            // Skip computed properties (those with get/set accessors)
+            // Skip computed properties
             if let accessorBlock = binding.accessorBlock {
-                if case .accessors(let accessorList) = accessorBlock.accessors {
+                switch accessorBlock.accessors {
+                case .getter:
+                    // Shorthand computed property: `var x: T { ... }`
+                    return nil
+                case .accessors(let accessorList):
                     let isComputed = accessorList.contains { accessor in
                         accessor.accessorSpecifier.tokenKind == .keyword(.get) ||
                         accessor.accessorSpecifier.tokenKind == .keyword(.set)

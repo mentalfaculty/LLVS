@@ -11,7 +11,7 @@ import LLVS
 /// A `MergeArbiter` that bridges LLVS merge conflicts to
 /// `Mergeable.merged(withSubordinate:commonAncestor:)` for property-wise resolution.
 ///
-/// Register each `ModelValue & Mergeable` type before merging. Unregistered
+/// Register each `StorableModel & Mergeable` type before merging. Unregistered
 /// value types fall through to `fallbackArbiter`.
 public class MergeableArbiter: MergeArbiter {
 
@@ -25,9 +25,9 @@ public class MergeableArbiter: MergeArbiter {
         self.fallbackArbiter = fallbackArbiter
     }
 
-    /// Register a `ModelValue & Mergeable` type so its conflicts are resolved
+    /// Register a `StorableModel & Mergeable` type so its conflicts are resolved
     /// with property-wise 3-way merge.
-    public func register<T: ModelValue & Mergeable>(_ type: T.Type) {
+    public func register<T: StorableModel & Mergeable>(_ type: T.Type) {
         let encoder = JSONEncoder()
         let decoder = JSONDecoder()
         registry[T.modelTypeIdentifier] = { dominantData, subordinateData, ancestorData in
