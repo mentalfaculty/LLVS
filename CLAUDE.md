@@ -10,18 +10,20 @@ LLVS (Low-Level Versioned Store) is a decentralized, versioned key-value storage
 
 ```bash
 swift build                                    # Build all targets
-swift test                                     # Run all 113 tests (LLVSTests target)
+swift test                                     # Run all 170 tests
 swift test --filter LLVSTests.StoreSetupTests  # Run a single test class
 swift test --filter testStoreCreatesDirectories # Run a single test method by name
 ```
 
-Tests are in `Tests/LLVSTests/` and depend on both `LLVS` and `LLVSSQLite`. There is no linter configured. Sample apps (in `Samples/`) are Xcode projects, not part of the SPM package.
+Tests are in `Tests/LLVSTests/` and `Tests/LLVSModelTests/`, depending on `LLVS`, `LLVSSQLite`, and `LLVSModel`. There is no linter configured. Sample apps (in `Samples/`) are Xcode projects, not part of the SPM package.
 
 ## Package Structure
 
-Four SPM targets with a layered dependency graph:
+SPM targets with a layered dependency graph:
 
 - **LLVS** — Core framework, zero dependencies. All fundamental types and logic.
+- **LLVSModel** — High-level model layer with `@MergeableModel` macro, `StorableModel` protocol, and `MergeableArbiter`. Depends on LLVS.
+- **LLVSModelMacros** — Swift macro implementation for `@MergeableModel`. Depends on SwiftSyntax.
 - **LLVSSQLite** — SQLite storage backend. Depends on LLVS and SQLite3.
 - **LLVSCloudKit** — CloudKit sync exchange. Depends on LLVS.
 - **SQLite3** — System library wrapper for SQLite.
@@ -40,7 +42,9 @@ Versions form a directed acyclic graph. Each `Version` has 0-2 predecessors (0 f
 
 ### Merging
 
-Three-way merge is the primary merge strategy: find the greatest common ancestor of two heads, diff each head against it, then pass the forks to a `MergeArbiter` to resolve conflicts. The `MergeArbiter` protocol has a single method: `changes(toResolve:in:) throws -> [Value.Change]`. Built-in arbiters: `MostRecentBranchFavoringArbiter` (favors branch with newer timestamp) and `MostRecentChangeFavoringArbiter` (favors most recent individual change). Fast-forward is used when one version is an ancestor of the other.
+Three-way merge is the primary merge strategy: find the greatest common ancestor of two heads, diff each head against it, then pass the forks to a `MergeArbiter` to resolve conflicts. The `MergeArbiter` protocol has a single method: `changes(toResolve:in:) throws -> [Value.Change]`. Built-in arbiters: `MostRecentBranchFavoringArbiter` (favors branch with newer timestamp), `MostRecentChangeFavoringArbiter` (favors most recent individual change), and `MergeableArbiter` (delegates to `Mergeable` types for property-wise 3-way merge). Fast-forward is used when one version is an ancestor of the other.
+
+`@MergeableModel` macro generates `Mergeable` conformance for structs, producing per-property merge via overloaded `mergeProperty`/`salvageProperty` helpers. Properties conforming to `Mergeable` get deep recursive merge; plain `Equatable` properties use simple equality checks. `Optional<Wrapped>` where `Wrapped: Mergeable` also supports smart merge.
 
 `Value.Fork` describes per-value conflict states: `.inserted`, `.updated`, `.removed` (non-conflicting, single branch), `.twiceInserted`, `.twiceUpdated`, `.removedAndUpdated` (conflicting, require arbiter resolution).
 
@@ -52,9 +56,11 @@ Three-way merge is the primary merge strategy: find the greatest common ancestor
 
 ### Sync (Exchange)
 
-`Exchange` protocol handles sending/receiving versions between stores. The default `retrieve`/`send` implementations (in protocol extensions on `Exchange.swift`) orchestrate the full sync flow: discover remote version IDs → find missing ones → fetch/push in batches (5MB chunks via `DynamicTaskBatcher`). Implementations:
+`Exchange` protocol handles sending/receiving versions between stores. All exchange methods use async/await. The default `retrieve`/`send` implementations orchestrate the full sync flow: discover remote version IDs → find missing ones → fetch/push in batches (5MB chunks via `DynamicTaskBatcher`). Implementations:
 - `CloudKitExchange` — syncs via CloudKit (private, public, or shared databases).
 - `FileSystemExchange` — syncs via a shared filesystem directory (useful for testing).
+- `MemoryExchange` — actor-based in-memory exchange.
+- `MultipeerExchange` — peer-to-peer exchange using `PeerTransport` protocol.
 
 ### Map (Value Index)
 
