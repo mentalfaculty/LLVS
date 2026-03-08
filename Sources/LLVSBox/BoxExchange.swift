@@ -21,6 +21,9 @@ private typealias AsyncTask = _Concurrency.Task
 /// Uses `BoxClient` from the official Box SDK for all API operations.
 /// The caller provides an authenticated `BoxClient` (e.g. via `BoxDeveloperTokenAuth`
 /// or `BoxCCGAuth`).
+///
+/// Folder listings are cached per retrieve/send cycle and downloads are parallelized
+/// using structured concurrency.
 public class BoxExchange: Exchange {
 
     public enum Error: Swift.Error {
@@ -39,6 +42,11 @@ public class BoxExchange: Exchange {
     public let rootFolderID: String
 
     @Atomic private var restoration = RestorationInfo()
+
+    /// Cached folder listings, populated during prepareToRetrieve
+    /// and consumed by subsequent calls in the same cycle.
+    private var cachedVersionsFileMap: [String: String]?
+    private var cachedChangesFileMap: [String: String]?
 
     private let newVersionsSubject = PassthroughSubject<Void, Never>()
 
@@ -74,9 +82,25 @@ public class BoxExchange: Exchange {
     // MARK: - Retrieve
 
     public func prepareToRetrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
+        cachedVersionsFileMap = nil
+        cachedChangesFileMap = nil
         AsyncTask {
             do {
                 try await ensureFoldersExist()
+
+                // Pre-cache both folder listings so retrieveAllVersionIdentifiers,
+                // retrieveVersions, and retrieveValueChanges don't re-list.
+                if let vFolderID = restoration.versionsFolderID {
+                    cachedVersionsFileMap = try await listFileNameMap(inFolder: vFolderID)
+                } else {
+                    cachedVersionsFileMap = [:]
+                }
+                if let cFolderID = restoration.changesFolderID {
+                    cachedChangesFileMap = try await listFileNameMap(inFolder: cFolderID)
+                } else {
+                    cachedChangesFileMap = [:]
+                }
+
                 completionHandler(.success(()))
             } catch {
                 completionHandler(.failure(error))
@@ -85,14 +109,19 @@ public class BoxExchange: Exchange {
     }
 
     public func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[LLVS.Version.ID]>) {
+        if let fileMap = cachedVersionsFileMap {
+            completionHandler(.success(fileMap.map { LLVS.Version.ID($0.key) }))
+            return
+        }
         AsyncTask {
             do {
                 guard let folderID = restoration.versionsFolderID else {
                     completionHandler(.success([]))
                     return
                 }
-                let items = try await listAllFileItems(inFolder: folderID)
-                completionHandler(.success(items.map { LLVS.Version.ID($0.name) }))
+                let fileMap = try await listFileNameMap(inFolder: folderID)
+                cachedVersionsFileMap = fileMap
+                completionHandler(.success(fileMap.map { LLVS.Version.ID($0.key) }))
             } catch {
                 completionHandler(.failure(error))
             }
@@ -104,21 +133,30 @@ public class BoxExchange: Exchange {
             completionHandler(.success([]))
             return
         }
+        guard let fileMap = cachedVersionsFileMap ?? nil else {
+            completionHandler(.success([]))
+            return
+        }
+
         AsyncTask {
             do {
-                guard let folderID = restoration.versionsFolderID else {
-                    completionHandler(.success([]))
-                    return
-                }
-                let items = try await listAllFileItems(inFolder: folderID)
-                let itemsByName = Dictionary(items.map { ($0.name, $0.id) }, uniquingKeysWith: { first, _ in first })
-
-                var versions: [LLVS.Version] = []
+                // Resolve all file IDs up front
+                var fileIDsToFetch: [(versionId: LLVS.Version.ID, fileID: String)] = []
                 for versionId in versionIds {
-                    guard let fileID = itemsByName[versionId.rawValue] else {
+                    guard let fileID = fileMap[versionId.rawValue] else {
                         throw Error.fileNotFound(versionId.rawValue)
                     }
-                    let data = try await downloadFileData(fileID: fileID)
+                    fileIDsToFetch.append((versionId, fileID))
+                }
+
+                // Download all in parallel
+                let dataByFileID = try await downloadFilesInParallel(fileIDs: fileIDsToFetch.map { $0.fileID })
+
+                var versions: [LLVS.Version] = []
+                for (_, fileID) in fileIDsToFetch {
+                    guard let data = dataByFileID[fileID] else {
+                        throw Error.downloadFailed
+                    }
                     if let version = try JSONDecoder().decode([String: LLVS.Version].self, from: data)["version"] {
                         versions.append(version)
                     } else {
@@ -137,21 +175,28 @@ public class BoxExchange: Exchange {
             completionHandler(.success([:]))
             return
         }
+        guard let fileMap = cachedChangesFileMap ?? nil else {
+            completionHandler(.success([:]))
+            return
+        }
+
         AsyncTask {
             do {
-                guard let folderID = restoration.changesFolderID else {
-                    completionHandler(.success([:]))
-                    return
-                }
-                let items = try await listAllFileItems(inFolder: folderID)
-                let itemsByName = Dictionary(items.map { ($0.name, $0.id) }, uniquingKeysWith: { first, _ in first })
-
-                var changesByVersion: [LLVS.Version.ID: [Value.Change]] = [:]
+                var fileIDsToFetch: [(versionId: LLVS.Version.ID, fileID: String)] = []
                 for versionId in versionIds {
-                    guard let fileID = itemsByName[versionId.rawValue] else {
+                    guard let fileID = fileMap[versionId.rawValue] else {
                         throw Error.fileNotFound(versionId.rawValue)
                     }
-                    let data = try await downloadFileData(fileID: fileID)
+                    fileIDsToFetch.append((versionId, fileID))
+                }
+
+                let dataByFileID = try await downloadFilesInParallel(fileIDs: fileIDsToFetch.map { $0.fileID })
+
+                var changesByVersion: [LLVS.Version.ID: [Value.Change]] = [:]
+                for (versionId, fileID) in fileIDsToFetch {
+                    guard let data = dataByFileID[fileID] else {
+                        throw Error.downloadFailed
+                    }
                     let changes = try JSONDecoder().decode([Value.Change].self, from: data)
                     changesByVersion[versionId] = changes
                 }
@@ -165,6 +210,8 @@ public class BoxExchange: Exchange {
     // MARK: - Send
 
     public func prepareToSend(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
+        cachedVersionsFileMap = nil
+        cachedChangesFileMap = nil
         AsyncTask {
             do {
                 try await ensureFoldersExist()
@@ -205,11 +252,6 @@ public class BoxExchange: Exchange {
 
     // MARK: - Box SDK Helpers
 
-    private struct FileItem {
-        let id: String
-        let name: String
-    }
-
     private func ensureFoldersExist() async throws {
         if restoration.versionsFolderID != nil && restoration.changesFolderID != nil { return }
 
@@ -221,7 +263,6 @@ public class BoxExchange: Exchange {
     }
 
     private func createSubfolderIfNeeded(named name: String, inFolder parentID: String) async throws -> String {
-        // Check if it already exists by listing the parent
         let items = try await listAllItems(inFolder: parentID)
         if let existing = items.first(where: { $0.name == name && $0.isFolder }) {
             return existing.id
@@ -268,9 +309,29 @@ public class BoxExchange: Exchange {
         return allItems
     }
 
-    private func listAllFileItems(inFolder folderID: String) async throws -> [FileItem] {
+    /// Returns a name-to-fileID mapping for all files in a folder.
+    private func listFileNameMap(inFolder folderID: String) async throws -> [String: String] {
         let items = try await listAllItems(inFolder: folderID)
-        return items.filter { !$0.isFolder }.map { FileItem(id: $0.id, name: $0.name) }
+        return items
+            .filter { !$0.isFolder }
+            .reduce(into: [:]) { result, item in result[item.name] = item.id }
+    }
+
+    /// Downloads multiple files in parallel using structured concurrency.
+    private func downloadFilesInParallel(fileIDs: [String]) async throws -> [String: Data] {
+        try await withThrowingTaskGroup(of: (String, Data).self) { group in
+            for fileID in fileIDs {
+                group.addTask {
+                    let data = try await self.downloadFileData(fileID: fileID)
+                    return (fileID, data)
+                }
+            }
+            var results: [String: Data] = [:]
+            for try await (fileID, data) in group {
+                results[fileID] = data
+            }
+            return results
+        }
     }
 
     private func downloadFileData(fileID: String) async throws -> Data {

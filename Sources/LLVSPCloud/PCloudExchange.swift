@@ -18,6 +18,7 @@ import PCloudSDKSwift
 ///
 /// Uses `PCloudClient` from the official pCloud SDK for all API operations.
 /// Folder IDs are cached via `restorationState` to avoid repeated lookups.
+/// Folder listings are cached per retrieve/send cycle and downloads are parallelized.
 public class PCloudExchange: Exchange {
 
     public enum Error: Swift.Error {
@@ -43,6 +44,11 @@ public class PCloudExchange: Exchange {
     private let urlSession: URLSession
 
     @Atomic private var restoration = RestorationInfo()
+
+    /// Cached folder listings, populated during prepareToRetrieve/prepareToSend
+    /// and consumed by subsequent calls in the same cycle.
+    private var cachedVersionsFileMap: [String: UInt64]?
+    private var cachedChangesFileMap: [String: UInt64]?
 
     private let newVersionsSubject = PassthroughSubject<Void, Never>()
 
@@ -76,10 +82,57 @@ public class PCloudExchange: Exchange {
     // MARK: - Retrieve
 
     public func prepareToRetrieve(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
-        ensureFoldersExist(completionHandler: completionHandler)
+        cachedVersionsFileMap = nil
+        cachedChangesFileMap = nil
+
+        let ensureFolders = AsynchronousTask { finish in
+            self.ensureFoldersExist { result in
+                finish(result)
+            }
+        }
+
+        let cacheVersionsListing = AsynchronousTask { finish in
+            guard let folderID = self.restoration.versionsFolderID else {
+                self.cachedVersionsFileMap = [:]
+                finish(.success(()))
+                return
+            }
+            self.listFileNames(inFolder: folderID) { result in
+                switch result {
+                case .success(let fileMap):
+                    self.cachedVersionsFileMap = fileMap
+                    finish(.success(()))
+                case .failure(let error):
+                    finish(.failure(error))
+                }
+            }
+        }
+
+        let cacheChangesListing = AsynchronousTask { finish in
+            guard let folderID = self.restoration.changesFolderID else {
+                self.cachedChangesFileMap = [:]
+                finish(.success(()))
+                return
+            }
+            self.listFileNames(inFolder: folderID) { result in
+                switch result {
+                case .success(let fileMap):
+                    self.cachedChangesFileMap = fileMap
+                    finish(.success(()))
+                case .failure(let error):
+                    finish(.failure(error))
+                }
+            }
+        }
+
+        [ensureFolders, cacheVersionsListing, cacheChangesListing].executeInOrder(completingWith: completionHandler)
     }
 
     public func retrieveAllVersionIdentifiers(executingUponCompletion completionHandler: @escaping CompletionHandler<[Version.ID]>) {
+        if let fileMap = cachedVersionsFileMap {
+            completionHandler(.success(fileMap.map { Version.ID($0.key) }))
+            return
+        }
         guard let folderID = restoration.versionsFolderID else {
             completionHandler(.success([]))
             return
@@ -87,6 +140,7 @@ public class PCloudExchange: Exchange {
         listFileNames(inFolder: folderID) { result in
             switch result {
             case .success(let fileMap):
+                self.cachedVersionsFileMap = fileMap
                 completionHandler(.success(fileMap.map { Version.ID($0.key) }))
             case .failure(let error):
                 completionHandler(.failure(error))
@@ -99,50 +153,43 @@ public class PCloudExchange: Exchange {
             completionHandler(.success([]))
             return
         }
-        guard let folderID = restoration.versionsFolderID else {
+        guard let fileMap = cachedVersionsFileMap ?? nil else {
             completionHandler(.success([]))
             return
         }
 
-        listFileNames(inFolder: folderID) { result in
+        var fileIDsToFetch: [(versionId: Version.ID, fileID: UInt64)] = []
+        for versionId in versionIds {
+            guard let fileID = fileMap[versionId.rawValue] else {
+                completionHandler(.failure(Error.fileNotFound(versionId.rawValue)))
+                return
+            }
+            fileIDsToFetch.append((versionId, fileID))
+        }
+
+        downloadFilesInParallel(fileIDs: fileIDsToFetch.map { $0.fileID }) { result in
             switch result {
-            case .failure(let error):
-                completionHandler(.failure(error))
-            case .success(let fileMap):
-                var versions: [Version] = []
-                let tasks = versionIds.map { versionId in
-                    AsynchronousTask { finish in
-                        guard let fileID = fileMap[versionId.rawValue] else {
-                            finish(.failure(Error.fileNotFound(versionId.rawValue)))
+            case .success(let dataByFileID):
+                do {
+                    var versions: [Version] = []
+                    for (_, fileID) in fileIDsToFetch {
+                        guard let data = dataByFileID[fileID] else {
+                            completionHandler(.failure(Error.invalidResponse))
                             return
                         }
-                        self.downloadFileData(fileID: fileID) { downloadResult in
-                            switch downloadResult {
-                            case .success(let data):
-                                do {
-                                    if let version = try JSONDecoder().decode([String: Version].self, from: data)["version"] {
-                                        versions.append(version)
-                                        finish(.success(()))
-                                    } else {
-                                        finish(.failure(Error.versionFileInvalid))
-                                    }
-                                } catch {
-                                    finish(.failure(error))
-                                }
-                            case .failure(let error):
-                                finish(.failure(error))
-                            }
+                        if let version = try JSONDecoder().decode([String: Version].self, from: data)["version"] {
+                            versions.append(version)
+                        } else {
+                            completionHandler(.failure(Error.versionFileInvalid))
+                            return
                         }
                     }
+                    completionHandler(.success(versions))
+                } catch {
+                    completionHandler(.failure(error))
                 }
-                tasks.executeInOrder { tasksResult in
-                    switch tasksResult {
-                    case .success:
-                        completionHandler(.success(versions))
-                    case .failure(let error):
-                        completionHandler(.failure(error))
-                    }
-                }
+            case .failure(let error):
+                completionHandler(.failure(error))
             }
         }
     }
@@ -152,47 +199,39 @@ public class PCloudExchange: Exchange {
             completionHandler(.success([:]))
             return
         }
-        guard let folderID = restoration.changesFolderID else {
+        guard let fileMap = cachedChangesFileMap ?? nil else {
             completionHandler(.success([:]))
             return
         }
 
-        listFileNames(inFolder: folderID) { result in
+        var fileIDsToFetch: [(versionId: Version.ID, fileID: UInt64)] = []
+        for versionId in versionIds {
+            guard let fileID = fileMap[versionId.rawValue] else {
+                completionHandler(.failure(Error.fileNotFound(versionId.rawValue)))
+                return
+            }
+            fileIDsToFetch.append((versionId, fileID))
+        }
+
+        downloadFilesInParallel(fileIDs: fileIDsToFetch.map { $0.fileID }) { result in
             switch result {
-            case .failure(let error):
-                completionHandler(.failure(error))
-            case .success(let fileMap):
-                var changesByVersion: [Version.ID: [Value.Change]] = [:]
-                let tasks = versionIds.map { versionId in
-                    AsynchronousTask { finish in
-                        guard let fileID = fileMap[versionId.rawValue] else {
-                            finish(.failure(Error.fileNotFound(versionId.rawValue)))
+            case .success(let dataByFileID):
+                do {
+                    var changesByVersion: [Version.ID: [Value.Change]] = [:]
+                    for (versionId, fileID) in fileIDsToFetch {
+                        guard let data = dataByFileID[fileID] else {
+                            completionHandler(.failure(Error.invalidResponse))
                             return
                         }
-                        self.downloadFileData(fileID: fileID) { downloadResult in
-                            switch downloadResult {
-                            case .success(let data):
-                                do {
-                                    let changes = try JSONDecoder().decode([Value.Change].self, from: data)
-                                    changesByVersion[versionId] = changes
-                                    finish(.success(()))
-                                } catch {
-                                    finish(.failure(error))
-                                }
-                            case .failure(let error):
-                                finish(.failure(error))
-                            }
-                        }
+                        let changes = try JSONDecoder().decode([Value.Change].self, from: data)
+                        changesByVersion[versionId] = changes
                     }
+                    completionHandler(.success(changesByVersion))
+                } catch {
+                    completionHandler(.failure(error))
                 }
-                tasks.executeInOrder { tasksResult in
-                    switch tasksResult {
-                    case .success:
-                        completionHandler(.success(changesByVersion))
-                    case .failure(let error):
-                        completionHandler(.failure(error))
-                    }
-                }
+            case .failure(let error):
+                completionHandler(.failure(error))
             }
         }
     }
@@ -200,6 +239,8 @@ public class PCloudExchange: Exchange {
     // MARK: - Send
 
     public func prepareToSend(executingUponCompletion completionHandler: @escaping CompletionHandler<Void>) {
+        cachedVersionsFileMap = nil
+        cachedChangesFileMap = nil
         ensureFoldersExist(completionHandler: completionHandler)
     }
 
@@ -344,6 +385,44 @@ public class PCloudExchange: Exchange {
                 }
             }
             .start()
+    }
+
+    /// Downloads multiple files in parallel via getFileLink + URLSession.
+    private func downloadFilesInParallel(fileIDs: [UInt64], completionHandler: @escaping CompletionHandler<[UInt64: Data]>) {
+        guard !fileIDs.isEmpty else {
+            completionHandler(.success([:]))
+            return
+        }
+
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var results: [UInt64: Data] = [:]
+        var firstError: Swift.Error?
+
+        for fileID in fileIDs {
+            group.enter()
+            downloadFileData(fileID: fileID) { result in
+                lock.lock()
+                defer {
+                    lock.unlock()
+                    group.leave()
+                }
+                switch result {
+                case .success(let data):
+                    results[fileID] = data
+                case .failure(let error):
+                    if firstError == nil { firstError = error }
+                }
+            }
+        }
+
+        group.notify(queue: .global(qos: .userInitiated)) {
+            if let error = firstError {
+                completionHandler(.failure(error))
+            } else {
+                completionHandler(.success(results))
+            }
+        }
     }
 
     /// Downloads file data by first getting a CDN link via the SDK, then fetching via URLSession.
