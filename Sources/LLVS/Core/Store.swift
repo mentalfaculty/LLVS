@@ -241,7 +241,46 @@ extension Store {
     public func enumerate(version versionId: Version.ID, executingForEach block: (Value.Reference) throws -> Void) throws {
         try valuesMap.enumerateValueReferences(forVersionIdentifiedBy: versionId, executingForEach: block)
     }
-    
+
+    /// Batch-fetches multiple values at a given version in a single Zone query.
+    /// Resolves map references individually (in-memory), then batch-fetches data from the Zone.
+    public func values(forIds ids: [Value.ID], at versionId: Version.ID) throws -> [Value?] {
+        guard !ids.isEmpty else { return [] }
+
+        let refs: [Value.Reference?] = try ids.map { try valueReference(id: $0, at: versionId) }
+
+        var zoneRefs: [ZoneReference] = []
+        var indexMapping: [(resultIndex: Int, zoneIndex: Int)] = []
+        for (i, ref) in refs.enumerated() {
+            if let ref = ref {
+                indexMapping.append((resultIndex: i, zoneIndex: zoneRefs.count))
+                zoneRefs.append(ZoneReference(key: ids[i].rawValue, version: ref.storedVersionId))
+            }
+        }
+
+        let dataArray = try valuesZone.data(for: zoneRefs)
+
+        var result = [Value?](repeating: nil, count: ids.count)
+        for mapping in indexMapping {
+            if let data = dataArray[mapping.zoneIndex] {
+                result[mapping.resultIndex] = Value(id: ids[mapping.resultIndex], storedVersionId: zoneRefs[mapping.zoneIndex].version, data: data)
+            }
+        }
+        return result
+    }
+
+    /// Batch-fetches values using pre-resolved references in a single Zone query.
+    public func values(storedAt references: [Value.Reference]) throws -> [Value?] {
+        guard !references.isEmpty else { return [] }
+
+        let zoneRefs = references.map { ZoneReference(key: $0.valueId.rawValue, version: $0.storedVersionId) }
+        let dataArray = try valuesZone.data(for: zoneRefs)
+
+        return zip(references, dataArray).map { ref, data in
+            data.map { Value(id: ref.valueId, storedVersionId: ref.storedVersionId, data: $0) }
+        }
+    }
+
 }
 
 
@@ -439,12 +478,12 @@ extension Store {
         guard let version = try version(identifiedBy: versionId) else { throw Error.missingVersion }
         
         guard let predecessors = version.predecessors else {
-            var changes: [Value.Change] = []
+            var refs: [Value.Reference] = []
             try valuesMap.enumerateValueReferences(forVersionIdentifiedBy: versionId) { ref in
-                let v = try value(id: ref.valueId, storedAt: ref.storedVersionId)!
-                changes.append(.insert(v))
+                refs.append(ref)
             }
-            return changes
+            let fetchedValues = try values(storedAt: refs)
+            return fetchedValues.compactMap { $0.map { .insert($0) } }
         }
         
         var changes: [Value.Change] = []
@@ -452,21 +491,31 @@ extension Store {
         if let p2 = predecessors.idOfSecond {
             // Do a reverse-in-time fork, and negate the outcome
             let diffs = try valuesMap.differences(between: p1, and: p2, withCommonAncestor: versionId)
+
+            // Collect value IDs that need data, batch-fetch them
+            let idsNeedingValues = diffs.compactMap { diff -> Value.ID? in
+                switch diff.valueFork {
+                case .twiceUpdated, .removedAndUpdated, .twiceRemoved, .removed, .updated:
+                    return diff.valueId
+                case .twiceInserted, .inserted:
+                    return nil
+                }
+            }
+            let fetchedValues = try values(forIds: idsNeedingValues, at: versionId)
+            let valuesByID = Dictionary(zip(idsNeedingValues, fetchedValues).compactMap { id, val in val.map { (id, $0) } }, uniquingKeysWith: { a, _ in a })
+
             for diff in diffs {
                 switch diff.valueFork {
                 case .twiceInserted:
                     changes.append(.remove(diff.valueId))
                 case .twiceUpdated, .removedAndUpdated:
-                    let value = try self.value(id: diff.valueId, at: versionId)!
-                    changes.append(.update(value))
+                    changes.append(.update(valuesByID[diff.valueId]!))
                 case .twiceRemoved:
-                    let value = try self.value(id: diff.valueId, at: versionId)!
-                    changes.append(.insert(value))
+                    changes.append(.insert(valuesByID[diff.valueId]!))
                 case .inserted:
                     changes.append(.preserveRemoval(diff.valueId))
                 case .removed, .updated:
-                    let value = try self.value(id: diff.valueId, at: versionId)!
-                    changes.append(.preserve(value.reference!))
+                    changes.append(.preserve(valuesByID[diff.valueId]!.reference!))
                 }
             }
         } else {
@@ -482,16 +531,29 @@ extension Store {
         
         var changes: [Value.Change] = []
         let diffs = try valuesMap.differences(between: versionId2, and: versionId1, withCommonAncestor: versionId1)
+
+        // Batch-fetch all values that need data
+        let idsNeedingValues = diffs.compactMap { diff -> Value.ID? in
+            switch diff.valueFork {
+            case .inserted, .updated:
+                return diff.valueId
+            case .removed:
+                return nil
+            case .removedAndUpdated, .twiceInserted, .twiceRemoved, .twiceUpdated:
+                fatalError("Should not be possible with only a single branch")
+            }
+        }
+        let fetchedValues = try values(forIds: idsNeedingValues, at: versionId2)
+        let valuesByID = Dictionary(zip(idsNeedingValues, fetchedValues).compactMap { id, val in val.map { (id, $0) } }, uniquingKeysWith: { a, _ in a })
+
         for diff in diffs {
             switch diff.valueFork {
             case .inserted:
-                let value = try self.value(id: diff.valueId, at: versionId2)!
-                changes.append(.insert(value))
+                changes.append(.insert(valuesByID[diff.valueId]!))
             case .removed:
                 changes.append(.remove(diff.valueId))
             case .updated:
-                let value = try self.value(id: diff.valueId, at: versionId2)!
-                changes.append(.update(value))
+                changes.append(.update(valuesByID[diff.valueId]!))
             case .removedAndUpdated, .twiceInserted, .twiceRemoved, .twiceUpdated:
                 fatalError("Should not be possible with only a single branch")
             }

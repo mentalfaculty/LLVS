@@ -215,20 +215,25 @@ public extension Exchange {
         let sendVersions = AsynchronousTask { finishAsyncTask in
             toSendIds = self.versionIdsMissingRemotely(forRemoteIdentifiers: remoteIds)
 
+            // Pre-fetch all versions once for both cost evaluation and batch execution
+            var versionsByID: [Version.ID: Version] = [:]
+            for id in toSendIds {
+                if let version = try? self.store.version(identifiedBy: id) {
+                    versionsByID[id] = version
+                }
+            }
+
             func batchSizeCostEvaluator(index: Int) -> Float {
                 let batchDataSizeLimit: Int64 = 5000000 // 5MB
                 let defaultDataSize: Int64 = 100000 // 100KB
-                if let version = try? self.store.version(identifiedBy: toSendIds[index]) {
-                    return Float(version.valueDataSize ?? defaultDataSize) / Float(batchDataSizeLimit)
-                } else {
-                    return Float(defaultDataSize) / Float(batchDataSizeLimit)
-                }
+                let version = versionsByID[toSendIds[index]]
+                return Float(version?.valueDataSize ?? defaultDataSize) / Float(batchDataSizeLimit)
             }
 
             let taskBatcher = DynamicTaskBatcher(numberOfTasks: toSendIds.count, taskCostEvaluator: batchSizeCostEvaluator) { range, finishBatch in
                 do {
-                    let versionChanges: [VersionChanges] = try toSendIds!.map { versionId in
-                        guard let version = try self.store.version(identifiedBy: versionId) else {
+                    let versionChanges: [VersionChanges] = try toSendIds[range].map { versionId in
+                        guard let version = versionsByID[versionId] else {
                             throw ExchangeError.missingVersion
                         }
                         let changes = try self.store.valueChanges(madeInVersionIdentifiedBy: versionId)

@@ -167,7 +167,8 @@ public class StoreCoordinator {
 
     public func values(at version: Version.ID? = nil) throws -> [Value] {
         try autoreleasepool {
-            return try valueReferences(at: version).map { try store.value(storedAt: $0)! }
+            let refs = try valueReferences(at: version)
+            return try store.values(storedAt: refs).compactMap { $0 }
         }
     }
 
