@@ -30,7 +30,8 @@ public class SQLiteStorage: Storage, SnapshotCapable {
 
 }
 
-internal final class SQLiteZone: Zone {
+/// Not thread-safe by design. The caller serialises access. See `SQLiteDatabase`.
+internal final class SQLiteZone: Zone, @unchecked Sendable {
     
     let rootDirectory: URL
     let fileExtension: String

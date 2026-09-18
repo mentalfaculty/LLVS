@@ -19,7 +19,7 @@ swift test --filter storeCreatesDirectories    # Run a single test by name
 - Tests are **Swift Testing** (`@Suite`/`@Test`/`#expect`), not XCTest. Test names have no `test` prefix.
 - Tests are in `Tests/LLVSTests/` and `Tests/LLVSModelTests/`, and depend on `LLVS`, `LLVSSQLite`, `LLVSModel`, and `LLVSWebDAV` (for its XML parser only). The other cloud backend targets have no tests.
 - SPM builds ALL targets before tests run. A broken backend target blocks the whole test suite. After a change to `LLVSBox` or `LLVSPCloud`, build with `--enable-all-traits`, or the change is not compiled at all.
-- `swift-tools-version: 6.1`, but every target except the macro uses `.swiftLanguageMode(.v5)`. Platforms: macOS 15, iOS 18, watchOS 11 (needed for `Mutex` from `Synchronization`).
+- `swift-tools-version: 6.1`, and every target builds in Swift 6 language mode (strict concurrency). Platforms: macOS 15, iOS 18, watchOS 11 (needed for `Mutex` from `Synchronization`).
 - CI is `.github/workflows/ci.yml`: `swift test`, then `swift build --enable-all-traits`. There is no linter. Sample apps (`Samples/LoCo`, `Samples/TheMessage`) are Xcode projects that reference the package locally; they are not part of the SPM package.
 - `docs/` is a 2019 Jekyll blog that teaches a removed Combine API. It may be served by GitHub Pages, so it has been left in place. Do not trust it for API. Record user-visible changes in `CHANGELOG.md`.
 

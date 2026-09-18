@@ -8,7 +8,7 @@
 import Foundation
 
 /// Metadata describing a snapshot stored in the cloud.
-public struct SnapshotManifest: Codable {
+public struct SnapshotManifest: Codable, Sendable {
     public var snapshotId: String
     public var format: String
     public var createdAt: Date
@@ -33,7 +33,7 @@ public struct SnapshotManifest: Codable {
 }
 
 /// Policy controlling automatic snapshot creation after sync.
-public struct SnapshotPolicy {
+public struct SnapshotPolicy: Sendable {
     public var enabled: Bool
     public var minimumInterval: TimeInterval
     public var minimumNewVersions: Int

@@ -43,7 +43,7 @@ public extension ClosedRange where Bound == Int {
 }
 
 @propertyWrapper
-public struct Atomic<Value: Sendable> {
+public struct Guarded<Value: Sendable>: Sendable {
 
     private final class Storage: @unchecked Sendable {
         let mutex: Mutex<Value>
@@ -51,6 +51,11 @@ public struct Atomic<Value: Sendable> {
     }
 
     private let storage: Storage
+
+    /// Read, change and write the value in one locked step.
+    public func withLock<Result>(_ body: (inout Value) throws -> Result) rethrows -> Result {
+        try storage.mutex.withLock { try body(&$0) }
+    }
 
     public init(wrappedValue value: Value) {
         self.storage = Storage(value)

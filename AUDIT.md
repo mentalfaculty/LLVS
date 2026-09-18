@@ -45,7 +45,7 @@ Read-only audit at commit 92fe81b (tag 0.9). `swift test` passes: 170 tests. Fin
 27. ✅ FIXED for Box and pCloud (branch `safety-pass`, package traits `Box` / `PCloud`; ZIPFoundation in core still open) **Box and pCloud SDKs are in every consumer's dependency graph**, because they are top-level package dependencies. Core LLVS depends on ZIPFoundation for one file.
 28. ✅ FIXED (untracked) Root `Package.resolved` is tracked, but `.gitignore:4` ignores `**/Package.resolved`.
 29. ✅ FIXED (renamed to `LICENSE`, with an "MIT License" title) `LICENCE.txt` uses the British spelling; GitHub and Swift Package Index licence detection may miss it.
-30. Swift 5 language mode everywhere. Swift 6 blockers: global `log` (non-Sendable, shadows Foundation `log()`), `History` escapes from `queryHistory`, non-Sendable `Store` captured in `@Sendable` closures, `Zone`/`MergeArbiter`/`DynamicTaskBatcher` not Sendable.
+30. ✅ FIXED (every target is in Swift 6 language mode; the named blockers are all resolved) Swift 5 language mode everywhere. Swift 6 blockers: global `log` (non-Sendable, shadows Foundation `log()`), `History` escapes from `queryHistory`, non-Sendable `Store` captured in `@Sendable` closures, `Zone`/`MergeArbiter`/`DynamicTaskBatcher` not Sendable.
 
 ## Minor / dead code
 
@@ -87,4 +87,5 @@ Open:
 - Zipping a live SQLite database in the middle of a transaction can capture a hot journal or a torn file.
 - `Store.init` derives `values/`, `versions/` and `maps/` from the unresolved root URL, while `rootDirectoryURL` is resolved. No failure seen.
 - `WebDAVResponseParser` ignores the namespace URI. Turning on `shouldProcessNamespaces` and checking for `DAV:` would be stricter.
+- `Store` is `@unchecked Sendable`, and vouches transitively for whatever `Storage` the caller supplies. The protocol now documents that implementations must be thread-safe, but nothing enforces it.
 

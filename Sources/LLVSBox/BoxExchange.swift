@@ -19,7 +19,7 @@ import BoxSdkGen
 /// Uses `BoxClient` from the official Box SDK for all API operations.
 /// The caller provides an authenticated `BoxClient` (e.g. via `BoxDeveloperTokenAuth`
 /// or `BoxCCGAuth`).
-public class BoxExchange: FolderBasedExchange {
+public final class BoxExchange: FolderBasedExchange, @unchecked Sendable {
 
     public typealias FileID = String
     public typealias FolderID = String
@@ -37,7 +37,7 @@ public class BoxExchange: FolderBasedExchange {
     /// The Box folder ID that serves as the root for LLVS data.
     public let rootFolderID: String
 
-    @Atomic private var restoration = RestorationInfo()
+    @Guarded private var restoration = RestorationInfo()
 
     public let newVersionsAvailable: AsyncStream<Void>
     private let newVersionsContinuation: AsyncStream<Void>.Continuation
@@ -51,7 +51,8 @@ public class BoxExchange: FolderBasedExchange {
         }
     }
 
-    fileprivate lazy var temporaryDirectory: URL = {
+    /// Not lazy: a lazy var is not thread-safe, and this is touched from callback queues.
+    fileprivate let temporaryDirectory: URL = {
         let result = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try? FileManager.default.createDirectory(at: result, withIntermediateDirectories: true, attributes: nil)
         return result

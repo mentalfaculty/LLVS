@@ -9,7 +9,7 @@ import Foundation
 import CloudKit
 import LLVS
 
-public class CloudKitExchange: Exchange {
+public final class CloudKitExchange: Exchange, @unchecked Sendable {
 
     public enum CloudDatabaseDescription {
         case privateDatabaseWithCustomZone(CKContainer, zoneIdentifier: String)
@@ -49,14 +49,15 @@ public class CloudKitExchange: Exchange {
         case snapshotChunkAssetMissing(Int)
     }
 
-    fileprivate lazy var temporaryDirectory: URL = {
+    /// Not lazy: a lazy var is not thread-safe, and this is touched from callback queues.
+    fileprivate let temporaryDirectory: URL = {
         let result = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try? FileManager.default.createDirectory(at: result, withIntermediateDirectories: true, attributes: nil)
         return result
     }()
 
     /// The store the exchange is updating.
-    public var store: Store
+    public let store: Store
 
     /// Client to inform of updates
     public let newVersionsAvailable: AsyncStream<Void>
@@ -84,7 +85,7 @@ public class CloudKitExchange: Exchange {
     }
 
     /// Restoration state
-    @Atomic private var restoration: Restoration = .init()
+    @Guarded private var restoration: Restoration = .init()
 
     /// Limit to use for CloudKit fetches. Should be less than actual limit (ie 400)
     private let cloudKitFetchLimit = 200
@@ -153,7 +154,7 @@ fileprivate extension CloudKitExchange {
             operation.fetchAllChanges = true
             operation.recordChangedBlock = { record in
                 let versionId = Version.ID(record.recordID.recordName)
-                self.restoration.versionsInCloud.insert(versionId)
+                self._restoration.withLock { $0.versionsInCloud.insert(versionId) }
                 log.verbose("Found record for version: \(versionId)")
             }
             operation.recordZoneFetchCompletionBlock = { zoneID, token, clientData, moreComing, error in
@@ -167,8 +168,10 @@ fileprivate extension CloudKitExchange {
                 let tokenExpired = cloudError?.code == .changeTokenExpired
                     || cloudError?.partialErrorsByItemID?.values.contains { ($0 as? CKError)?.code == .changeTokenExpired } == true
                 if !isRetryAfterTokenReset, tokenExpired {
-                    self.restoration.fetchRecordChangesToken = nil
-                    self.restoration.versionsInCloud = []
+                    self._restoration.withLock {
+                        $0.fetchRecordChangesToken = nil
+                        $0.versionsInCloud = []
+                    }
                     log.error("iCloud token expired. Cleared cached data")
                     // Retry once. A second failure (eg zone not found, rate limited) is thrown to the caller.
                     Task {
@@ -222,9 +225,9 @@ fileprivate extension CloudKitExchange {
         do {
             let records = try await queryDatabase(with: .query(query))
             let versionIds = records.map { Version.ID($0.recordID.recordName) }
-            self.restoration.versionsInCloud.formUnion(versionIds)
+            self._restoration.withLock { $0.versionsInCloud.formUnion(versionIds) }
             let modificationDates = records.map { $0.modificationDate! }
-            self.restoration.lastQueryDate = max(self.restoration.lastQueryDate ?? Date.distantPast, modificationDates.max() ?? Date.distantPast )
+            self._restoration.withLock { $0.lastQueryDate = max($0.lastQueryDate ?? Date.distantPast, modificationDates.max() ?? Date.distantPast) }
         } catch let error as CKError where error.code == .unknownItem {
             // Probably don't have data in cloud yet. Ignore error
             self.restoration.lastQueryDate = Date.distantPast
@@ -237,16 +240,17 @@ fileprivate extension CloudKitExchange {
 
         return try await withCheckedThrowingContinuation { continuation in
             let operation = queryInfo.makeQueryOperation()
-            var records: [CKRecord] = []
+            // CloudKit calls these blocks on its own queue, so the records are collected under a lock
+            let records = Guarded<[CKRecord]>(wrappedValue: [])
             operation.recordFetchedBlock = { record in
-                records.append(record)
+                records.withLock { $0.append(record) }
             }
             operation.queryCompletionBlock = { cursor, error in
                 if let cursor = cursor {
                     Task {
                         do {
                             let moreRecords = try await self.queryDatabase(with: .cursor(cursor))
-                            continuation.resume(returning: records + moreRecords)
+                            continuation.resume(returning: records.wrappedValue + moreRecords)
                         } catch {
                             continuation.resume(throwing: error)
                         }
@@ -257,7 +261,7 @@ fileprivate extension CloudKitExchange {
                         log.error("Failed to fetch new versions: \(error)")
                         continuation.resume(throwing: error)
                     } else {
-                        continuation.resume(returning: records)
+                        continuation.resume(returning: records.wrappedValue)
                     }
                 }
             }

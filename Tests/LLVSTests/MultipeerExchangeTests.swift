@@ -203,8 +203,9 @@ class MockPeerTransport: PeerTransport {
         let ver = try store1.makeVersion(basedOnPredecessor: nil, storing: [.insert(val)])
 
         // Listen for new versions on exchange2
+        let listeningExchange = exchange2
         let notified = Task<Bool, Never> {
-            for await _ in exchange2.newVersionsAvailable {
+            for await _ in listeningExchange.newVersionsAvailable {
                 return true
             }
             return false

@@ -7,7 +7,7 @@
 
 import Foundation
 
-public struct Value: Codable, Identifiable {
+public struct Value: Codable, Identifiable, Sendable {
     public typealias ID = Identifier
     
     public var id: ID
@@ -49,12 +49,12 @@ public struct Value: Codable, Identifiable {
 
 public extension Value {
     
-    struct Reference: Codable, Hashable {
+    struct Reference: Codable, Hashable, Sendable {
         public var valueId: ID
         public var storedVersionId: Version.ID
     }
     
-    struct Identifier: RawRepresentable, Hashable, Codable {
+    struct Identifier: RawRepresentable, Hashable, Codable, Sendable {
         public var rawValue: String
         
         public init(rawValue: String = UUID().uuidString) {
@@ -66,7 +66,7 @@ public extension Value {
         }
     }
     
-    enum Change: Codable {
+    enum Change: Codable, Sendable {
         case insert(Value)
         case update(Value)
         case remove(ID)
@@ -118,8 +118,8 @@ public extension Value {
         }
     }
     
-    enum Fork: Equatable {
-        public enum Branch: Equatable {
+    enum Fork: Equatable, Sendable {
+        public enum Branch: Equatable, Sendable {
             case first
             case second
             

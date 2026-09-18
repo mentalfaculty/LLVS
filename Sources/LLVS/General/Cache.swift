@@ -11,24 +11,27 @@ import Synchronization
 /// Generational cache. Fills up each generation to a limit, then discards oldest creating a new generation.
 /// When you retrieve a value, it automatically adds that value to the newest generation, to keep it around.
 /// Creating generations is based on the number of values in the latest generation, not on time or data size.
-public final class Cache<ValueType> {
+public final class Cache<ValueType: Sendable>: Sendable {
 
-    private class Generation {
-        private var valuesByIdentifier: [AnyHashable:ValueType] = [:]
+    /// A type-erased key. Like `AnyHashable`, but it carries the promise that the key is `Sendable`.
+    private struct Key: Hashable, @unchecked Sendable {
+        private let base: AnyHashable
+        init(_ base: some Hashable & Sendable) { self.base = AnyHashable(base) }
+    }
 
-        subscript(id: AnyHashable) -> ValueType? {
-            get {
-                return valuesByIdentifier[id]
-            }
-            set(newValue) {
-                valuesByIdentifier[id] = newValue
-            }
+    // A struct, so that the compiler can see that nothing escapes the lock
+    private struct Generation: Sendable {
+        private var valuesByIdentifier: [Key:ValueType] = [:]
+
+        subscript(id: Key) -> ValueType? {
+            get { valuesByIdentifier[id] }
+            set { valuesByIdentifier[id] = newValue }
         }
 
         var count: Int { return valuesByIdentifier.count }
     }
 
-    private struct State {
+    private struct State: Sendable {
         var generations: [Generation]
     }
 
@@ -44,30 +47,26 @@ public final class Cache<ValueType> {
         self.state = Mutex(State(generations: generations))
     }
 
-    public func setValue(_ value: ValueType, for identifier: AnyHashable) {
+    public func setValue(_ value: ValueType, for identifier: some Hashable & Sendable) {
         state.withLock { state in
             regenerateIfNeeded(&state)
-            state.generations.first![identifier] = value
+            state.generations[0][Key(identifier)] = value
         }
     }
 
-    public func removeValue(for identifier: AnyHashable) {
+    public func removeValue(for identifier: some Hashable & Sendable) {
         state.withLock { state in
-            state.generations.forEach { generation in
-                generation[identifier] = nil
+            for i in state.generations.indices {
+                state.generations[i][Key(identifier)] = nil
             }
         }
     }
 
-    public func value(for identifier: AnyHashable) -> ValueType? {
+    public func value(for identifier: some Hashable & Sendable) -> ValueType? {
         state.withLock { state in
-            if let generation = state.generations.first(where: { $0[identifier] != nil }) {
-                let value = generation[identifier]
-                state.generations.first![identifier] = value // Keep current by adding to most recent generation
-                return value
-            } else {
-                return nil
-            }
+            guard let value = state.generations.lazy.compactMap({ $0[Key(identifier)] }).first else { return nil }
+            state.generations[0][Key(identifier)] = value // Keep current by adding to most recent generation
+            return value
         }
     }
 
@@ -78,8 +77,7 @@ public final class Cache<ValueType> {
     }
 
     private func regenerateIfNeeded(_ state: inout State) {
-        let generation = state.generations.first!
-        if generation.count > regenerationLimit {
+        if state.generations[0].count > regenerationLimit {
             regenerate(&state)
         }
     }

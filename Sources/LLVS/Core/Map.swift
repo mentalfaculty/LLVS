@@ -352,7 +352,7 @@ final class Map {
 
 extension Map {
     
-    struct Key: Codable, Hashable {
+    struct Key: Codable, Hashable, Sendable {
         var keyString: String
         init(_ keyString: String = UUID().uuidString) {
             self.keyString = keyString
@@ -365,7 +365,7 @@ extension Map {
         var valueFork: Value.Fork
     }
     
-    struct KeyValuePair: Codable, Hashable {
+    struct KeyValuePair: Codable, Hashable, Sendable {
         var key: Key
         var valueReference: Value.Reference
     }
@@ -380,7 +380,7 @@ extension Map {
         }
     }
     
-    struct Node: Codable, Hashable {
+    struct Node: Codable, Hashable, Sendable {
         var reference: ZoneReference
         var children: Children
     }

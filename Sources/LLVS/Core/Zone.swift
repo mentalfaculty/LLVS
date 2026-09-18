@@ -7,12 +7,12 @@
 
 import Foundation
 
-public struct ZoneReference: Codable, Hashable {
+public struct ZoneReference: Codable, Hashable, Sendable {
     public var key: String
     public var version: Version.ID
 }
 
-public protocol Zone {
+public protocol Zone: Sendable {
     func store(_ data: Data, for reference: ZoneReference) throws
     
     // Default provided, but zone implementations can optimize this.

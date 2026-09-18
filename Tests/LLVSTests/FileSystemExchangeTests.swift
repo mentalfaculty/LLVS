@@ -147,8 +147,9 @@ import Foundation
         let _ = try store1.makeVersion(basedOnPredecessor: nil, storing: [])
 
         // Start listening before the send
+        let listeningExchange = exchange2
         let notificationTask = Task {
-            for await _ in exchange2.newVersionsAvailable {
+            for await _ in listeningExchange.newVersionsAvailable {
                 return // Got a notification
             }
         }

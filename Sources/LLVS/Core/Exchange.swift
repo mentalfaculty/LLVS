@@ -22,7 +22,7 @@ public protocol SnapshotExchange {
     func sendSnapshot(manifest: SnapshotManifest, chunkProvider: @escaping @Sendable (Int) throws -> Data) async throws
 }
 
-public protocol Exchange: AnyObject {
+public protocol Exchange: AnyObject, Sendable {
 
     var newVersionsAvailable: AsyncStream<Void> { get }
 

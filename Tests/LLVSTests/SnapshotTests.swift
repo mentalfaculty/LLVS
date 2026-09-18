@@ -576,15 +576,14 @@ import Foundation
 
         let replacerExchange = FileSystemExchange(rootDirectoryURL: exchangeURL, store: store2, usesFileCoordination: false)
 
-        var bootstrapError: Swift.Error?
-
-        // Race bootstrap and snapshot replacement
-        await withTaskGroup(of: Void.self) { group in
+        // Race bootstrap and snapshot replacement. The group reports whether the bootstrap failed.
+        let bootstrapFailed = await withTaskGroup(of: Bool.self) { group -> Bool in
             group.addTask {
                 do {
                     try await coordinator3.bootstrapFromSnapshot()
+                    return false
                 } catch {
-                    bootstrapError = error
+                    return true
                 }
             }
             group.addTask {
@@ -592,11 +591,13 @@ import Foundation
                     let chunkFile = snapshotDir2.appendingPathComponent(String(format: "chunk-%03d", index))
                     return try Data(contentsOf: chunkFile)
                 })
+                return false
             }
+            return await group.reduce(false) { $0 || $1 }
         }
 
         // The key assertion: no crash, and the store is in a consistent state.
-        if bootstrapError != nil {
+        if bootstrapFailed {
             // Bootstrap failed due to race — this is the expected graceful recovery.
             var versionCount = 0
             coordinator3.store.queryHistory { history in
