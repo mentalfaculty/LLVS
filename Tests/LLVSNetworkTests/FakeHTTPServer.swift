@@ -19,12 +19,18 @@ final class FakeHTTPServer: @unchecked Sendable {
     }
 
     private let lock = NSLock()
+    private var token: String?
     private var replies: [Reply] = []
+    private var repeatsLastReply = true
     private var recorded: [RecordedRequest] = []
 
-    /// Replies are handed out in order. The last one repeats once the list runs out.
-    func setReplies(_ replies: [Reply]) {
-        lock.withLock { self.replies = replies }
+    /// Replies are handed out in order. By default the last one repeats once the list runs out,
+    /// so a test can say "always busy" with a single reply.
+    func setReplies(_ replies: [Reply], repeatingLastReply: Bool = true) {
+        lock.withLock {
+            self.replies = replies
+            self.repeatsLastReply = repeatingLastReply
+        }
     }
 
     var requests: [RecordedRequest] { lock.withLock { recorded } }
@@ -34,14 +40,20 @@ final class FakeHTTPServer: @unchecked Sendable {
         lock.withLock {
             recorded.append(request)
             guard !replies.isEmpty else { return Reply() }
-            return replies.count == 1 ? replies[0] : replies.removeFirst()
+            if replies.count == 1 && repeatsLastReply { return replies[0] }
+            return replies.removeFirst()
         }
+    }
+
+    deinit {
+        if let token { FakeURLProtocol.unregister(token) }
     }
 
     func makeSession() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         // The server is found again by this token, because URLProtocol gets the request, not the session
         let token = FakeURLProtocol.register(self)
+        lock.withLock { self.token = token }
         configuration.protocolClasses = [FakeURLProtocol.self]
         configuration.httpAdditionalHeaders = [FakeURLProtocol.serverTokenHeader: token]
         return URLSession(configuration: configuration)
@@ -60,6 +72,10 @@ final class FakeURLProtocol: URLProtocol, @unchecked Sendable {
         let token = UUID().uuidString
         lock.withLock { serversByToken[token] = server }
         return token
+    }
+
+    static func unregister(_ token: String) {
+        lock.withLock { _ = serversByToken.removeValue(forKey: token) }
     }
 
     private static func server(for request: URLRequest) -> FakeHTTPServer? {
@@ -91,10 +107,13 @@ final class FakeURLProtocol: URLProtocol, @unchecked Sendable {
             body = collected
         }
 
+        // The routing header is ours, not the caller's, so tests never see it
+        var headers = request.allHTTPHeaderFields ?? [:]
+        headers.removeValue(forKey: Self.serverTokenHeader)
         let recorded = FakeHTTPServer.RecordedRequest(
             method: request.httpMethod ?? "GET",
             url: url,
-            headers: request.allHTTPHeaderFields ?? [:],
+            headers: headers,
             body: body
         )
         let reply = server.nextReply(for: recorded)

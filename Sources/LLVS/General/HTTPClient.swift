@@ -44,10 +44,27 @@ public struct HTTPClient: Sendable {
             }
         }
 
+        /// Throws unless the status is a success, or one the caller says is fine.
+        /// Use it for the codes a service treats as normal, such as WebDAV's 207, or its 405 for
+        /// a directory that already exists.
+        public func requireSuccess(allowing acceptableStatusCodes: Set<Int> = []) throws {
+            let isAcceptable = (200..<300).contains(statusCode) || acceptableStatusCodes.contains(statusCode)
+            guard !isAcceptable else { return }
+            throw StatusError(statusCode: statusCode, body: data)
+        }
+
         /// The value of a header, whatever case the server used for its name.
         public func headerValue(for name: String) -> String? {
             headerFields.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value
         }
+    }
+
+    /// A status the caller did not expect. It keeps the body, because servers explain themselves there.
+    public struct StatusError: Swift.Error, Sendable {
+        public let statusCode: Int
+        public let body: Data
+
+        public var bodyText: String? { String(data: body, encoding: .utf8) }
     }
 
     public struct RetryPolicy: Sendable {
@@ -90,9 +107,9 @@ public struct HTTPClient: Sendable {
     public func perform(_ request: URLRequest, uploading body: Data? = nil, isSafeToRepeat: Bool = true) async throws -> Response {
         let attempts = isSafeToRepeat ? policy.maximumRetries : 0
         var delay = policy.initialDelay
-        var lastTransportError: (any Swift.Error)?
 
         for attempt in 0...attempts {
+            try Task.checkCancellation()
             do {
                 let (data, urlResponse) = try await send(request, uploading: body)
                 guard let http = urlResponse as? HTTPURLResponse else {
@@ -101,21 +118,24 @@ public struct HTTPClient: Sendable {
                 let response = Response(data: data, response: http)
                 guard attempt < attempts, isWorthRetrying(status: http.statusCode) else { return response }
 
-                // A server that says how long to wait knows better than the doubling
-                let wait = response.headerValue(for: "Retry-After").flatMap(Self.secondsToWait(fromRetryAfter:)) ?? delay
-                try await sleeper.sleep(for: wait)
+                // A server that says how long to wait knows better than the doubling, but it does not
+                // get to hold the sync open for a day, and a broken one can send nonsense
+                let asked = response.headerValue(for: "Retry-After").flatMap(Self.secondsToWait(fromRetryAfter:))
+                try await sleeper.sleep(for: min(asked ?? delay, policy.maximumDelay))
                 delay = min(delay * 2, policy.maximumDelay)
             } catch is CancellationError {
                 throw CancellationError()
+            } catch let error as URLError where error.code == .cancelled {
+                throw CancellationError()
             } catch {
                 guard isWorthRetrying(error: error), attempt < attempts else { throw error }
-                lastTransportError = error
                 try await sleeper.sleep(for: delay)
                 delay = min(delay * 2, policy.maximumDelay)
             }
         }
 
-        throw lastTransportError ?? URLError(.unknown)
+        // The last attempt always returns or throws above
+        preconditionFailure("The retry loop ended without a result")
     }
 
     private func send(_ request: URLRequest, uploading body: Data?) async throws -> (Data, URLResponse) {
@@ -137,7 +157,7 @@ public struct HTTPClient: Sendable {
         switch urlError.code {
         case .timedOut, .networkConnectionLost, .notConnectedToInternet, .cannotConnectToHost,
              .cannotFindHost, .dnsLookupFailed, .resourceUnavailable, .internationalRoamingOff,
-             .callIsActive, .dataNotAllowed, .secureConnectionFailed:
+             .callIsActive, .dataNotAllowed, .badServerResponse, .cannotLoadFromNetwork:
             return true
         default:
             return false
@@ -147,13 +167,22 @@ public struct HTTPClient: Sendable {
     /// `Retry-After` is either a number of seconds, or an HTTP date.
     static func secondsToWait(fromRetryAfter value: String) -> TimeInterval? {
         let trimmed = value.trimmingCharacters(in: .whitespaces)
-        if let seconds = TimeInterval(trimmed) { return max(0, seconds) }
+        if let seconds = TimeInterval(trimmed) {
+            guard seconds.isFinite else { return nil }
+            return max(0, seconds)
+        }
 
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "GMT")
-        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
-        guard let date = formatter.date(from: trimmed) else { return nil }
+        guard let date = httpDateFormatter.date(from: trimmed) else { return nil }
         return max(0, date.timeIntervalSinceNow)
     }
 }
+
+/// RFC 7231 IMF-fixdate, the form every current server sends. The two legacy forms fall back to the
+/// doubling delay, which is a safe answer rather than a wrong one.
+private let httpDateFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.timeZone = TimeZone(identifier: "GMT")
+    formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+    return formatter
+}()

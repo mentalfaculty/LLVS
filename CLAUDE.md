@@ -11,7 +11,7 @@ LLVS (Low-Level Versioned Store) is a decentralized, versioned key-value storage
 ```bash
 swift build                                    # Build all targets (Box and pCloud compile to empty modules)
 swift build --enable-all-traits                # Also compile the SDK-backed backends (Box, pCloud)
-swift test                                     # Run all 220 tests (191 LLVSTests + 12 LLVSNetworkTests + 17 LLVSModelTests)
+swift test                                     # Run all 225 tests (191 LLVSTests + 17 LLVSNetworkTests + 17 LLVSModelTests)
 swift test --filter LLVSTests.StoreSetupTests  # Run a single suite
 swift test --filter storeCreatesDirectories    # Run a single test by name
 ```

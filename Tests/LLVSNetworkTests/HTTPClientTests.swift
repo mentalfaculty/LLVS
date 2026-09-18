@@ -94,6 +94,38 @@ import Foundation
         #expect(server.requestCount == 1)
     }
 
+    @Test func aHugeRetryAfterIsCappedByThePolicy() async throws {
+        // A server could ask us to wait a day, or send nonsense that parses as infinity
+        let server = FakeHTTPServer()
+        server.setReplies([.init(statusCode: 429, headers: ["Retry-After": "86400"]), .init(statusCode: 200)])
+        let sleeper = TestSleeper()
+
+        _ = try await client(server, clock: sleeper).perform(request)
+
+        #expect(sleeper.sleeps == [30.0]) // the policy maximum
+    }
+
+    @Test func anInfiniteRetryAfterIsIgnored() async throws {
+        let server = FakeHTTPServer()
+        server.setReplies([.init(statusCode: 429, headers: ["Retry-After": "inf"]), .init(statusCode: 200)])
+        let sleeper = TestSleeper()
+
+        _ = try await client(server, clock: sleeper).perform(request)
+
+        #expect(sleeper.sleeps.first.map { $0.isFinite } == true)
+    }
+
+    @Test func aCancelledRequestThrowsCancellation() async throws {
+        // URLSession reports cancellation as URLError(.cancelled), not CancellationError
+        let server = FakeHTTPServer()
+        server.setReplies([.init(error: URLError(.cancelled))])
+
+        await #expect(throws: CancellationError.self) {
+            _ = try await self.client(server).perform(self.request)
+        }
+        #expect(server.requestCount == 1)
+    }
+
     @Test func cancellationStopsTheRetries() async throws {
         let server = FakeHTTPServer()
         server.setReplies([.init(statusCode: 503)])
@@ -103,6 +135,28 @@ import Foundation
             _ = try await self.client(server, clock: sleeper).perform(self.request)
         }
         #expect(server.requestCount == 1)
+    }
+
+    @Test func requireSuccessAcceptsTheCodesTheCallerNames() throws {
+        // WebDAV answers a PROPFIND with 207, and MKCOL with 405 when the folder is already there
+        let multiStatus = HTTPClient.Response(data: Data(), statusCode: 207)
+        let alreadyExists = HTTPClient.Response(data: Data(), statusCode: 405)
+
+        try multiStatus.requireSuccess()              // 207 is already a success code
+        try alreadyExists.requireSuccess(allowing: [405])
+        #expect(throws: HTTPClient.StatusError.self) { try alreadyExists.requireSuccess() }
+    }
+
+    @Test func requireSuccessReportsTheStatusAndBody() throws {
+        let response = HTTPClient.Response(data: Data("no room left".utf8), statusCode: 507)
+
+        do {
+            try response.requireSuccess()
+            Issue.record("should have thrown")
+        } catch let error as HTTPClient.StatusError {
+            #expect(error.statusCode == 507)
+            #expect(error.bodyText == "no room left")
+        }
     }
 
     private func sorted(_ values: [TimeInterval]) -> [TimeInterval] { values.sorted() }

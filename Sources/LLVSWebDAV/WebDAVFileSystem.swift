@@ -24,7 +24,7 @@ public final class WebDAVFileSystem: CloudFileSystem, @unchecked Sendable {
 
     /// The credential used for authentication.
     /// Set from the username and password at init. The session delegate answers challenges with it.
-    public private(set) var credential: URLCredential?
+    public let credential: URLCredential?
 
     private let session: URLSession
 
@@ -41,7 +41,12 @@ public final class WebDAVFileSystem: CloudFileSystem, @unchecked Sendable {
         self.baseURL = baseURL
         if let username, let password {
             self.credential = URLCredential(user: username, password: password, persistence: .forSession)
+        } else {
+            self.credential = nil
         }
+        // A supplied session has no credential delegate, so it must carry its own authentication
+        precondition(session == nil || (username == nil && password == nil),
+                     "A supplied URLSession must carry its own authentication; do not also pass a username and password")
         if let session {
             self.session = session
         } else {
