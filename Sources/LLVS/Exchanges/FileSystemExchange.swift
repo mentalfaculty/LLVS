@@ -117,7 +117,8 @@ public final class FileSystemExchange: NSObject, Exchange, NSFilePresenter, Snap
         case read, write
     }
 
-    private func coordinateFileAccess<T>(_ access: FileAccess, by block: @escaping () throws -> T) async throws -> T {
+    // The block runs on the operation queue, so it and its result must be safe to hand across threads.
+    private func coordinateFileAccess<T: Sendable>(_ access: FileAccess, by block: @escaping @Sendable () throws -> T) async throws -> T {
         try await withCheckedThrowingContinuation { continuation in
             queue.addOperation {
                 if self.usesFileCoordination {
