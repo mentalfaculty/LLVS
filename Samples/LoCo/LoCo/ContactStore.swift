@@ -70,7 +70,7 @@ class ContactStore {
     func sync() {
         Task {
             try? await storeCoordinator.exchange()
-            storeCoordinator.merge()
+            _ = try? storeCoordinator.merge()
         }
     }
 
@@ -79,7 +79,7 @@ class ContactStore {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(15))
                 try? await storeCoordinator.exchange()
-                storeCoordinator.merge()
+                _ = try? storeCoordinator.merge()
             }
         }
     }

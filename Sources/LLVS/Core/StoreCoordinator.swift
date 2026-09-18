@@ -12,9 +12,9 @@ import Synchronization
 /// A `StoreCoordinator` takes care of all aspects of setting up a syncing store.
 /// It's the simplest way to get started, though you may want more control for advanced use cases.
 ///
-/// Thread-safety: `currentVersion` is protected by a `Mutex`. Other mutable properties
-/// (`exchange`, `mergeArbiter`, `defaultMetadataForNewVersions`, `isExchanging`) are
-/// set during initialization or within the serialized exchange flow.
+/// Thread-safety: `currentVersion` and `isExchanging` are protected by a `Mutex`. The configuration
+/// properties (`exchange`, `mergeArbiter`, `defaultMetadataForNewVersions`) are not: set them during
+/// setup, before the coordinator is used from more than one thread.
 public class StoreCoordinator: @unchecked Sendable {
 
     private struct CachedData: Codable {
@@ -140,7 +140,7 @@ public class StoreCoordinator: @unchecked Sendable {
     private func persist() {
         let cachedData = CachedData(exchangeRestorationData: exchange?.restorationState, currentVersionIdentifier: currentVersion)
         if let data = try? JSONEncoder().encode(cachedData) {
-            try? data.write(to: cachedCoordinatorFileURL)
+            try? data.write(to: cachedCoordinatorFileURL, options: .atomic)
         }
     }
 
@@ -209,10 +209,12 @@ public class StoreCoordinator: @unchecked Sendable {
 
     // MARK: Sync
 
-    public private(set) var isExchanging = false
+    /// Whether an exchange is in progress. It is written by the exchange task, and can be read from any thread.
+    public var isExchanging: Bool { _isExchanging.withLock { $0 } }
+    private let _isExchanging = Mutex(false)
 
     /// Serializer to ensure one exchange at a time.
-    private var exchangeSerializer = ExchangeSerializer()
+    private let exchangeSerializer = ExchangeSerializer()
 
     /// This transfers data between cloud and local store, but does not alter the current branch or do any merging.
     /// It's a bit like a two-way version of Git's fetch.
@@ -223,8 +225,8 @@ public class StoreCoordinator: @unchecked Sendable {
     }
 
     private func performExchange() async throws {
-        isExchanging = true
-        defer { isExchanging = false }
+        _isExchanging.withLock { $0 = true }
+        defer { _isExchanging.withLock { $0 = false } }
 
         guard let exchange = exchange else { return }
 
@@ -240,15 +242,26 @@ public class StoreCoordinator: @unchecked Sendable {
     /// Merging any extra heads, or fast forward to latest. It's a good idea to save data just before calling this, so that
     /// in view edits are committed. Returns true if the merge changed the current version; false otherwise.
     /// Note that the default behavior is not to merge in named branches. These are usually used for background work, and need to be merged in under controlled circumstances.
-    @discardableResult public func merge(metadata: Version.Metadata? = nil, headSelection: Store.MergeHeadSelection = .allExceptBranches) -> Bool {
+    /// - Throws: The first error met, after all heads have been tried. A head that fails to merge does not stop
+    ///   the other heads from merging, and the current version moves forward for each head that succeeds.
+    ///   `currentVersionUpdates` therefore yields once per merged head, not once per call.
+    @discardableResult public func merge(metadata: Version.Metadata? = nil, headSelection: Store.MergeHeadSelection = .allExceptBranches) throws -> Bool {
         let metadata = metadata ?? defaultMetadataForNewVersions
-        let newVersion = self.store.mergeHeads(into: self.currentVersion, resolvingWith: self.mergeArbiter, headSelection: headSelection, metadata: metadata)
-        if let newVersion = newVersion {
-            updateCurrentVersion(newVersion)
-            return true
-        } else {
-            return false
+        var changed = false
+        var firstError: Swift.Error?
+        for head in store.headsToMerge(into: currentVersion, headSelection: headSelection) {
+            do {
+                let versionToMergeInto = currentVersion
+                let newVersion = try store.merge(version: versionToMergeInto, with: head, resolvingWith: mergeArbiter, metadata: metadata)
+                if newVersion.id != versionToMergeInto { changed = true }
+                updateCurrentVersion(newVersion.id)
+            } catch {
+                log.error("Failed to merge head \(head.rawValue): \(error)")
+                if firstError == nil { firstError = error }
+            }
         }
+        if let firstError { throw firstError }
+        return changed
     }
 
 

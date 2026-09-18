@@ -64,6 +64,28 @@ class MockPeerTransport: PeerTransport {
 
     // MARK: - Tests
 
+    @Test func pushedVersionsAreAddedWhateverTheirOrder() async throws {
+        // A version can arrive before its predecessor, because send() does not order the versions
+        var versionChanges: [VersionChanges] = []
+        var predecessor: Version.ID? = nil
+        for i in 0..<3 {
+            let change: Value.Change = i == 0 ? .insert(value("AABBCC", stringData: "\(i)")) : .update(value("AABBCC", stringData: "\(i)"))
+            let version = try store1.makeVersion(basedOnPredecessor: predecessor, storing: [change])
+            versionChanges.append((version, [change]))
+            predecessor = version.id
+        }
+
+        try await exchange1.send(versionChanges: versionChanges.reversed())
+
+        // Delivery is asynchronous
+        for _ in 0..<100 where try store2.version(identifiedBy: predecessor!) == nil {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        for (version, _) in versionChanges {
+            #expect(try store2.version(identifiedBy: version.id) != nil)
+        }
+    }
+
     @Test func retrieveVersionIdentifiers() async throws {
         let val = value("AABBCC", stringData: "Hello")
         _ = try store2.makeVersion(basedOnPredecessor: nil, storing: [.insert(val)])

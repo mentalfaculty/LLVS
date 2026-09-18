@@ -41,6 +41,12 @@ let package = Package(
             name: "LLVSOneDrive",
             targets: ["LLVSOneDrive"]),
     ],
+    // The LLVSBox and LLVSPCloud products are empty unless the consumer enables the matching trait,
+    // e.g. .package(url: "...", from: "0.10.0", traits: ["Box"]). This keeps the vendor SDKs out of other apps.
+    traits: [
+        .trait(name: "Box", description: "Box backend via the Box SDK"),
+        .trait(name: "PCloud", description: "pCloud backend via the pCloud SDK"),
+    ],
     dependencies: [
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", .upToNextMajor(from: "0.9.0")),
         .package(url: "https://github.com/pCloud/pcloud-sdk-swift.git", from: "3.0.0"),
@@ -59,7 +65,7 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v5)]),
         .testTarget(
             name: "LLVSTests",
-            dependencies: ["LLVS", "LLVSSQLite"],
+            dependencies: ["LLVS", "LLVSSQLite", "LLVSWebDAV"],
             swiftSettings: [.swiftLanguageMode(.v5)]),
         .target(
             name: "LLVSCloudKit",
@@ -73,14 +79,14 @@ let package = Package(
             name: "LLVSPCloud",
             dependencies: [
                 "LLVS",
-                .product(name: "PCloudSDKSwift", package: "pcloud-sdk-swift")
+                .product(name: "PCloudSDKSwift", package: "pcloud-sdk-swift", condition: .when(traits: ["PCloud"]))
             ],
             swiftSettings: [.swiftLanguageMode(.v5)]),
         .target(
             name: "LLVSBox",
             dependencies: [
                 "LLVS",
-                .product(name: "BoxSDK", package: "box-ios-sdk")
+                .product(name: "BoxSDK", package: "box-ios-sdk", condition: .when(traits: ["Box"]))
             ],
             swiftSettings: [.swiftLanguageMode(.v5)]),
         .macro(

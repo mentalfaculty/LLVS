@@ -55,6 +55,9 @@ public final class SQLiteDatabase {
             throw Error.openFailed(code: code)
         }
         database = newDatabase!
+
+        // A store can be shared with other processes (eg app extensions). Wait for a lock, rather than fail at once.
+        sqlite3_busy_timeout(database, 5000)
     }
     
     deinit {
@@ -126,9 +129,16 @@ public final class SQLiteDatabase {
         
         try bind(values: bindings, toSQLStatement: sqlStatement!)
         
-        while sqlite3_step(sqlStatement) == SQLITE_ROW {
+        var stepCode = sqlite3_step(sqlStatement)
+        while stepCode == SQLITE_ROW {
             let row = Row(statement: sqlStatement!)
             try rowHandler(row)
+            stepCode = sqlite3_step(sqlStatement)
+        }
+
+        // Anything other than DONE is an error (eg busy, corrupt), and must not be read as "no more rows"
+        guard stepCode == SQLITE_DONE else {
+            throw Error.queryFailed(query: query, code: stepCode)
         }
     }
     
@@ -187,19 +197,19 @@ public final class SQLiteDatabase {
         /// Only SQLite types are supported (Int32, Int64, Double, String, Data),
         /// as well as optional variants. Column indexes are zero based.
         public func value<T>(inColumnAtIndex column: Int) -> T? {
-            if sqlite3_column_type(statement, 0) == SQLITE_NULL {
+            if sqlite3_column_type(statement, Int32(column)) == SQLITE_NULL {
                 return nil
             }
             
             switch T.self {
             case is String.Type:
-                let cString = sqlite3_column_text(statement, Int32(column))
-                return String(cString: cString!) as? T
+                guard let cString = sqlite3_column_text(statement, Int32(column)) else { return nil }
+                return String(cString: cString) as? T
             case is Data.Type:
+                // The blob pointer is NULL for a zero-length blob
+                guard let bytes = sqlite3_column_blob(statement, Int32(column)) else { return Data() as? T }
                 let length = sqlite3_column_bytes(statement, Int32(column))
-                let bytes = sqlite3_column_blob(statement, Int32(column))
-                let data = Data(bytes: bytes!, count: Int(length))
-                return data as? T
+                return Data(bytes: bytes, count: Int(length)) as? T
             case is Int64.Type:
                 return sqlite3_column_int64(statement, Int32(column)) as? T
             case is Int32.Type:

@@ -6,6 +6,7 @@
 //
 
 import Testing
+import Foundation
 @testable import LLVS
 
 @Suite struct HistoryTests {
@@ -56,6 +57,84 @@ import Testing
 
         let versions: (Version.ID, Version.ID) = (.init("ABCD"), .init("CDEF"))
         #expect(try history.greatestCommonAncestor(ofVersionsIdentifiedBy: versions) == nil)
+    }
+
+    @Test mutating func greatestCommonAncestorIsNotAnAncestorOfAnotherCommonAncestor() throws {
+        // A - C - F            F is the first version
+        // |    \
+        // |     Q - B
+        // |          \
+        // P ---------- S       S merges P and B, and is the second version
+        //
+        // A and C are both common ancestors of F and S. C descends from A, so C is the greatest.
+        // The shortest path from S to A (via P) is shorter than the path from S to C (via B and Q).
+        func add(_ id: String, _ first: String? = nil, _ second: String? = nil) throws {
+            let predecessors = first.map { Version.Predecessors(idOfFirst: .init($0), idOfSecond: second.map { .init($0) }) }
+            try history.add(Version(id: .init(id), predecessors: predecessors, valueDataSize: 0), updatingPredecessorVersions: true)
+        }
+        try add("A")
+        try add("C", "A")
+        try add("P", "A")
+        try add("F", "C")
+        try add("Q", "C")
+        try add("B", "Q")
+        try add("S", "P", "B")
+
+        #expect(try history.greatestCommonAncestor(ofVersionsIdentifiedBy: (.init("F"), .init("S")))?.rawValue == "C")
+        #expect(try history.greatestCommonAncestor(ofVersionsIdentifiedBy: (.init("S"), .init("F")))?.rawValue == "C")
+    }
+
+    @Test mutating func greatestCommonAncestorDoesNotDependOnArgumentOrder() throws {
+        // X and Y are equally valid common ancestors of F and S, but X is nearer to F, and Y is nearer to S.
+        // R - X ----------- F          F merges X and Yc
+        // |    \          /
+        // |     Xb - Xc -/-- S         S merges Y and Xc
+        // |             /   /
+        // Y - Yb - Yc -    /
+        //  \ -------------
+        // The more recent of the two (Y) is chosen, whatever the argument order.
+        func add(_ id: String, _ first: String? = nil, _ second: String? = nil, timestamp: TimeInterval) throws {
+            let predecessors = first.map { Version.Predecessors(idOfFirst: .init($0), idOfSecond: second.map { .init($0) }) }
+            var version = Version(id: .init(id), predecessors: predecessors, valueDataSize: 0)
+            version.timestamp = timestamp
+            try history.add(version, updatingPredecessorVersions: true)
+        }
+        try add("R", timestamp: 0)
+        try add("X", "R", timestamp: 1)
+        try add("Y", "R", timestamp: 2)
+        try add("Xb", "X", timestamp: 3)
+        try add("Xc", "Xb", timestamp: 4)
+        try add("Yb", "Y", timestamp: 5)
+        try add("Yc", "Yb", timestamp: 6)
+        try add("F", "X", "Yc", timestamp: 7)
+        try add("S", "Y", "Xc", timestamp: 8)
+
+        #expect(try history.greatestCommonAncestor(ofVersionsIdentifiedBy: (.init("F"), .init("S")))?.rawValue == "Y")
+        #expect(try history.greatestCommonAncestor(ofVersionsIdentifiedBy: (.init("S"), .init("F")))?.rawValue == "Y")
+    }
+
+    @Test mutating func greatestCommonAncestorIsFastForLongHistory() throws {
+        // Guards against a quadratic walk. A linear walk of this history takes a small fraction of a second.
+        var previous: Version.ID? = nil
+        for i in 0..<20000 {
+            let id = Version.ID("V\(i)")
+            let predecessors = previous.map { Version.Predecessors(idOfFirst: $0, idOfSecond: nil) }
+            try history.add(Version(id: id, predecessors: predecessors, valueDataSize: 0), updatingPredecessorVersions: true)
+            previous = id
+        }
+        let tip = previous!
+        for head in ["H1", "H2"] {
+            let predecessors = Version.Predecessors(idOfFirst: tip, idOfSecond: nil)
+            try history.add(Version(id: .init(head), predecessors: predecessors, valueDataSize: 0), updatingPredecessorVersions: true)
+        }
+
+        var common: Version.ID?
+        let duration = try ContinuousClock().measure {
+            common = try history.greatestCommonAncestor(ofVersionsIdentifiedBy: (.init("H1"), .init("H2")))
+        }
+
+        #expect(common == tip)
+        #expect(duration < .seconds(2))
     }
 
     @Test mutating func simpleSerialHistory() throws {

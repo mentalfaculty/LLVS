@@ -10,6 +10,7 @@ import Foundation
 enum ExchangeError: Swift.Error {
     case remoteVersionsWithUnknownPredecessors
     case missingVersion
+    case missingValueChanges(Version.ID)
     case unknown(error: Swift.Error)
 }
 
@@ -95,11 +96,7 @@ public extension Exchange {
                 return .definitive(.failure(error))
             }
 
-            let valueChangesByVersionID: [Version.ID: [Value.Change]] = valueChangesByVersionIdentifier.reduce(into: [:]) { result, keyValue in
-                var version = versionsByIdentifier[keyValue.key]!
-                if version.valueDataSize == nil { version.valueDataSize = keyValue.value.valueDataSize }
-                result[version.id] = keyValue.value
-            }
+            let valueChangesByVersionID = valueChangesByVersionIdentifier.filter { versionsByIdentifier[$0.key] != nil }
 
             do {
                 try self.addToHistorySync(sortedVersions: batchVersions, valueChangesByVersionID: valueChangesByVersionID)
@@ -121,7 +118,10 @@ public extension Exchange {
                 log.error("Failed to add to history due to missing predecessors")
                 throw ExchangeError.remoteVersionsWithUnknownPredecessors
             }
-            let valueChanges = valueChangesByVersionID[version.id]!
+            guard let valueChanges = valueChangesByVersionID[version.id] else {
+                log.error("Remote returned no value changes for version: \(version.id.rawValue)")
+                throw ExchangeError.missingValueChanges(version.id)
+            }
             log.trace("Adding version to store: \(version.id.rawValue)")
             log.verbose("Value changes for \(version.id.rawValue): \(valueChanges)")
 
@@ -192,9 +192,10 @@ public extension Exchange {
     private func versionIdsMissingRemotely(forRemoteIdentifiers remoteIdentifiers: [Version.ID]) -> [Version.ID] {
         var toSendIds: [Version.ID]!
         self.store.queryHistory { history in
-            let storeVersionIds = Set(history.allVersionIdentifiers)
+            // History iterates from the heads back. Reverse it, so that predecessors are sent first.
+            // A receiver that adds versions as they arrive (eg a peer) depends on this.
             let remoteVersionIds = Set(remoteIdentifiers)
-            toSendIds = Array(storeVersionIds.subtracting(remoteVersionIds))
+            toSendIds = history.reversed().map({ $0.id }).filter({ !remoteVersionIds.contains($0) })
         }
         return toSendIds
     }

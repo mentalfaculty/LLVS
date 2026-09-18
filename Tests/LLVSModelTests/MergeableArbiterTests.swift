@@ -334,4 +334,48 @@ struct OuterOptionalModel: StorableModel, Equatable {
         // Dominant unchanged from ancestor, subordinate removed → accept removal
         #expect(outer.inner == nil)
     }
+
+    @Test func optionalMergeableSubordinateNilToSome() throws {
+        let dominant: InnerModel? = nil
+        let subordinate: InnerModel? = InnerModel(x: 5, y: 6)
+
+        let merged = try dominant.merged(withSubordinate: subordinate, commonAncestor: nil)
+
+        // Dominant unchanged from nil ancestor, subordinate inserted → accept insertion
+        #expect(merged == subordinate)
+    }
+
+    @Test func optionalMergeableSubordinateUpdateBeatsDominantRemoval() throws {
+        // Same rule as MergeableArbiter uses for .removedAndUpdated: an update beats a removal, on either side.
+        let dominant: InnerModel? = nil
+        let subordinate: InnerModel? = InnerModel(x: 9, y: 2)
+        let ancestor: InnerModel? = InnerModel(x: 1, y: 2)
+
+        #expect(try dominant.merged(withSubordinate: subordinate, commonAncestor: ancestor) == subordinate)
+        #expect(try dominant.merged(withSubordinate: ancestor, commonAncestor: ancestor) == nil)
+    }
+
+    @Test func optionalMergeableBothInsertedUsesSalvaging() throws {
+        // Both branches set a value where the ancestor had none. This is the same situation as
+        // a twice-inserted value, so the wrapped type decides, through salvaging(from:).
+        let dominant: TagSet? = TagSet(tags: ["a"])
+        let subordinate: TagSet? = TagSet(tags: ["b"])
+
+        let merged = try dominant.merged(withSubordinate: subordinate, commonAncestor: nil)
+
+        #expect(merged == TagSet(tags: ["a", "b"]))
+    }
+}
+
+/// A Mergeable with a custom salvaging rule: keep the tags of both sides.
+private struct TagSet: Mergeable {
+    var tags: Set<String>
+
+    func merged(withSubordinate other: TagSet, commonAncestor: TagSet) throws -> TagSet {
+        TagSet(tags: tags.union(other.tags))
+    }
+
+    func salvaging(from other: TagSet) throws -> TagSet {
+        TagSet(tags: tags.union(other.tags))
+    }
 }

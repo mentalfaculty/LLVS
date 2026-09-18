@@ -40,7 +40,7 @@ public final class Cache<ValueType> {
     public init(numberOfGenerations: Int = 2, regenerationLimit: Int = 1000) {
         self.numberOfGenerations = max(1, numberOfGenerations)
         self.regenerationLimit = max(1, regenerationLimit)
-        let generations: [Generation] = .init(repeating: Generation(), count: max(1, numberOfGenerations))
+        let generations = (0..<max(1, numberOfGenerations)).map { _ in Generation() }
         self.state = Mutex(State(generations: generations))
     }
 
@@ -73,7 +73,7 @@ public final class Cache<ValueType> {
 
     public func purgeAllValues() {
         state.withLock { state in
-            state.generations = .init(repeating: Generation(), count: self.numberOfGenerations)
+            state.generations = (0..<self.numberOfGenerations).map { _ in Generation() }
         }
     }
 
@@ -85,7 +85,7 @@ public final class Cache<ValueType> {
     }
 
     private func regenerate(_ state: inout State) {
-        let _ = state.generations.dropLast()
+        state.generations.removeLast()
         state.generations.insert(Generation(), at: 0)
     }
 }

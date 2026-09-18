@@ -54,9 +54,15 @@ extension Optional: Mergeable where Wrapped: Mergeable {
             return try .some(d.merged(withSubordinate: s, commonAncestor: a))
         case (.some(let d), .none, .some(let a)):
             return d == a ? other : self
-        case (.none, _, .some):
+        case (.none, .some(let s), .some(let a)):
+            return s == a ? self : other
+        case (.none, .none, .some):
             return self
-        case (_, _, .none):
+        case (.none, _, .none):
+            return other
+        case let (.some(d), .some(s), .none):
+            return try .some(d.salvaging(from: s))
+        case (.some, .none, .none):
             return self
         }
     }

@@ -17,7 +17,10 @@ public struct SnapshotManifest: Codable {
     public var chunkCount: Int
     public var totalSize: Int64
 
-    public init(snapshotId: String = UUID().uuidString, format: String, createdAt: Date = Date(), latestVersionId: Version.ID, versionCount: Int, chunkCount: Int, totalSize: Int64) {
+    /// Hex SHA-256 of the whole archive (all chunks, in order). Nil for snapshots made before 0.10.
+    public var sha256: String?
+
+    public init(snapshotId: String = UUID().uuidString, format: String, createdAt: Date = Date(), latestVersionId: Version.ID, versionCount: Int, chunkCount: Int, totalSize: Int64, sha256: String? = nil) {
         self.snapshotId = snapshotId
         self.format = format
         self.createdAt = createdAt
@@ -25,6 +28,7 @@ public struct SnapshotManifest: Codable {
         self.versionCount = versionCount
         self.chunkCount = chunkCount
         self.totalSize = totalSize
+        self.sha256 = sha256
     }
 }
 

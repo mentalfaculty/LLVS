@@ -54,14 +54,19 @@ internal final class FileZone: Zone {
         let (dir, file) = try fileSystemLocation(for: reference)
         try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
         let compressed = DataCompression.compress(data)
-        try compressed.write(to: file)
+        try compressed.write(to: file, options: .atomic)
         cacheIfNeeded(data, for: reference)
     }
 
     internal func data(for reference: ZoneReference) throws -> Data? {
         if let data = cache.value(for: reference) { return data }
         let (_, file) = try fileSystemLocation(for: reference)
-        guard let raw = try? Data(contentsOf: file) else { return nil }
+        let raw: Data
+        do {
+            raw = try Data(contentsOf: file)
+        } catch CocoaError.fileReadNoSuchFile, CocoaError.fileNoSuchFile {
+            return nil
+        }
         let data = DataCompression.decompressIfNeeded(raw)
         cacheIfNeeded(data, for: reference)
         return data

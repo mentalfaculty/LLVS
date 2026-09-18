@@ -1,3 +1,4 @@
+#if Box
 //
 //  BoxExchange.swift
 //  LLVS
@@ -184,3 +185,5 @@ public class BoxExchange: FolderBasedExchange {
         var changesFolderID: String?
     }
 }
+
+#endif

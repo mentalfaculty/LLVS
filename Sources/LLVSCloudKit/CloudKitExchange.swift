@@ -136,7 +136,7 @@ public class CloudKitExchange: Exchange {
 fileprivate extension CloudKitExchange {
 
     /// Uses the zone changes API. Requires a custom zone.
-    func fetchCloudZoneChanges() async throws {
+    func fetchCloudZoneChanges(isRetryAfterTokenReset: Bool = false) async throws {
         log.trace("Fetching cloud changes")
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Swift.Error>) in
@@ -147,7 +147,9 @@ fileprivate extension CloudKitExchange {
             let operation = CKFetchRecordZoneChangesOperation()
             operation.recordZoneIDs = [self.zoneID!]
             operation.configurationsByRecordZoneID = [self.zoneID! : config]
-            operation.addDependency(self.createZoneOperation!)
+            if let createZoneOperation = self.createZoneOperation {
+                operation.addDependency(createZoneOperation) // Only the private database creates its zone
+            }
             operation.fetchAllChanges = true
             operation.recordChangedBlock = { record in
                 let versionId = Version.ID(record.recordID.recordName)
@@ -159,14 +161,19 @@ fileprivate extension CloudKitExchange {
                 log.verbose("Stored iCloud token: \(String(describing: token))")
             }
             operation.fetchRecordZoneChangesCompletionBlock = { error in
-                if let error = error as? CKError, error.code == .changeTokenExpired || error.code == .partialFailure {
+                // An expired token can arrive at the top level, or per zone inside a partial failure.
+                // Other partial failures (eg zone not found, rate limited) must not reset the cached state.
+                let cloudError = error as? CKError
+                let tokenExpired = cloudError?.code == .changeTokenExpired
+                    || cloudError?.partialErrorsByItemID?.values.contains { ($0 as? CKError)?.code == .changeTokenExpired } == true
+                if !isRetryAfterTokenReset, tokenExpired {
                     self.restoration.fetchRecordChangesToken = nil
                     self.restoration.versionsInCloud = []
                     log.error("iCloud token expired. Cleared cached data")
-                    // Retry
+                    // Retry once. A second failure (eg zone not found, rate limited) is thrown to the caller.
                     Task {
                         do {
-                            try await self.fetchCloudZoneChanges()
+                            try await self.fetchCloudZoneChanges(isRetryAfterTokenReset: true)
                             continuation.resume()
                         } catch {
                             continuation.resume(throwing: error)

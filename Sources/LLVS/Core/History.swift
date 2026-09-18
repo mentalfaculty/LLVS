@@ -94,24 +94,10 @@ public class History {
         }
     }
     
-    /// Finds the greatest common ancestor of all the given version IDs by pairwise reduction.
-    internal func greatestCommonAncestor(ofAll versionIds: Set<Version.ID>) throws -> Version.ID? {
-        guard !versionIds.isEmpty else { return nil }
-        var ids = Array(versionIds)
-        var result = ids.removeFirst()
-        for id in ids {
-            guard let gca = try greatestCommonAncestor(ofVersionsIdentifiedBy: (result, id)) else {
-                return nil
-            }
-            result = gca
-        }
-        return result
-    }
-
     public func greatestCommonAncestor(ofVersionsIdentifiedBy ids: (Version.ID, Version.ID)) throws -> Version.ID? {
-        // Find all ancestors of first Version. Determine how many generations back each Version is.
-        // We take the shortest path to any given Version, ie, the minimum of possible paths.
-        var generationById = [Version.ID:Int]()
+        // Find all ancestors of first Version.
+        // Note that fronts are filtered, rather than using subtract, which iterates the (large) set passed.
+        var ancestorsOfFirst = Set<Version.ID>()
         var firstFront: Set<Version.ID> = [ids.0]
         
         func propagateFront(front: inout Set<Version.ID>) throws {
@@ -125,24 +111,37 @@ public class History {
             front = newFront
         }
         
-        var generation = 0
         while firstFront.count > 0 {
-            firstFront.forEach { generationById[$0] = Swift.min(generationById[$0] ?? Int.max, generation) }
+            firstFront = firstFront.filter { !ancestorsOfFirst.contains($0) }
+            ancestorsOfFirst.formUnion(firstFront)
             try propagateFront(front: &firstFront)
-            generation += 1
         }
         
-        // Now go through ancestors of second version until we find the first in common with the first ancestors
+        // Find all ancestors of the second version, and from those, the ancestors in common with the first.
+        // Stopping at the first common ancestor reached is not enough: a short path (eg via a merge)
+        // can reach an old common ancestor before a longer path reaches a more recent one.
+        var ancestorsOfSecond = Set<Version.ID>()
         var secondFront: Set<Version.ID> = [ids.1]
-        let ancestorsOfFirst = Set(generationById.keys)
         while secondFront.count > 0 {
-            let common = ancestorsOfFirst.intersection(secondFront)
-            let sorted = common.sorted { generationById[$0]! < generationById[$1]! }
-            if let mostRecentCommon = sorted.first { return mostRecentCommon }
+            secondFront = secondFront.filter { !ancestorsOfSecond.contains($0) }
+            ancestorsOfSecond.formUnion(secondFront)
             try propagateFront(front: &secondFront)
         }
-        
-        return nil
+        let common = ancestorsOfSecond.intersection(ancestorsOfFirst)
+
+        // Exclude any common ancestor that is itself an ancestor of another common ancestor.
+        var superseded = Set<Version.ID>()
+        var supersededFront = common
+        while supersededFront.count > 0 {
+            try propagateFront(front: &supersededFront)
+            supersededFront = supersededFront.filter { !superseded.contains($0) }
+            superseded.formUnion(supersededFront)
+        }
+
+        // With criss-cross merges there can be more than one candidate. Choose the most recent.
+        // The choice must not depend on the argument order, so that all devices choose the same one.
+        let candidates = common.filter { !superseded.contains($0) }
+        return candidates.max { (version(identifiedBy: $0)!.timestamp, $0.rawValue) < (version(identifiedBy: $1)!.timestamp, $1.rawValue) }
     }
 }
 

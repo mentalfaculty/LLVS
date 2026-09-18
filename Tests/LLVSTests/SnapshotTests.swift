@@ -46,6 +46,107 @@ import Foundation
         return versions
     }
 
+    private func regularFileCount(in directory: URL) -> Int {
+        guard let enumerator = fm.enumerator(at: directory, includingPropertiesForKeys: [.isRegularFileKey]) else { return 0 }
+        return enumerator.compactMap { $0 as? URL }.filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }.count
+    }
+
+    /// Writes a snapshot in several chunks, lets the caller damage the chunks, and restores into an empty directory.
+    /// Returns the number of files found in that directory after the restore failed.
+    private func filesLeftAfterFailedRestore(damagingChunksWith damage: ([URL]) throws -> Void) throws -> Int {
+        makeLinearChain(count: 50)
+        let storage = FileStorage()
+        let snapshotDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        defer { try? fm.removeItem(at: snapshotDir) }
+        let manifest = try storage.writeSnapshotChunks(storeRootURL: rootURL, to: snapshotDir, maxChunkSize: 4_000)
+        let chunks = (0..<manifest.chunkCount).map { snapshotDir.appendingPathComponent(String(format: "chunk-%03d", $0)) }
+        try #require(chunks.count > 3)
+        try damage(chunks)
+
+        let rootURL2 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        defer { try? fm.removeItem(at: rootURL2) }
+        try fm.createDirectory(at: rootURL2, withIntermediateDirectories: true, attributes: nil)
+
+        #expect(throws: (any Error).self) {
+            try storage.restoreFromSnapshotChunks(storeRootURL: rootURL2, from: snapshotDir, manifest: manifest)
+        }
+        return regularFileCount(in: rootURL2)
+    }
+
+    @Test func restoreRejectsChunksThatDoNotMatchTheManifestSize() throws {
+        // Eg a chunk from a different snapshot, downloaded while the snapshot was being replaced
+        let filesLeft = try filesLeftAfterFailedRestore { chunks in
+            let last = chunks.last!
+            try Data(try Data(contentsOf: last).dropLast(10)).write(to: last)
+        }
+        #expect(filesLeft == 0)
+    }
+
+    @Test func failedRestoreLeavesTheStoreUntouched() throws {
+        // Same size, but damaged part way through. Entries before the damage unzip without error.
+        let filesLeft = try filesLeftAfterFailedRestore { chunks in
+            let middle = chunks[chunks.count / 2]
+            try Data(repeating: 0xAA, count: try Data(contentsOf: middle).count).write(to: middle)
+        }
+        #expect(filesLeft == 0)
+    }
+
+    @Test func manifestCarriesAHashOfTheArchive() throws {
+        makeLinearChain(count: 5)
+        let snapshotDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        defer { try? fm.removeItem(at: snapshotDir) }
+        let manifest = try FileStorage().writeSnapshotChunks(storeRootURL: rootURL, to: snapshotDir, maxChunkSize: 4_000)
+        #expect(manifest.sha256?.count == 64)
+    }
+
+    @Test func manifestWithoutAHashStillDecodes() throws {
+        // Snapshots uploaded by 0.9 have no hash
+        let old = SnapshotManifest(format: "zip-v1", latestVersionId: .init("v"), versionCount: 1, chunkCount: 1, totalSize: 10, sha256: "abc")
+        var object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(old)) as! [String: Any]
+        object["sha256"] = nil
+        let manifest = try JSONDecoder().decode(SnapshotManifest.self, from: JSONSerialization.data(withJSONObject: object))
+        #expect(manifest.versionCount == 1)
+        #expect(manifest.sha256 == nil)
+    }
+
+    @Test func restoreWithoutAHashRejectsAnArchiveWithTooFewVersions() throws {
+        // Without a hash, the version count is the only check on an archive that unzipped only in part
+        makeLinearChain(count: 10)
+        let storage = FileStorage()
+        let snapshotDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        defer { try? fm.removeItem(at: snapshotDir) }
+        var manifest = try storage.writeSnapshotChunks(storeRootURL: rootURL, to: snapshotDir, maxChunkSize: 5_000_000)
+        manifest.sha256 = nil
+        manifest.versionCount += 1
+
+        let rootURL2 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        defer { try? fm.removeItem(at: rootURL2) }
+        try fm.createDirectory(at: rootURL2, withIntermediateDirectories: true, attributes: nil)
+
+        #expect(throws: (any Error).self) {
+            try storage.restoreFromSnapshotChunks(storeRootURL: rootURL2, from: snapshotDir, manifest: manifest)
+        }
+        #expect(regularFileCount(in: rootURL2) == 0)
+    }
+
+    @Test func restoreTakesOnlyStoreDirectories() throws {
+        // With the default coordinator setup, the uploader's Coordinator.json is inside the store directory
+        makeLinearChain(count: 5)
+        try Data("{}".utf8).write(to: rootURL.appendingPathComponent("Coordinator.json"))
+        let storage = FileStorage()
+        let snapshotDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        defer { try? fm.removeItem(at: snapshotDir) }
+        let manifest = try storage.writeSnapshotChunks(storeRootURL: rootURL, to: snapshotDir, maxChunkSize: 5_000_000)
+
+        let rootURL2 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        defer { try? fm.removeItem(at: rootURL2) }
+        try fm.createDirectory(at: rootURL2, withIntermediateDirectories: true, attributes: nil)
+        try storage.restoreFromSnapshotChunks(storeRootURL: rootURL2, from: snapshotDir, manifest: manifest)
+
+        #expect(!fm.fileExists(atPath: rootURL2.appendingPathComponent("Coordinator.json").path))
+        #expect(fm.fileExists(atPath: rootURL2.appendingPathComponent("versions").path))
+    }
+
     @Test func fileStorageSnapshotRoundTrip() throws {
         let versions = makeLinearChain(count: 50)
         let storage = FileStorage()
@@ -124,6 +225,28 @@ import Foundation
         #expect(manifest.chunkCount > 0)
         #expect(!manifest.latestVersionId.rawValue.isEmpty)
         #expect(manifest.totalSize > 0)
+    }
+
+    @Test func sqliteRestoreIntoAnExistingStoreThrowsAndAddsNoVersions() throws {
+        // A database file cannot be merged. Keeping the old one, and then adding the version files,
+        // would give versions without values.
+        try? fm.removeItem(at: rootURL)
+        let sqlStore = try Store(rootDirectoryURL: rootURL, storage: SQLiteStorage())
+        makeLinearChain(count: 3, store: sqlStore)
+        let storage = SQLiteStorage()
+        let snapshotDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        defer { try? fm.removeItem(at: snapshotDir) }
+        let manifest = try storage.writeSnapshotChunks(storeRootURL: rootURL, to: snapshotDir, maxChunkSize: 5_000_000)
+
+        let rootURL2 = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        defer { try? fm.removeItem(at: rootURL2) }
+        let existingStore = try Store(rootDirectoryURL: rootURL2, storage: SQLiteStorage())
+        _ = try existingStore.makeVersion(basedOnPredecessor: nil, storing: [.insert(value("local", "local"))])
+
+        #expect(throws: (any Error).self) {
+            try storage.restoreFromSnapshotChunks(storeRootURL: rootURL2, from: snapshotDir, manifest: manifest)
+        }
+        #expect(regularFileCount(in: rootURL2.appendingPathComponent("versions")) == 1)
     }
 
     @Test func sqliteStorageSnapshotRoundTrip() throws {

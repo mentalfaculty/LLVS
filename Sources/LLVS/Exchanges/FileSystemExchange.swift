@@ -63,8 +63,11 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter, SnapshotEx
 
     public func retrieveAllVersionIdentifiers() async throws -> [Version.ID] {
         try await coordinateFileAccess(.read) {
-            let contents = try self.fileManager.contentsOfDirectory(at: self.versionsDirectory, includingPropertiesForKeys: nil, options: [])
-            return contents.map({ Version.ID($0.lastPathComponent) })
+            // A version is only complete when its changes file is also present. Changes are written first.
+            // This also excludes strays, such as temporary files orphaned by an interrupted atomic write.
+            let versionNames = try self.fileManager.contentsOfDirectory(at: self.versionsDirectory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]).map { $0.lastPathComponent }
+            let changesNames = Set(try self.fileManager.contentsOfDirectory(at: self.changesDirectory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]).map { $0.lastPathComponent })
+            return versionNames.filter({ changesNames.contains($0) }).map({ Version.ID($0) })
         }
     }
 
@@ -101,11 +104,11 @@ public class FileSystemExchange: NSObject, Exchange, NSFilePresenter, SnapshotEx
             for (version, valueChanges) in versionChanges {
                 let changesURL = self.changesDirectory.appendingPathComponent(version.id.rawValue)
                 let changesData = try JSONEncoder().encode(valueChanges)
-                try changesData.write(to: changesURL)
+                try changesData.write(to: changesURL, options: .atomic)
 
                 let versionURL = self.versionsDirectory.appendingPathComponent(version.id.rawValue)
                 let versionData = try JSONEncoder().encode(["version":version])
-                try versionData.write(to: versionURL)
+                try versionData.write(to: versionURL, options: .atomic)
             }
         }
     }

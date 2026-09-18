@@ -187,7 +187,6 @@ public final class WebDAVFileSystem: CloudFileSystem, @unchecked Sendable {
         <?xml version="1.0" encoding="utf-8" ?>\
         <D:propfind xmlns:D="DAV:">\
         <D:prop>\
-        <D:href/>\
         <D:resourcetype/>\
         <D:getcontentlength/>\
         </D:prop>\

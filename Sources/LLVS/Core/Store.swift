@@ -47,15 +47,12 @@ public final class Store {
     
     public let storage: Storage
 
-    private lazy var valuesZone: Zone = {
-        return try! storage.makeValuesZone(in: self)
-    }()
-    
+    // Set once, at the end of init. They need the store itself, so they cannot be set before the other properties.
+    // They used to be lazy, which crashed on a storage error, and raced when first used from two threads.
+    private var valuesZone: Zone!
+    private var valuesMap: Map!
+
     private let valuesMapName = "__llvs_values"
-    private lazy var valuesMap: Map = {
-        let valuesMapZone = try! self.storage.makeMapZone(for: .valuesByVersion, in: self)
-        return Map(zone: valuesMapZone)
-    }()
     
     private let history = Mutex(History())
 
@@ -74,7 +71,10 @@ public final class Store {
         try? fileManager.createDirectory(at: self.valuesDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.versionsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.mapsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
-        
+
+        self.valuesZone = try storage.makeValuesZone(in: self)
+        self.valuesMap = Map(zone: try storage.makeMapZone(for: .valuesByVersion, in: self))
+
         try reloadHistory()
     }
 
@@ -275,28 +275,24 @@ extension Store {
         queryHistory { history in
             let heads = history.headIdentifiers
             result = heads.filter { id in
-                let version = history.version(identifiedBy: id)!
-                return branch.rawValue == version.metadata[.branch]?.value()
+                guard let version = history.version(identifiedBy: id) else { return false }
+                return branch.rawValue == version.metadata[.branch]?.valueIfDecodable()
             }
         }
         return result
     }
     
-    /// Merges heads into the version passed, which is usually a head itself. This is a convenience
-    /// to save looping through all heads.
-    /// If the version ends up being changed by the merging, the new version is returned, otherwise nil.
-    public func mergeHeads(into version: Version.ID, resolvingWith arbiter: MergeArbiter, headSelection: MergeHeadSelection = .allExceptBranches, metadata: Version.Metadata = [:]) -> Version.ID? {
-        var heads: Set<Version.ID> = []
-        var versionsById: [Version.ID:Version] = [:]
+    /// The heads that `mergeHeads` would merge into the version passed, oldest first.
+    /// The order is the same on every device, because it depends only on the versions themselves.
+    public func headsToMerge(into version: Version.ID, headSelection: MergeHeadSelection = .allExceptBranches) -> [Version.ID] {
+        var heads: [Version] = []
         queryHistory { history in
-            heads = history.headIdentifiers
-            versionsById = .init(uniqueKeysWithValues: heads.map({ ($0, history.version(identifiedBy: $0)!) }))
+            heads = history.headIdentifiers.compactMap { history.version(identifiedBy: $0) }
         }
-        heads.remove(version)
-        
-        heads = heads.filter { id in
-            let version = versionsById[id]!
-            let branch: String? = version.metadata[.branch]?.value()
+
+        let selected = heads.filter { head in
+            guard head.id != version else { return false }
+            let branch: String? = head.metadata[.branch]?.valueIfDecodable()
             switch headSelection {
             case .all:
                 return true
@@ -308,15 +304,24 @@ extension Store {
                 return branches.map({ $0.rawValue }).contains(branch)
             }
         }
-        
+
+        return selected.sorted { ($0.timestamp, $0.id.rawValue) < ($1.timestamp, $1.id.rawValue) }.map { $0.id }
+    }
+
+    /// Merges heads into the version passed, which is usually a head itself. This is a convenience
+    /// to save looping through all heads.
+    /// If the version ends up being changed by the merging, the new version is returned, otherwise nil.
+    /// - Throws: The error from the first merge that fails. Merges made before the failure remain in the store.
+    public func mergeHeads(into version: Version.ID, resolvingWith arbiter: MergeArbiter, headSelection: MergeHeadSelection = .allExceptBranches, metadata: Version.Metadata = [:]) throws -> Version.ID? {
+        let heads = headsToMerge(into: version, headSelection: headSelection)
         guard !heads.isEmpty else { return nil }
-        
+
         var versionId: Version.ID = version
         for otherHead in heads {
-            let newVersion = try! merge(version: versionId, with: otherHead, resolvingWith: arbiter, metadata: metadata)
+            let newVersion = try merge(version: versionId, with: otherHead, resolvingWith: arbiter, metadata: metadata)
             versionId = newVersion.id
         }
-        
+
         return versionId
     }
     
@@ -516,7 +521,7 @@ extension Store {
             let (dir, file) = fileSystemLocation(forVersionIdentifiedBy: version.id)
             try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
             let data = try JSONEncoder().encode(version)
-            try data.write(to: file)
+            try data.write(to: file, options: .atomic)
         }
     }
     
