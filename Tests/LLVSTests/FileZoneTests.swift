@@ -51,6 +51,22 @@ import Foundation
         #expect(String(data: linked, encoding: .utf8) == "old")
     }
 
+    @Test(.enabled(if: getuid() != 0, "root ignores file permissions")) func unreadableFileThrowsRatherThanReadingAsMissing() throws {
+        // A value that exists but cannot be read is an error. Reporting it as missing
+        // would make the store treat the value as removed.
+        let data = Data((0..<20000).map { UInt8(truncatingIfNeeded: $0) }) // Too big for the zone cache
+        try zone.store(data, for: ref)
+        let (_, fileURL) = try zone.fileSystemLocation(for: ref)
+        try fm.setAttributes([.posixPermissions: 0o000], ofItemAtPath: fileURL.path)
+        defer { try? fm.setAttributes([.posixPermissions: 0o644], ofItemAtPath: fileURL.path) }
+
+        #expect(throws: (any Error).self) { try zone.data(for: ref) }
+    }
+
+    @Test func missingFileReadsAsNil() throws {
+        #expect(try zone.data(for: ref) == nil)
+    }
+
     @Test func addingMultipleReferencesInSameDiretories() throws {
         try zone.store(Data(), for: ref)
         try zone.store(Data(), for: .init(key: "ABCDEF", version: .init("1245")))

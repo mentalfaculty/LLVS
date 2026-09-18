@@ -68,12 +68,12 @@ Read-only audit at commit 92fe81b (tag 0.9). `swift test` passes: 170 tests. Fin
 9. **Map bucketing by hash** (format change; needs a migration plan).
 10. **Swift 6 language mode**, target by target, starting with LLVSModel.
 
-## Follow-ups from the 2026-09-18 code review of `safety-pass`
+## Follow-ups from the code reviews of `safety-pass`
 
-- `StoreCoordinator.merge()`: merge head by head, update `currentVersion` after each success, then rethrow the first error. Today one head that always fails blocks the UI from seeing the heads that did merge. Add "Throws" notes to the doc comments. `Store.swift:293` still force-unwraps `history.version(identifiedBy:)!`.
-- `Mergeable.swift`: `(.some, .some, .none)` returns `self`; it should call `salvaging(from:)` to match `MergeableArbiter` for `.twiceInserted`.
-- `README.md:70` and `:266` call `merge()` without `try`. Fix in the README rewrite. Put the source break (`merge()` and `mergeHeads` now throw; Box and pCloud need traits) in the release notes.
-- Untrack `Package.resolved` (`git rm --cached`); it flips with whichever traits were last resolved.
+Done: `StoreCoordinator.merge()` merges head by head in a stable order and keeps the heads that merged; branch metadata of the wrong type no longer traps (`valueIfDecodable()`); twice-inserted optionals use `salvaging(from:)`; `FileZone` rethrows real read errors; each cache generation has its own object; dead `greatestCommonAncestor(ofAll:)` deleted; `Package.resolved` untracked.
+
+Open:
+- `README.md:70` and `:266` call `merge()` without `try`. Fix in the README rewrite. Put the source breaks (`merge()` and `mergeHeads` now throw; Box and pCloud need traits) in the release notes.
 - `.atomic` costs about 2x on small value writes (measured 0.43 s vs 0.85 s per 5000 writes). Accepted.
 - Criss-cross merges have more than one greatest common ancestor. LLVS picks one (the most recent). Like non-recursive git, this can silently pick a side: value R=0, X=0, Y=1; M1 keeps 1, M2 deliberately resolves back to 0; with base X the merge takes 1 with no conflict. A recursive merge base would fix it. Out of scope for now.
-- `History.greatestCommonAncestor(ofAll:)` has no callers, and pairwise reduction over an unordered `Set` is not a correct multi-way ancestor. Delete it.
+- `Version.MetadataValue.value()` and `init(_:)` still use `try!` (documented; public API).

@@ -140,7 +140,7 @@ public class StoreCoordinator: @unchecked Sendable {
     private func persist() {
         let cachedData = CachedData(exchangeRestorationData: exchange?.restorationState, currentVersionIdentifier: currentVersion)
         if let data = try? JSONEncoder().encode(cachedData) {
-            try? data.write(to: cachedCoordinatorFileURL)
+            try? data.write(to: cachedCoordinatorFileURL, options: .atomic)
         }
     }
 
@@ -240,15 +240,26 @@ public class StoreCoordinator: @unchecked Sendable {
     /// Merging any extra heads, or fast forward to latest. It's a good idea to save data just before calling this, so that
     /// in view edits are committed. Returns true if the merge changed the current version; false otherwise.
     /// Note that the default behavior is not to merge in named branches. These are usually used for background work, and need to be merged in under controlled circumstances.
+    /// - Throws: The first error met, after all heads have been tried. A head that fails to merge does not stop
+    ///   the other heads from merging, and the current version moves forward for each head that succeeds.
+    ///   `currentVersionUpdates` therefore yields once per merged head, not once per call.
     @discardableResult public func merge(metadata: Version.Metadata? = nil, headSelection: Store.MergeHeadSelection = .allExceptBranches) throws -> Bool {
         let metadata = metadata ?? defaultMetadataForNewVersions
-        let newVersion = try self.store.mergeHeads(into: self.currentVersion, resolvingWith: self.mergeArbiter, headSelection: headSelection, metadata: metadata)
-        if let newVersion = newVersion {
-            updateCurrentVersion(newVersion)
-            return true
-        } else {
-            return false
+        var changed = false
+        var firstError: Swift.Error?
+        for head in store.headsToMerge(into: currentVersion, headSelection: headSelection) {
+            do {
+                let versionToMergeInto = currentVersion
+                let newVersion = try store.merge(version: versionToMergeInto, with: head, resolvingWith: mergeArbiter, metadata: metadata)
+                if newVersion.id != versionToMergeInto { changed = true }
+                updateCurrentVersion(newVersion.id)
+            } catch {
+                log.error("Failed to merge head \(head.rawValue): \(error)")
+                if firstError == nil { firstError = error }
+            }
         }
+        if let firstError { throw firstError }
+        return changed
     }
 
 

@@ -22,7 +22,9 @@ public struct Version: Hashable, Identifiable {
         public let data: Data
         public init(data: Data) { self.data = data }
         public init<T: Codable>(_ value: T) { self.data = try! JSONEncoder().encode(value) }
+        /// Traps if the data does not decode to `T`. Use `valueIfDecodable()` for metadata that came from another device.
         public func value<T: Codable>() -> T { try! JSONDecoder().decode(T.self, from: self.data) }
+        public func valueIfDecodable<T: Codable>() -> T? { try? JSONDecoder().decode(T.self, from: self.data) }
     }
         
     public typealias ID = Identifier

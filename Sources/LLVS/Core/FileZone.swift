@@ -61,7 +61,12 @@ internal final class FileZone: Zone {
     internal func data(for reference: ZoneReference) throws -> Data? {
         if let data = cache.value(for: reference) { return data }
         let (_, file) = try fileSystemLocation(for: reference)
-        guard let raw = try? Data(contentsOf: file) else { return nil }
+        let raw: Data
+        do {
+            raw = try Data(contentsOf: file)
+        } catch CocoaError.fileReadNoSuchFile, CocoaError.fileNoSuchFile {
+            return nil
+        }
         let data = DataCompression.decompressIfNeeded(raw)
         cacheIfNeeded(data, for: reference)
         return data

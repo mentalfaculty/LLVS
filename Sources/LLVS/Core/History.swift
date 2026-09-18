@@ -94,20 +94,6 @@ public class History {
         }
     }
     
-    /// Finds the greatest common ancestor of all the given version IDs by pairwise reduction.
-    internal func greatestCommonAncestor(ofAll versionIds: Set<Version.ID>) throws -> Version.ID? {
-        guard !versionIds.isEmpty else { return nil }
-        var ids = Array(versionIds)
-        var result = ids.removeFirst()
-        for id in ids {
-            guard let gca = try greatestCommonAncestor(ofVersionsIdentifiedBy: (result, id)) else {
-                return nil
-            }
-            result = gca
-        }
-        return result
-    }
-
     public func greatestCommonAncestor(ofVersionsIdentifiedBy ids: (Version.ID, Version.ID)) throws -> Version.ID? {
         // Find all ancestors of first Version.
         // Note that fronts are filtered, rather than using subtract, which iterates the (large) set passed.
