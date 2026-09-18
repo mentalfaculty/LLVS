@@ -47,15 +47,12 @@ public final class Store {
     
     public let storage: Storage
 
-    private lazy var valuesZone: Zone = {
-        return try! storage.makeValuesZone(in: self)
-    }()
-    
+    // Set once, at the end of init. They need the store itself, so they cannot be set before the other properties.
+    // They used to be lazy, which crashed on a storage error, and raced when first used from two threads.
+    private var valuesZone: Zone!
+    private var valuesMap: Map!
+
     private let valuesMapName = "__llvs_values"
-    private lazy var valuesMap: Map = {
-        let valuesMapZone = try! self.storage.makeMapZone(for: .valuesByVersion, in: self)
-        return Map(zone: valuesMapZone)
-    }()
     
     private let history = Mutex(History())
 
@@ -74,7 +71,10 @@ public final class Store {
         try? fileManager.createDirectory(at: self.valuesDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.versionsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: self.mapsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
-        
+
+        self.valuesZone = try storage.makeValuesZone(in: self)
+        self.valuesMap = Map(zone: try storage.makeMapZone(for: .valuesByVersion, in: self))
+
         try reloadHistory()
     }
 

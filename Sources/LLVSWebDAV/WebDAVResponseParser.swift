@@ -9,7 +9,7 @@ import Foundation
 import LLVS
 
 /// Parses PROPFIND XML responses from a WebDAV server.
-/// Handles namespace variations (`D:`, `lp1:`, etc.) for broad server compatibility.
+/// Matches elements on their local name, because a server can bind the DAV: namespace to any prefix.
 final class WebDAVResponseParser: NSObject, XMLParserDelegate, @unchecked Sendable {
 
     struct Item {
@@ -39,12 +39,11 @@ final class WebDAVResponseParser: NSObject, XMLParserDelegate, @unchecked Sendab
 
     // MARK: - Element Matching
 
-    /// Matches element names with or without common WebDAV namespace prefixes.
+    /// Matches on the local name, so `D:response`, `d:response`, `ns0:response` and `response` are all the same.
+    /// A server can bind the DAV: namespace to any prefix.
     private func element(_ element: String, matches other: String) -> Bool {
-        if element.caseInsensitiveCompare(other) == .orderedSame { return true }
-        if ("D:" + element).caseInsensitiveCompare(other) == .orderedSame { return true }
-        if ("lp1:" + element).caseInsensitiveCompare(other) == .orderedSame { return true }
-        return false
+        func localName(_ name: String) -> Substring { name.split(separator: ":").last ?? Substring(name) }
+        return localName(element).caseInsensitiveCompare(localName(other)) == .orderedSame
     }
 
     // MARK: - XMLParserDelegate
@@ -58,14 +57,19 @@ final class WebDAVResponseParser: NSObject, XMLParserDelegate, @unchecked Sendab
 
     func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
         if element(elementName, matches: "D:href") {
-            currentItemDictionary?["path"] = characters.removingPercentEncoding ?? characters
+            // The first href is the path. Servers can echo an empty href later, inside a 404 propstat.
+            if currentItemDictionary?["path"] == nil {
+                currentItemDictionary?["path"] = characters.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
         } else if element(elementName, matches: "D:collection") {
             currentItemDictionary?["isDirectory"] = true
         } else if element(elementName, matches: "D:response"),
                   let dict = currentItemDictionary,
                   let path = dict["path"] as? String {
             let isDir = dict["isDirectory"] as? Bool ?? false
-            let name = (path as NSString).lastPathComponent
+            // Take the last component before decoding, so that an encoded slash stays part of the name
+            let encodedName = (path as NSString).lastPathComponent
+            let name = encodedName.removingPercentEncoding ?? encodedName
             items.append(Item(name: name, isDirectory: isDir))
             currentItemDictionary = nil
         }

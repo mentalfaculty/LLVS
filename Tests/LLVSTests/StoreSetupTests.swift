@@ -24,4 +24,17 @@ import Foundation
         #expect(fm.fileExists(atPath: root.appendingPathComponent("values")))
         #expect(fm.fileExists(atPath: root.appendingPathComponent("maps")))
     }
+
+    @Test func storageThatCannotMakeZonesFailsAtInit() throws {
+        // The zones were made lazily with try!, so this used to crash at the first read or write
+        struct ZoneFailure: Swift.Error {}
+        struct FailingStorage: Storage {
+            func makeValuesZone(in store: Store) throws -> Zone { throw ZoneFailure() }
+            func makeMapZone(for type: MapType, in store: Store) throws -> Zone { throw ZoneFailure() }
+        }
+        let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        #expect(throws: ZoneFailure.self) { try Store(rootDirectoryURL: url, storage: FailingStorage()) }
+    }
 }

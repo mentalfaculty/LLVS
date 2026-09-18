@@ -65,7 +65,7 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v5)]),
         .testTarget(
             name: "LLVSTests",
-            dependencies: ["LLVS", "LLVSSQLite"],
+            dependencies: ["LLVS", "LLVSSQLite", "LLVSWebDAV"],
             swiftSettings: [.swiftLanguageMode(.v5)]),
         .target(
             name: "LLVSCloudKit",

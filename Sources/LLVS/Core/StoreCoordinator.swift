@@ -12,9 +12,9 @@ import Synchronization
 /// A `StoreCoordinator` takes care of all aspects of setting up a syncing store.
 /// It's the simplest way to get started, though you may want more control for advanced use cases.
 ///
-/// Thread-safety: `currentVersion` is protected by a `Mutex`. Other mutable properties
-/// (`exchange`, `mergeArbiter`, `defaultMetadataForNewVersions`, `isExchanging`) are
-/// set during initialization or within the serialized exchange flow.
+/// Thread-safety: `currentVersion` and `isExchanging` are protected by a `Mutex`. The configuration
+/// properties (`exchange`, `mergeArbiter`, `defaultMetadataForNewVersions`) are not: set them during
+/// setup, before the coordinator is used from more than one thread.
 public class StoreCoordinator: @unchecked Sendable {
 
     private struct CachedData: Codable {
@@ -209,10 +209,12 @@ public class StoreCoordinator: @unchecked Sendable {
 
     // MARK: Sync
 
-    public private(set) var isExchanging = false
+    /// Whether an exchange is in progress. It is written by the exchange task, and can be read from any thread.
+    public var isExchanging: Bool { _isExchanging.withLock { $0 } }
+    private let _isExchanging = Mutex(false)
 
     /// Serializer to ensure one exchange at a time.
-    private var exchangeSerializer = ExchangeSerializer()
+    private let exchangeSerializer = ExchangeSerializer()
 
     /// This transfers data between cloud and local store, but does not alter the current branch or do any merging.
     /// It's a bit like a two-way version of Git's fetch.
@@ -223,8 +225,8 @@ public class StoreCoordinator: @unchecked Sendable {
     }
 
     private func performExchange() async throws {
-        isExchanging = true
-        defer { isExchanging = false }
+        _isExchanging.withLock { $0 = true }
+        defer { _isExchanging.withLock { $0 = false } }
 
         guard let exchange = exchange else { return }
 
