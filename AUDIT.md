@@ -41,9 +41,9 @@ Read-only audit at commit 92fe81b (tag 0.9). `swift test` passes: 170 tests. Fin
 23. **`docs/` is a 2019 Jekyll blog** that teaches the removed Combine API and links to a deleted sample.
 24. **About 3,000 lines of backend code have no tests**: CloudKit, Google Drive, OneDrive, WebDAV (including the pure `WebDAVResponseParser`), Box, pCloud, `FolderBasedExchange`, `Cache`, `ExchangeSerializer`. No `assertMacroExpansion` tests. `StoreCoordinator` has no dedicated tests.
 25. ✅ ADDED `.github/workflows/ci.yml` (not yet seen to run on GitHub) **No CI.** No `.github/`.
-26. **Tags 0.7, 0.8, 0.9 are two-part.** SPM `from:` needs three-part semver. Duplicate old tags exist (0.1 and 0.1.0, etc.).
+26. ✅ FIXED going forward (0.10.0 is three-part; the old tags are left as they are) **Tags 0.7, 0.8, 0.9 are two-part.** SPM `from:` needs three-part semver. Duplicate old tags exist (0.1 and 0.1.0, etc.).
 27. ✅ FIXED for Box and pCloud (branch `safety-pass`, package traits `Box` / `PCloud`; ZIPFoundation in core still open) **Box and pCloud SDKs are in every consumer's dependency graph**, because they are top-level package dependencies. Core LLVS depends on ZIPFoundation for one file.
-28. Root `Package.resolved` is tracked, but `.gitignore:4` ignores `**/Package.resolved`.
+28. ✅ FIXED (untracked) Root `Package.resolved` is tracked, but `.gitignore:4` ignores `**/Package.resolved`.
 29. ✅ FIXED (renamed to `LICENSE`, with an "MIT License" title) `LICENCE.txt` uses the British spelling; GitHub and Swift Package Index licence detection may miss it.
 30. Swift 5 language mode everywhere. Swift 6 blockers: global `log` (non-Sendable, shadows Foundation `log()`), `History` escapes from `queryHistory`, non-Sendable `Store` captured in `@Sendable` closures, `Zone`/`MergeArbiter`/`DynamicTaskBatcher` not Sendable.
 

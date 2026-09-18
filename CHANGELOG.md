@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.10.0 (unreleased)
+## 0.10.0 (2026-09-18)
 
 ### Source breaking
 
