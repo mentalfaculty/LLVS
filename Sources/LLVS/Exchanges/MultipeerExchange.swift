@@ -265,15 +265,30 @@ public class MultipeerExchange: Exchange {
             let codable = try JSONDecoder().decode([CodableVersionChanges].self, from: payload)
             let versionChanges: [VersionChanges] = codable.map { ($0.version, $0.valueChanges) }
 
-            for (version, valueChanges) in versionChanges {
-                do {
-                    try store.addVersion(version, storing: valueChanges)
-                } catch Store.Error.attemptToAddExistingVersion {
-                    // Ignore
+            // Versions arrive in no particular order. Make passes over them, adding the versions that
+            // have their predecessors, until there are none left, or a pass adds nothing.
+            var remaining = versionChanges
+            var addedAny = false
+            defer { if addedAny { newVersionsContinuation.yield(()) } } // Also announce when a later version fails
+            while !remaining.isEmpty {
+                var waitingForPredecessors: [VersionChanges] = []
+                for (version, valueChanges) in remaining {
+                    do {
+                        try store.addVersion(version, storing: valueChanges)
+                        addedAny = true
+                    } catch Store.Error.attemptToAddExistingVersion {
+                        // Ignore
+                    } catch Store.Error.attemptToAddVersionWithNonexistingPredecessors {
+                        waitingForPredecessors.append((version, valueChanges))
+                    }
                 }
+                if waitingForPredecessors.count == remaining.count {
+                    // The predecessors were not in this push. A later retrieve will fetch these versions.
+                    log.error("Pushed versions have unknown predecessors: \(waitingForPredecessors.map({ $0.version.id.rawValue }))")
+                    break
+                }
+                remaining = waitingForPredecessors
             }
-
-            newVersionsContinuation.yield(())
         } catch {
             log.error("Failed to handle push: \(error)")
         }

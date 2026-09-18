@@ -8,7 +8,7 @@ Read-only audit at commit 92fe81b (tag 0.9). `swift test` passes: 170 tests. Fin
 2. ✅ FIXED (branch `safety-pass`; `mergeHeads` and `StoreCoordinator.merge()` now `throws`) **`try!` in `mergeHeads`** — `Sources/LLVS/Core/Store.swift:316`. Any arbiter or I/O error crashes the app. Reachable through `StoreCoordinator.merge()`. Fix: make it `throws`.
 3. ✅ FIXED (branch `safety-pass`; `FileZone.swift:64` `try?` on read still open) **Non-atomic writes** — `Store.swift:519`, `FileZone.swift:57`, `FileSystemExchange.swift:104,108`. `data.write(to:)` without `.atomic`. A crash mid-write leaves a truncated version JSON, after which `Store.init` fails. Another process can read a partial file, and `FileZone` caches it. `FileZone.swift:64` uses `try?`, which turns read errors into "missing".
 4. ✅ FIXED (branch `safety-pass`) **Greatest common ancestor is not always the greatest** — `History.swift:111-146`. The search from the second version returns the first common ancestor it reaches, which can be an ancestor of a nearer one. The merge is still valid, but it reports false conflicts, and a timestamp arbiter can then discard a newer edit. Fix: gather all common ancestors and drop any that is an ancestor of another.
-5. **CloudKit shared database crashes** — `CloudKitExchange.swift:101-105,150`. `createZoneOperation` is nil for non-private scopes but is force-unwrapped. `zoneID` hardcodes `CKCurrentUserDefaultName` (:83), which is wrong for another owner's zone.
+5. ✅ PARTLY FIXED (no longer crashes; the zone owner is still hardcoded, so shared databases still do not work) **CloudKit shared database crashes** — `CloudKitExchange.swift:101-105,150`. `createZoneOperation` is nil for non-private scopes but is force-unwrapped. `zoneID` hardcodes `CKCurrentUserDefaultName` (:83), which is wrong for another owner's zone.
 
 ## Important — core
 
@@ -21,8 +21,8 @@ Read-only audit at commit 92fe81b (tag 0.9). `swift test` passes: 170 tests. Fin
 
 ## Important — exchanges
 
-12. **CloudKit retry loop** — `CloudKitExchange.swift:162` treats `.partialFailure` as an expired token and retries recursively with no limit or backoff. No handling of `requestRateLimited`, `zoneBusy`, `limitExceeded`, `retryAfter`.
-13. **Multipeer push drops versions** — `MultipeerExchange.swift:268` adds versions in arrival order; `send` orders them by `Set`. A version whose predecessor has not arrived throws, the rest of the batch is dropped, and the sender reports success.
+12. ✅ PARTLY FIXED (retries once only; rate-limit and `retryAfter` handling still open) **CloudKit retry loop** — `CloudKitExchange.swift:162` treats `.partialFailure` as an expired token and retries recursively with no limit or backoff. No handling of `requestRateLimited`, `zoneBusy`, `limitExceeded`, `retryAfter`.
+13. ✅ FIXED (versions are added in dependency order; there is still no ack to the sender) **Multipeer push drops versions** — `MultipeerExchange.swift:268` adds versions in arrival order; `send` orders them by `Set`. A version whose predecessor has not arrived throws, the rest of the batch is dropped, and the sender reports success.
 14. **Box stuck version** — `BoxExchange.swift:109` always creates a new file. If changes upload and the version upload fails, the retry hits a name conflict forever.
 15. **Google Drive duplicate folders** — `GoogleDriveFileSystem.swift:271-296` is check-then-create, and Drive allows duplicate names. Two devices on first sync can split permanently.
 16. **OAuth** — no PKCE and no `state` parameter; no single-flight token refresh (OneDrive rotates refresh tokens); `SecItemAdd` status ignored; `ASWebAuthenticationSession` is not retained; form bodies use `.urlQueryAllowed`, which leaves `+ & =` unescaped.

@@ -20,6 +20,8 @@
 - `@MergeableModel` on a `public struct` did not compile, and `var a = 0, b = 0` merged only `a`.
 - `Optional` properties of `Mergeable` types: a value set on only one branch could be dropped, two inserted values now go through `salvaging(from:)`, and an update beats a removal on either side.
 - SQLite: errors while reading rows (busy, corrupt) were read as "no rows", `NULL` was checked on the wrong column, and an empty blob crashed. A 5 second busy timeout is set for stores shared between processes.
+- `MultipeerExchange` dropped pushed versions that arrived before their predecessors. `Exchange.send()` also sends predecessors first now.
+- `CloudKitExchange` crashed on its first fetch with a shared database, and retried without limit when a fetch kept failing. It now retries once, and only when the change token really expired. Shared databases still do not work, because the zone owner is assumed to be the current user.
 
 ### Added
 

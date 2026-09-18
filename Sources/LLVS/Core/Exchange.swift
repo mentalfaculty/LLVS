@@ -192,9 +192,10 @@ public extension Exchange {
     private func versionIdsMissingRemotely(forRemoteIdentifiers remoteIdentifiers: [Version.ID]) -> [Version.ID] {
         var toSendIds: [Version.ID]!
         self.store.queryHistory { history in
-            let storeVersionIds = Set(history.allVersionIdentifiers)
+            // History iterates from the heads back. Reverse it, so that predecessors are sent first.
+            // A receiver that adds versions as they arrive (eg a peer) depends on this.
             let remoteVersionIds = Set(remoteIdentifiers)
-            toSendIds = Array(storeVersionIds.subtracting(remoteVersionIds))
+            toSendIds = history.reversed().map({ $0.id }).filter({ !remoteVersionIds.contains($0) })
         }
         return toSendIds
     }

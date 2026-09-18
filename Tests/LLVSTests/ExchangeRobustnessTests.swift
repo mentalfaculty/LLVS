@@ -25,6 +25,23 @@ private final class FaultyChangesExchange: Exchange {
     func send(versionChanges: [VersionChanges]) async throws {}
 }
 
+/// An exchange with an empty remote, which records the order in which versions are sent.
+private final class SendRecordingExchange: Exchange {
+    let store: Store
+    var restorationState: Data?
+    let newVersionsAvailable: AsyncStream<Void> = AsyncStream { $0.finish() }
+    var sentVersions: [Version] = []
+
+    init(store: Store) { self.store = store }
+
+    func prepareToRetrieve() async throws {}
+    func retrieveAllVersionIdentifiers() async throws -> [Version.ID] { [] }
+    func retrieveVersions(identifiedBy versionIds: [Version.ID]) async throws -> [Version] { [] }
+    func retrieveValueChanges(forVersionsIdentifiedBy versionIds: [Version.ID]) async throws -> [Version.ID: [Value.Change]] { [:] }
+    func prepareToSend() async throws {}
+    func send(versionChanges: [VersionChanges]) async throws { sentVersions += versionChanges.map { $0.version } }
+}
+
 @Suite class ExchangeRobustnessTests {
 
     let remoteStore: Store
@@ -67,5 +84,25 @@ private final class FaultyChangesExchange: Exchange {
         _ = try await exchange.retrieve()
 
         #expect(try localStore.version(identifiedBy: version.id) != nil)
+    }
+
+    @Test func versionsAreSentAfterTheirPredecessors() async throws {
+        // A receiver that adds versions as they arrive (eg a peer) needs predecessors first,
+        // also when the versions are split over several batches.
+        var predecessor: Version.ID? = nil
+        for i in 0..<30 {
+            let value = Value(id: .init("ABCDEF"), data: "\(i)".data(using: .utf8)!)
+            predecessor = try localStore.makeVersion(basedOnPredecessor: predecessor, storing: [i == 0 ? .insert(value) : .update(value)]).id
+        }
+        let exchange = SendRecordingExchange(store: localStore)
+
+        _ = try await exchange.send()
+
+        #expect(exchange.sentVersions.count == 30)
+        var sent = Set<Version.ID>()
+        for version in exchange.sentVersions {
+            #expect(sent.isSuperset(of: version.predecessors?.ids ?? []), "Sent before its predecessor: \(version.id.rawValue)")
+            sent.insert(version.id)
+        }
     }
 }
