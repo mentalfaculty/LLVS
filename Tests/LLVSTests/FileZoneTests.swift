@@ -36,6 +36,21 @@ import Foundation
         fm.fileExists(atPath: rootURL.appendingPathComponent("AB/CDEF/1/234.json").path)
     }
 
+    @Test func overwritingReplacesFileRatherThanWritingInPlace() throws {
+        // An atomic write goes to a temporary file, which is then renamed over the original.
+        // A hard link to the original keeps the old content. With an in-place write, a concurrent
+        // reader (or a crash) can see a partly written file, and the hard link sees the new content.
+        try zone.store("old".data(using: .utf8)!, for: ref)
+        let (_, fileURL) = try zone.fileSystemLocation(for: ref)
+        let linkURL = rootURL.appendingPathComponent("link")
+        try fm.linkItem(at: fileURL, to: linkURL)
+
+        try zone.store("new".data(using: .utf8)!, for: ref)
+
+        let linked = DataCompression.decompressIfNeeded(try Data(contentsOf: linkURL))
+        #expect(String(data: linked, encoding: .utf8) == "old")
+    }
+
     @Test func addingMultipleReferencesInSameDiretories() throws {
         try zone.store(Data(), for: ref)
         try zone.store(Data(), for: .init(key: "ABCDEF", version: .init("1245")))

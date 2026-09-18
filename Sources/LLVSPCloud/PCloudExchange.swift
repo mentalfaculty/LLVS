@@ -1,3 +1,4 @@
+#if PCloud
 //
 //  PCloudExchange.swift
 //  LLVS
@@ -199,3 +200,5 @@ public class PCloudExchange: FolderBasedExchange {
         var changesFolderID: UInt64?
     }
 }
+
+#endif

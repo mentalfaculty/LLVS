@@ -85,7 +85,7 @@ public final class Cache<ValueType> {
     }
 
     private func regenerate(_ state: inout State) {
-        let _ = state.generations.dropLast()
+        state.generations.removeLast()
         state.generations.insert(Generation(), at: 0)
     }
 }

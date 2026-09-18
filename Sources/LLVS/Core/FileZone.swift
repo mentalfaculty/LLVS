@@ -54,7 +54,7 @@ internal final class FileZone: Zone {
         let (dir, file) = try fileSystemLocation(for: reference)
         try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
         let compressed = DataCompression.compress(data)
-        try compressed.write(to: file)
+        try compressed.write(to: file, options: .atomic)
         cacheIfNeeded(data, for: reference)
     }
 

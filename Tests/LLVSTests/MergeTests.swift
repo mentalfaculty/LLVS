@@ -48,6 +48,13 @@ import Foundation
         try? FileManager.default.removeItem(at: rootURL)
     }
 
+    @Test func mergeHeadsThrowsWhenArbiterLeavesConflictUnresolved() {
+        class Arbiter: MergeArbiter {
+            func changes(toResolve merge: Merge, in store: Store) -> [Value.Change] { [] }
+        }
+        #expect(throws: (any Error).self) { try store.mergeHeads(into: branch1.id, resolvingWith: Arbiter()) }
+    }
+
     @Test func unresolvedMergeFails() {
         class Arbiter: MergeArbiter {
             func changes(toResolve merge: Merge, in store: Store) -> [Value.Change] {

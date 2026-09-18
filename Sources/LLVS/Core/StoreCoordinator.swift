@@ -240,9 +240,9 @@ public class StoreCoordinator: @unchecked Sendable {
     /// Merging any extra heads, or fast forward to latest. It's a good idea to save data just before calling this, so that
     /// in view edits are committed. Returns true if the merge changed the current version; false otherwise.
     /// Note that the default behavior is not to merge in named branches. These are usually used for background work, and need to be merged in under controlled circumstances.
-    @discardableResult public func merge(metadata: Version.Metadata? = nil, headSelection: Store.MergeHeadSelection = .allExceptBranches) -> Bool {
+    @discardableResult public func merge(metadata: Version.Metadata? = nil, headSelection: Store.MergeHeadSelection = .allExceptBranches) throws -> Bool {
         let metadata = metadata ?? defaultMetadataForNewVersions
-        let newVersion = self.store.mergeHeads(into: self.currentVersion, resolvingWith: self.mergeArbiter, headSelection: headSelection, metadata: metadata)
+        let newVersion = try self.store.mergeHeads(into: self.currentVersion, resolvingWith: self.mergeArbiter, headSelection: headSelection, metadata: metadata)
         if let newVersion = newVersion {
             updateCurrentVersion(newVersion)
             return true

@@ -10,6 +10,7 @@ import Foundation
 enum ExchangeError: Swift.Error {
     case remoteVersionsWithUnknownPredecessors
     case missingVersion
+    case missingValueChanges(Version.ID)
     case unknown(error: Swift.Error)
 }
 
@@ -95,11 +96,7 @@ public extension Exchange {
                 return .definitive(.failure(error))
             }
 
-            let valueChangesByVersionID: [Version.ID: [Value.Change]] = valueChangesByVersionIdentifier.reduce(into: [:]) { result, keyValue in
-                var version = versionsByIdentifier[keyValue.key]!
-                if version.valueDataSize == nil { version.valueDataSize = keyValue.value.valueDataSize }
-                result[version.id] = keyValue.value
-            }
+            let valueChangesByVersionID = valueChangesByVersionIdentifier.filter { versionsByIdentifier[$0.key] != nil }
 
             do {
                 try self.addToHistorySync(sortedVersions: batchVersions, valueChangesByVersionID: valueChangesByVersionID)
@@ -121,7 +118,10 @@ public extension Exchange {
                 log.error("Failed to add to history due to missing predecessors")
                 throw ExchangeError.remoteVersionsWithUnknownPredecessors
             }
-            let valueChanges = valueChangesByVersionID[version.id]!
+            guard let valueChanges = valueChangesByVersionID[version.id] else {
+                log.error("Remote returned no value changes for version: \(version.id.rawValue)")
+                throw ExchangeError.missingValueChanges(version.id)
+            }
             log.trace("Adding version to store: \(version.id.rawValue)")
             log.verbose("Value changes for \(version.id.rawValue): \(valueChanges)")
 

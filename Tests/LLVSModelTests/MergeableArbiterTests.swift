@@ -334,4 +334,14 @@ struct OuterOptionalModel: StorableModel, Equatable {
         // Dominant unchanged from ancestor, subordinate removed → accept removal
         #expect(outer.inner == nil)
     }
+
+    @Test func optionalMergeableSubordinateNilToSome() throws {
+        let dominant: InnerModel? = nil
+        let subordinate: InnerModel? = InnerModel(x: 5, y: 6)
+
+        let merged = try dominant.merged(withSubordinate: subordinate, commonAncestor: nil)
+
+        // Dominant unchanged from nil ancestor, subordinate inserted → accept insertion
+        #expect(merged == subordinate)
+    }
 }

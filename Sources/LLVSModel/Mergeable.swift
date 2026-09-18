@@ -56,7 +56,9 @@ extension Optional: Mergeable where Wrapped: Mergeable {
             return d == a ? other : self
         case (.none, _, .some):
             return self
-        case (_, _, .none):
+        case (.none, _, .none):
+            return other
+        case (.some, _, .none):
             return self
         }
     }

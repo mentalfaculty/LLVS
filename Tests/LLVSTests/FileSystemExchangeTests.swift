@@ -52,6 +52,26 @@ import Foundation
         return try! fm.contentsOfDirectory(at: exchangeURL.appendingPathComponent("versions"), includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
     }
 
+    @Test func hiddenFilesAreNotListedAsVersions() async throws {
+        // Finder and cloud sync tools drop hidden files such as .DS_Store into shared folders
+        let hiddenURL = exchangeURL.appendingPathComponent("versions").appendingPathComponent(".DS_Store")
+        try Data().write(to: hiddenURL)
+
+        let ids = try await exchange1.retrieveAllVersionIdentifiers()
+
+        #expect(ids.isEmpty)
+    }
+
+    @Test func orphanedAtomicWriteTemporaryFilesAreNotListedAsVersions() async throws {
+        // A crash during an atomic write leaves a sibling file like "<name>.sb-<hex>-<rand>", which is not hidden
+        let orphanURL = exchangeURL.appendingPathComponent("versions").appendingPathComponent(UUID().uuidString + ".sb-1234abcd-XyZ")
+        try Data("{\"vers".utf8).write(to: orphanURL)
+
+        let ids = try await exchange1.retrieveAllVersionIdentifiers()
+
+        #expect(ids.isEmpty)
+    }
+
     @Test func sendFiles() async throws {
         let val = value("CDEFGH", stringData: "Origin")
         let ver = try store1.makeVersion(basedOnPredecessor: nil, storing: [.insert(val)])

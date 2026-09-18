@@ -285,7 +285,7 @@ extension Store {
     /// Merges heads into the version passed, which is usually a head itself. This is a convenience
     /// to save looping through all heads.
     /// If the version ends up being changed by the merging, the new version is returned, otherwise nil.
-    public func mergeHeads(into version: Version.ID, resolvingWith arbiter: MergeArbiter, headSelection: MergeHeadSelection = .allExceptBranches, metadata: Version.Metadata = [:]) -> Version.ID? {
+    public func mergeHeads(into version: Version.ID, resolvingWith arbiter: MergeArbiter, headSelection: MergeHeadSelection = .allExceptBranches, metadata: Version.Metadata = [:]) throws -> Version.ID? {
         var heads: Set<Version.ID> = []
         var versionsById: [Version.ID:Version] = [:]
         queryHistory { history in
@@ -313,7 +313,7 @@ extension Store {
         
         var versionId: Version.ID = version
         for otherHead in heads {
-            let newVersion = try! merge(version: versionId, with: otherHead, resolvingWith: arbiter, metadata: metadata)
+            let newVersion = try merge(version: versionId, with: otherHead, resolvingWith: arbiter, metadata: metadata)
             versionId = newVersion.id
         }
         
@@ -516,7 +516,7 @@ extension Store {
             let (dir, file) = fileSystemLocation(forVersionIdentifiedBy: version.id)
             try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
             let data = try JSONEncoder().encode(version)
-            try data.write(to: file)
+            try data.write(to: file, options: .atomic)
         }
     }
     
