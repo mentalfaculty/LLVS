@@ -20,8 +20,8 @@ swift test --filter storeCreatesDirectories    # Run a single test by name
 - Tests are in `Tests/LLVSTests/` and `Tests/LLVSModelTests/`, and depend only on `LLVS`, `LLVSSQLite`, and `LLVSModel`. The cloud backend targets have no tests.
 - SPM builds ALL targets before tests run. A broken backend target blocks the whole test suite. After a change to `LLVSBox` or `LLVSPCloud`, build with `--enable-all-traits`, or the change is not compiled at all.
 - `swift-tools-version: 6.1`, but every target except the macro uses `.swiftLanguageMode(.v5)`. Platforms: macOS 15, iOS 18, watchOS 11 (needed for `Mutex` from `Synchronization`).
-- There is no CI and no linter. Sample apps (`Samples/LoCo`, `Samples/TheMessage`) are Xcode projects that reference the package locally; they are not part of the SPM package.
-- `README.md` and `docs/` are stale (completion-handler samples, old platforms). Do not trust them for API; read the source.
+- CI is `.github/workflows/ci.yml`: `swift test`, then `swift build --enable-all-traits`. There is no linter. Sample apps (`Samples/LoCo`, `Samples/TheMessage`) are Xcode projects that reference the package locally; they are not part of the SPM package.
+- `docs/` is a 2019 Jekyll blog that teaches a removed Combine API. It may be served by GitHub Pages, so it has been left in place. Do not trust it for API. Record user-visible changes in `CHANGELOG.md`.
 
 ## Package Structure
 
@@ -51,7 +51,7 @@ Three-way merge is the primary merge strategy: find the greatest common ancestor
 
 `@MergeableModel` macro generates `Mergeable` conformance for structs, producing per-property merge via overloaded `mergeProperty`/`salvageProperty` free functions. Properties conforming to `Mergeable` get deep recursive merge; plain `Equatable` properties use simple equality checks. `Optional<Wrapped>` where `Wrapped: Mergeable` also supports smart merge. `StorableModel` (`Codable` + `modelTypeIdentifier`) is for top-level stored entities; nested types only need `@MergeableModel`. The macro must skip computed properties in both forms (`.getter` shorthand and explicit `.accessors`).
 
-`Value.Fork` describes per-value conflict states: `.inserted`, `.updated`, `.removed` (non-conflicting, single branch), `.twiceInserted`, `.twiceUpdated`, `.removedAndUpdated` (conflicting, require arbiter resolution).
+`Value.Fork` describes per-value conflict states: `.inserted`, `.updated`, `.removed` (non-conflicting, single branch), `.twiceRemoved` (non-conflicting, both branches), `.twiceInserted`, `.twiceUpdated`, `.removedAndUpdated` (conflicting, require arbiter resolution).
 
 ### Storage Abstraction
 
