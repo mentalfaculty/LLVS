@@ -100,7 +100,7 @@ LLVS is installed with the Swift Package Manager. It requires Swift tools 6.1, a
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/mentalfaculty/LLVS.git", from: "0.10.0")
+    .package(url: "https://github.com/mentalfaculty/LLVS.git", from: "0.11.0")
 ]
 ```
 
@@ -122,7 +122,7 @@ The core `LLVS` library depends on [ZIPFoundation](https://github.com/weichsel/Z
 `LLVSBox` and `LLVSPCloud` wrap vendor SDKs, and I don't want those SDKs downloaded into apps that never use them. They are gated behind package traits, so you have to opt in:
 
 ```swift
-.package(url: "https://github.com/mentalfaculty/LLVS.git", from: "0.10.0", traits: ["Box"])
+.package(url: "https://github.com/mentalfaculty/LLVS.git", from: "0.11.0", traits: ["Box"])
 ```
 
 The traits are `Box` and `PCloud`. Without the trait, the module builds but is empty, and the SDK is not fetched.
@@ -416,6 +416,15 @@ The _Samples_ directory has two SwiftUI apps. They are Xcode projects, not part 
 - **TheMessage** is a minimal app that syncs a single shared message via the public CloudKit database. Good for understanding the basics.
 - **LoCo** is a contact book that uses `LLVSModel`, `@MergeableModel`, and `MergeableArbiter`, and syncs via a private CloudKit zone.
 
+
+## Upgrading to 0.11
+
+The package builds in Swift 6 language mode. Ordinary use is unaffected, and both sample apps needed no changes, but four things break if you extend the framework.
+
+- **`Exchange` and `Zone` require `Sendable`.** Your own conformances must be safe to use from more than one thread.
+- **`Cache` requires `Sendable` keys and values.** Its methods take `some Hashable & Sendable` instead of `AnyHashable`.
+- **`@Atomic` is now `@Guarded`.** The standard library has its own `Atomic`, and the two names clashed.
+- **`SQLiteDatabase.Error.bindingFailed` carries a `valueDescription: String`** instead of an `Any?` value.
 
 ## Upgrading to 0.10
 

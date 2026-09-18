@@ -42,7 +42,7 @@ let package = Package(
             targets: ["LLVSOneDrive"]),
     ],
     // The LLVSBox and LLVSPCloud products are empty unless the consumer enables the matching trait,
-    // e.g. .package(url: "...", from: "0.10.0", traits: ["Box"]). This keeps the vendor SDKs out of other apps.
+    // e.g. .package(url: "...", from: "0.11.0", traits: ["Box"]). This keeps the vendor SDKs out of other apps.
     traits: [
         .trait(name: "Box", description: "Box backend via the Box SDK"),
         .trait(name: "PCloud", description: "pCloud backend via the pCloud SDK"),

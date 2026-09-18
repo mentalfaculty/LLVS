@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.11.0 (2026-09-18)
 
 ### Changed
 
@@ -12,6 +12,7 @@
 
 - `CloudKitExchange` had two real data races that strict concurrency brought to light: records were collected from its query callbacks without a lock, and its cached restoration state was read, changed and written back in separate steps, so concurrent callbacks could lose version IDs. Its `store` property is now a `let`, and its temporary directory is no longer a `lazy var`, which is not thread-safe.
 - `BoxExchange` used a `lazy var` for its temporary directory.
+- `FileSystemExchange` passed a non-`Sendable` closure to its operation queue.
 
 ## 0.10.0 (2026-09-18)
 
