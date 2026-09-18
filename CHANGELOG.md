@@ -4,7 +4,7 @@
 
 ### Changed
 
-- Every target builds in Swift 6 language mode, with strict concurrency checking. The public value types (`Version`, `Value`, `Value.Change`, `ZoneReference`, `SnapshotManifest`, `SnapshotPolicy` and their nested types) are `Sendable`, and so are the `Exchange` and `Zone` protocols. A custom `Exchange` or `Zone` in your own code must now be `Sendable` too. `Cache` gained a `ValueType: Sendable` constraint, and its methods take `some Hashable & Sendable` instead of `AnyHashable`.
+- Every target builds in Swift 6 language mode, with strict concurrency checking. The public value types (`Version`, `Value`, `Value.Change`, `ZoneReference`, `SnapshotManifest`, `SnapshotPolicy` and their nested types) are `Sendable`, and so are the `Exchange` and `Zone` protocols. A custom `Exchange` or `Zone` in your own code must now be `Sendable` too. `Cache` gained a `ValueType: Sendable` constraint, and its methods take `some Hashable & Sendable` instead of `AnyHashable`. `SQLiteDatabase.Error.bindingFailed` carries a `valueDescription: String` instead of an `Any?` value, so that the error is `Sendable`.
 - `Log.level` can be set from any thread.
 - The `@Atomic` property wrapper is renamed to `@Guarded`, because the standard library now has its own `Atomic`.
 

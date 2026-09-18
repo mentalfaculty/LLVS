@@ -27,7 +27,8 @@ public final class SQLiteDatabase {
         case openFailed(code: Int32)
         case closeFailed(code: Int32)
         case statementFailed(statement: String, code: Int32)
-        case bindingFailed(bindingIndex: Int, value: Any?, code: Int32)
+        /// The value is described, rather than carried, so that the error can cross threads.
+        case bindingFailed(bindingIndex: Int, valueDescription: String, code: Int32)
         case queryFailed(query: String, code: Int32)
     }
     
@@ -176,7 +177,7 @@ public final class SQLiteDatabase {
             }
             
             guard code == SQLITE_OK else {
-                throw Error.bindingFailed(bindingIndex: i+1, value: value, code: code)
+                throw Error.bindingFailed(bindingIndex: i+1, valueDescription: String(describing: value), code: code)
             }
         }
     }
