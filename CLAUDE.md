@@ -11,13 +11,13 @@ LLVS (Low-Level Versioned Store) is a decentralized, versioned key-value storage
 ```bash
 swift build                                    # Build all targets (Box and pCloud compile to empty modules)
 swift build --enable-all-traits                # Also compile the SDK-backed backends (Box, pCloud)
-swift test                                     # Run all 208 tests (191 LLVSTests + 17 LLVSModelTests)
+swift test                                     # Run all 225 tests (191 LLVSTests + 17 LLVSNetworkTests + 17 LLVSModelTests)
 swift test --filter LLVSTests.StoreSetupTests  # Run a single suite
 swift test --filter storeCreatesDirectories    # Run a single test by name
 ```
 
 - Tests are **Swift Testing** (`@Suite`/`@Test`/`#expect`), not XCTest. Test names have no `test` prefix.
-- Tests are in `Tests/LLVSTests/` and `Tests/LLVSModelTests/`, and depend on `LLVS`, `LLVSSQLite`, `LLVSModel`, and `LLVSWebDAV` (for its XML parser only). The other cloud backend targets have no tests.
+- Tests are in `Tests/LLVSTests/`, `Tests/LLVSNetworkTests/` (HTTP backends, against a `URLProtocol` fake server) and `Tests/LLVSModelTests/`, and depend on `LLVS`, `LLVSSQLite`, `LLVSModel`, and `LLVSWebDAV` (for its XML parser only). The other cloud backend targets have no tests.
 - SPM builds ALL targets before tests run. A broken backend target blocks the whole test suite. After a change to `LLVSBox` or `LLVSPCloud`, build with `--enable-all-traits`, or the change is not compiled at all.
 - `swift-tools-version: 6.1`, and every target builds in Swift 6 language mode (strict concurrency). Platforms: macOS 15, iOS 18, watchOS 11 (needed for `Mutex` from `Synchronization`).
 - CI is `.github/workflows/ci.yml`: `swift test`, then `swift build --enable-all-traits`. There is no linter. Sample apps (`Samples/LoCo`, `Samples/TheMessage`) are Xcode projects that reference the package locally; they are not part of the SPM package.

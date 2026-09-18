@@ -30,24 +30,31 @@ public final class OneDriveFileSystem: CloudFileSystem, @unchecked Sendable {
 
     private static let graphBaseURL = URL(string: "https://graph.microsoft.com/v1.0")!
 
-    private lazy var session: URLSession = {
+    private let session: URLSession
+
+    /// The session used when none is supplied. Not lazy: a lazy var is not thread-safe.
+    static func makeDefaultSession() -> URLSession {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
         config.timeoutIntervalForResource = 3600
         return URLSession(configuration: config)
-    }()
+    }
 
     // MARK: - Initialization
 
     /// Creates a OneDrive file system with a static access token.
-    public init(accessToken: String) {
+    /// - Parameter session: Pass your own to control networking. Mainly for tests.
+    public init(accessToken: String, session: URLSession? = nil) {
         self.tokenProvider = { accessToken }
+        self.session = session ?? Self.makeDefaultSession()
     }
 
     /// Creates a OneDrive file system with an authenticator that
     /// automatically refreshes expired tokens.
-    public init(authenticator: OneDriveAuthenticator) {
+    /// - Parameter session: Pass your own to control networking. Mainly for tests.
+    public init(authenticator: OneDriveAuthenticator, session: URLSession? = nil) {
         self.tokenProvider = { try await authenticator.validAccessToken() }
+        self.session = session ?? Self.makeDefaultSession()
     }
 
     // MARK: - CloudFileSystem

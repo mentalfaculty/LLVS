@@ -41,24 +41,31 @@ public final class GoogleDriveFileSystem: CloudFileSystem, @unchecked Sendable {
     private static let uploadBaseURL = URL(string: "https://www.googleapis.com/upload/drive/v3/")!
     private static let folderMimeType = "application/vnd.google-apps.folder"
 
-    private lazy var session: URLSession = {
+    private let session: URLSession
+
+    /// The session used when none is supplied. Not lazy: a lazy var is not thread-safe.
+    static func makeDefaultSession() -> URLSession {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
         config.timeoutIntervalForResource = 3600
         return URLSession(configuration: config)
-    }()
+    }
 
     // MARK: - Initialization
 
     /// Creates a Google Drive file system with a static access token.
-    public init(accessToken: String) {
+    /// - Parameter session: Pass your own to control networking. Mainly for tests.
+    public init(accessToken: String, session: URLSession? = nil) {
         self.tokenProvider = { accessToken }
+        self.session = session ?? Self.makeDefaultSession()
     }
 
     /// Creates a Google Drive file system with an authenticator that
     /// automatically refreshes expired tokens.
-    public init(authenticator: GoogleDriveAuthenticator) {
+    /// - Parameter session: Pass your own to control networking. Mainly for tests.
+    public init(authenticator: GoogleDriveAuthenticator, session: URLSession? = nil) {
         self.tokenProvider = { try await authenticator.validAccessToken() }
+        self.session = session ?? Self.makeDefaultSession()
     }
 
     // MARK: - CloudFileSystem
