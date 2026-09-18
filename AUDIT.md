@@ -26,7 +26,7 @@ Read-only audit at commit 92fe81b (tag 0.9). `swift test` passes: 170 tests. Fin
 14. **Box stuck version** — `BoxExchange.swift:109` always creates a new file. If changes upload and the version upload fails, the retry hits a name conflict forever.
 15. **Google Drive duplicate folders** — `GoogleDriveFileSystem.swift:271-296` is check-then-create, and Drive allows duplicate names. Two devices on first sync can split permanently.
 16. **OAuth** — no PKCE and no `state` parameter; no single-flight token refresh (OneDrive rotates refresh tokens); `SecItemAdd` status ignored; `ASWebAuthenticationSession` is not retained; form bodies use `.urlQueryAllowed`, which leaves `+ & =` unescaped.
-17. **No retry/backoff** in WebDAV, Google Drive, OneDrive, pCloud. No 429/`Retry-After` handling, no refresh-and-retry on 401. pCloud downloads ignore HTTP status.
+17. 🔶 IN PROGRESS (`HTTPClient` exists with retry, backoff and `Retry-After`, and the file systems take an injectable session; none of the four backends route through it yet) **No retry/backoff** in WebDAV, Google Drive, OneDrive, pCloud. No 429/`Retry-After` handling, no refresh-and-retry on 401. pCloud downloads ignore HTTP status.
 18. ✅ FIXED (branch `safety-pass`) **`FileSystemExchange` lists with `options: []`** (:66), so `.DS_Store` becomes a version ID and `retrieve` throws.
 
 ## Important — snapshots

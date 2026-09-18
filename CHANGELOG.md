@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `HTTPClient` in the core library: makes an HTTP request and retries while the problem looks temporary (408, 429, 5xx, and transport failures such as a dropped connection). Waits double from half a second and are capped, and a `Retry-After` header wins over that, within the same cap. A 4xx comes back as a response rather than an error, because what a 404 means differs per service. Callers pass `isSafeToRepeat: false` for a request that would do the work twice if repeated. **Nothing uses it yet**: the WebDAV, Google Drive, OneDrive and pCloud backends still make their own unretried requests. Wiring them up, refresh-on-401 and PKCE are still to come.
+- `HTTPClient.Response.requireSuccess(allowing:)`, for the codes a service treats as normal, such as WebDAV's 207, or its 405 for a directory that already exists.
+
+### Changed
+
+- `WebDAVFileSystem`, `GoogleDriveFileSystem` and `OneDriveFileSystem` take an optional `URLSession`, so their networking can be tested. They built their own in a `lazy var` before, which no test could reach, and which is not thread-safe. `WebDAVFileSystem.credential` is now a `let`. Passing both a session and a username and password traps, because a supplied session gets no credential delegate and would otherwise make unauthenticated requests silently.
+
 ## 0.11.0 (2026-09-18)
 
 ### Changed
