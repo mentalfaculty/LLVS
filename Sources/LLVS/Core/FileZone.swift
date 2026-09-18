@@ -28,7 +28,8 @@ public class FileStorage: Storage, SnapshotCapable {
 
 }
 
-internal final class FileZone: Zone {
+/// Each zone owns its `FileManager`, which is the documented way to use it from more than one thread.
+internal final class FileZone: Zone, @unchecked Sendable {
     
     let rootDirectory: URL
     let fileExtension: String

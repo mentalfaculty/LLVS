@@ -7,7 +7,7 @@
 
 import Foundation
 
-public class FileSystemExchange: NSObject, Exchange, NSFilePresenter, SnapshotExchange {
+public final class FileSystemExchange: NSObject, Exchange, NSFilePresenter, SnapshotExchange, @unchecked Sendable {
 
     public enum Error: Swift.Error {
         case versionFileInvalid

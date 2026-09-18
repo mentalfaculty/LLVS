@@ -7,18 +7,18 @@
 
 import Foundation
 
-public struct Version: Hashable, Identifiable {
+public struct Version: Hashable, Identifiable, Sendable {
     
     public typealias Metadata = [MetadataKey:MetadataValue]
     
-    public struct MetadataKey: Hashable, Codable, RawRepresentable {
+    public struct MetadataKey: Hashable, Codable, RawRepresentable, Sendable {
         public var rawValue: String
         public init(rawValue: String) { self.rawValue = rawValue }
         
         public static let branch = Self(rawValue: "__llvs_branch")
     }
     
-    public struct MetadataValue: Codable {
+    public struct MetadataValue: Codable, Sendable {
         public let data: Data
         public init(data: Data) { self.data = data }
         public init<T: Codable>(_ value: T) { self.data = try! JSONEncoder().encode(value) }
@@ -87,7 +87,7 @@ extension Version: Codable {
 
 extension Version {
     
-    public struct Identifier: RawRepresentable, Codable, Hashable {
+    public struct Identifier: RawRepresentable, Codable, Hashable, Sendable {
         public var rawValue: String
         
         public init(rawValue: String = UUID().uuidString) {
@@ -99,7 +99,7 @@ extension Version {
         }
     }
     
-    public struct Predecessors: Codable, Hashable {
+    public struct Predecessors: Codable, Hashable, Sendable {
         public internal(set) var idOfFirst: ID
         public internal(set) var idOfSecond: ID?
         public var ids: [ID] {
@@ -114,7 +114,7 @@ extension Version {
         }
     }
     
-    public struct Successors: Codable, Hashable {
+    public struct Successors: Codable, Hashable, Sendable {
         public internal(set) var ids: Set<ID>
         internal init(ids: Set<ID> = []) {
             self.ids = ids

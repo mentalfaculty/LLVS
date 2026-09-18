@@ -11,7 +11,7 @@ import Synchronization
 
 // MARK:- Branch
 
-public struct Branch: RawRepresentable {
+public struct Branch: RawRepresentable, Sendable {
     public let rawValue: String
     
     public init(rawValue: String) {
@@ -27,7 +27,7 @@ public struct Branch: RawRepresentable {
 
 // MARK:- Store
 
-public final class Store {
+public final class Store: @unchecked Sendable {
     
     public enum Error: Swift.Error {
         case missingVersion

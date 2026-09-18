@@ -18,7 +18,7 @@ import PCloudSDKSwift
 ///
 /// Uses `PCloudClient` from the official pCloud SDK for all API operations.
 /// Folder IDs are cached via `restorationState` to avoid repeated lookups.
-public class PCloudExchange: FolderBasedExchange {
+public final class PCloudExchange: FolderBasedExchange, @unchecked Sendable {
 
     public typealias FileID = UInt64
     public typealias FolderID = UInt64
@@ -42,7 +42,7 @@ public class PCloudExchange: FolderBasedExchange {
     /// URL session used for downloading file data from pCloud CDN links.
     private let urlSession: URLSession
 
-    @Atomic private var restoration = RestorationInfo()
+    @Guarded private var restoration = RestorationInfo()
 
     public let newVersionsAvailable: AsyncStream<Void>
     private let newVersionsContinuation: AsyncStream<Void>.Continuation

@@ -18,9 +18,9 @@ import Foundation
     }
 
     @Test func failure() async throws {
-        var count = 0
+        let counter = Counter()
         let batcher = DynamicTaskBatcher(numberOfTasks: 10, taskCostEvaluator: { _ in 0.1 }) { range in
-            count += 1
+            counter.increment()
             return .definitive(.failure(TestError.testError))
         }
 
@@ -30,7 +30,7 @@ import Foundation
         } catch {
             // Expected
         }
-        #expect(count == 1)
+        #expect(counter.value == 1)
     }
 
     @Test func zeroTasks() async throws {
@@ -41,55 +41,55 @@ import Foundation
     }
 
     @Test func oneTask() async throws {
-        var count = 0
+        let counter = Counter()
         let batcher = DynamicTaskBatcher(numberOfTasks: 1, taskCostEvaluator: { _ in 0.1 }) { range in
-            count += 1
+            counter.increment()
             #expect(range == 0..<1)
             return .definitive(.success(()))
         }
 
         try await batcher.start()
-        #expect(count == 1)
+        #expect(counter.value == 1)
     }
 
     @Test func oneLargeTask() async throws {
-        var count = 0
+        let counter = Counter()
         let batcher = DynamicTaskBatcher(numberOfTasks: 1, taskCostEvaluator: { _ in 2.0 }) { range in
-            count += 1
+            counter.increment()
             #expect(range == 0..<1)
             return .definitive(.success(()))
         }
 
         try await batcher.start()
-        #expect(count == 1)
+        #expect(counter.value == 1)
     }
 
     @Test func twoSmallTasks() async throws {
-        var count = 0
+        let counter = Counter()
         let batcher = DynamicTaskBatcher(numberOfTasks: 2, taskCostEvaluator: { _ in 0.1 }) { range in
-            count += 1
+            counter.increment()
             #expect(range == 0..<2)
             return .definitive(.success(()))
         }
 
         try await batcher.start()
-        #expect(count == 1)
+        #expect(counter.value == 1)
     }
 
     @Test func twoLargeTasks() async throws {
-        var count = 0
+        let counter = Counter()
         let batcher = DynamicTaskBatcher(numberOfTasks: 2, taskCostEvaluator: { _ in 1.0 }) { range in
-            count += 1
+            counter.increment()
             #expect(range.count == 1)
             return .definitive(.success(()))
         }
 
         try await batcher.start()
-        #expect(count == 2)
+        #expect(counter.value == 2)
     }
 
     @Test func accumulatingCost() async throws {
-        var count = 0
+        let counter = Counter()
         let batcher = DynamicTaskBatcher(numberOfTasks: 4, taskCostEvaluator: { index in
             switch index {
             case 0, 1:
@@ -102,7 +102,7 @@ import Foundation
                 return 0.1
             }
         }) { range in
-            count += 1
+            counter.increment()
             if range.lowerBound == 0 {
                 #expect(range.count == 1)
             } else if range.lowerBound == 1 {
@@ -114,13 +114,13 @@ import Foundation
         }
 
         try await batcher.start()
-        #expect(count == 3)
+        #expect(counter.value == 3)
     }
 
     @Test func growingAndRepeatingBatchesUntilFail() async throws {
-        var count = 0
+        let counter = Counter()
         let batcher = DynamicTaskBatcher(numberOfTasks: 2, taskCostEvaluator: { _ in 1.01 }) { range in
-            count += 1
+            counter.increment()
             #expect(range.lowerBound == 0)
             return .growBatchAndReexecute
         }
@@ -131,13 +131,13 @@ import Foundation
         } catch {
             // Expected
         }
-        #expect(count == 2)
+        #expect(counter.value == 2)
     }
 
     @Test func growingAndRepeatingBatchesWithSuccess() async throws {
-        var count = 0
+        let counter = Counter()
         let batcher = DynamicTaskBatcher(numberOfTasks: 3, taskCostEvaluator: { _ in 1.01 }) { range in
-            count += 1
+            counter.increment()
             switch range {
             case 0..<1:
                 return .growBatchAndReexecute
@@ -152,6 +152,14 @@ import Foundation
         }
 
         try await batcher.start()
-        #expect(count == 3)
+        #expect(counter.value == 3)
     }
+}
+
+/// The batcher can call its closure from more than one task, so the test counts under a lock.
+private final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    var value: Int { lock.withLock { count } }
+    func increment() { lock.withLock { count += 1 } }
 }

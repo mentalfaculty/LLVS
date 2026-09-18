@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Every target builds in Swift 6 language mode, with strict concurrency checking. The public value types (`Version`, `Value`, `Value.Change`, `ZoneReference`, `SnapshotManifest`, `SnapshotPolicy` and their nested types) are `Sendable`, and so are the `Exchange` and `Zone` protocols. A custom `Exchange` or `Zone` in your own code must now be `Sendable` too. `Cache` gained a `ValueType: Sendable` constraint, and its methods take `some Hashable & Sendable` instead of `AnyHashable`.
+- `Log.level` can be set from any thread.
+- The `@Atomic` property wrapper is renamed to `@Guarded`, because the standard library now has its own `Atomic`.
+
+### Fixed
+
+- `CloudKitExchange` had two real data races that strict concurrency brought to light: records were collected from its query callbacks without a lock, and its cached restoration state was read, changed and written back in separate steps, so concurrent callbacks could lose version IDs. Its `store` property is now a `let`, and its temporary directory is no longer a `lazy var`, which is not thread-safe.
+- `BoxExchange` used a `lazy var` for its temporary directory.
+
 ## 0.10.0 (2026-09-18)
 
 ### Source breaking

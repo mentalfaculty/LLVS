@@ -131,8 +131,9 @@ import Foundation
         _ = try store1.makeVersion(basedOnPredecessor: nil, storing: [])
 
         // Start a task to listen for the notification
+        let listeningExchange = exchange1
         let notified = Task<Bool, Never> {
-            for await _ in exchange1.newVersionsAvailable {
+            for await _ in listeningExchange.newVersionsAvailable {
                 return true
             }
             return false

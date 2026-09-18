@@ -62,33 +62,33 @@ let package = Package(
             dependencies: [
                 .product(name: "ZIPFoundation", package: "ZIPFoundation"),
             ],
-            swiftSettings: [.swiftLanguageMode(.v5)]),
+            swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(
             name: "LLVSTests",
             dependencies: ["LLVS", "LLVSSQLite", "LLVSWebDAV"],
-            swiftSettings: [.swiftLanguageMode(.v5)]),
+            swiftSettings: [.swiftLanguageMode(.v6)]),
         .target(
             name: "LLVSCloudKit",
             dependencies: ["LLVS"],
-            swiftSettings: [.swiftLanguageMode(.v5)]),
+            swiftSettings: [.swiftLanguageMode(.v6)]),
         .target(
             name: "LLVSSQLite",
             dependencies: ["LLVS", "SQLite3"],
-            swiftSettings: [.swiftLanguageMode(.v5)]),
+            swiftSettings: [.swiftLanguageMode(.v6)]),
         .target(
             name: "LLVSPCloud",
             dependencies: [
                 "LLVS",
                 .product(name: "PCloudSDKSwift", package: "pcloud-sdk-swift", condition: .when(traits: ["PCloud"]))
             ],
-            swiftSettings: [.swiftLanguageMode(.v5)]),
+            swiftSettings: [.swiftLanguageMode(.v6)]),
         .target(
             name: "LLVSBox",
             dependencies: [
                 "LLVS",
                 .product(name: "BoxSDK", package: "box-ios-sdk", condition: .when(traits: ["Box"]))
             ],
-            swiftSettings: [.swiftLanguageMode(.v5)]),
+            swiftSettings: [.swiftLanguageMode(.v6)]),
         .macro(
             name: "LLVSModelMacros",
             dependencies: [
@@ -101,19 +101,19 @@ let package = Package(
                 "LLVS",
                 "LLVSModelMacros",
             ],
-            swiftSettings: [.swiftLanguageMode(.v5)]),
+            swiftSettings: [.swiftLanguageMode(.v6)]),
         .target(
             name: "LLVSWebDAV",
             dependencies: ["LLVS"],
-            swiftSettings: [.swiftLanguageMode(.v5)]),
+            swiftSettings: [.swiftLanguageMode(.v6)]),
         .target(
             name: "LLVSGoogleDrive",
             dependencies: ["LLVS"],
-            swiftSettings: [.swiftLanguageMode(.v5)]),
+            swiftSettings: [.swiftLanguageMode(.v6)]),
         .target(
             name: "LLVSOneDrive",
             dependencies: ["LLVS"],
-            swiftSettings: [.swiftLanguageMode(.v5)]),
+            swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(
             name: "LLVSModelTests",
             dependencies: [
@@ -121,6 +121,6 @@ let package = Package(
                 "LLVS",
                 "LLVSSQLite",
             ],
-            swiftSettings: [.swiftLanguageMode(.v5)])
+            swiftSettings: [.swiftLanguageMode(.v6)])
     ]
 )

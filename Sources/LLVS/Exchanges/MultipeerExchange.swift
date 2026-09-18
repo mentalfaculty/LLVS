@@ -21,7 +21,8 @@ public protocol PeerTransport: AnyObject {
 ///
 /// Each peer runs its own MultipeerExchange instance. One peer's `send()`/`retrieve()`
 /// sends requests to the other peer, which responds automatically via `handleRequest`.
-public class MultipeerExchange: Exchange {
+/// All of its own state is immutable, or lives in the `State` actor.
+public final class MultipeerExchange: Exchange, @unchecked Sendable {
 
     public enum Error: Swift.Error {
         case transportUnavailable
@@ -32,7 +33,7 @@ public class MultipeerExchange: Exchange {
 
     // MARK: - PeerMessage
 
-    struct PeerMessage: Codable {
+    struct PeerMessage: Codable, Sendable {
         let id: String
         let type: MessageType
         var requestId: String?

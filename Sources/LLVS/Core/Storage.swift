@@ -12,6 +12,7 @@ public enum MapType {
     case userDefined(label: String)
 }
 
+/// Implementations must be safe to use from more than one thread: `Store` vouches for its storage.
 public protocol Storage {
 
     func makeValuesZone(in store: Store) throws -> Zone

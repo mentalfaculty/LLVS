@@ -3,7 +3,8 @@ import Foundation
 @testable import LLVS
 
 /// An exchange whose remote returns version metadata, but the wrong value changes.
-private final class FaultyChangesExchange: Exchange {
+/// Unchecked only because the tests drive it from one thread. Do not copy this into a real exchange.
+private final class FaultyChangesExchange: Exchange, @unchecked Sendable {
     let store: Store
     let remoteVersions: [Version]
     var restorationState: Data?
@@ -26,7 +27,7 @@ private final class FaultyChangesExchange: Exchange {
 }
 
 /// An exchange with an empty remote, which records the order in which versions are sent.
-private final class SendRecordingExchange: Exchange {
+private final class SendRecordingExchange: Exchange, @unchecked Sendable {
     let store: Store
     var restorationState: Data?
     let newVersionsAvailable: AsyncStream<Void> = AsyncStream { $0.finish() }

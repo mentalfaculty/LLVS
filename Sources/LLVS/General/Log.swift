@@ -7,12 +7,14 @@
 
 import Foundation
 import os
+import Synchronization
 
 public let log = Log()
 
-public class Log {
+/// The shared logger. `level` can be set from any thread, and is `.none` until you raise it.
+public final class Log: Sendable {
 
-    public enum Level : Int, Comparable {
+    public enum Level : Int, Comparable, Sendable {
         case none
         case error
         case warning
@@ -35,7 +37,11 @@ public class Log {
         }
     }
 
-    public var level = Level.none
+    public var level: Level {
+        get { _level.withLock { $0 } }
+        set { _level.withLock { $0 = newValue } }
+    }
+    private let _level = Mutex(Level.none)
 
     @inline(__always) public final func verbose(_ messageClosure: @autoclosure () -> String, path: StaticString = #file, function: StaticString = #function, line: Int = #line) {
         if level >= .verbose {
