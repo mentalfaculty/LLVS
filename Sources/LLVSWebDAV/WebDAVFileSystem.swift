@@ -23,15 +23,10 @@ public final class WebDAVFileSystem: CloudFileSystem, @unchecked Sendable {
     public let baseURL: URL
 
     /// The credential used for authentication.
-    public var credential: URLCredential?
+    /// Set from the username and password at init. The session delegate answers challenges with it.
+    public private(set) var credential: URLCredential?
 
-    private lazy var session: URLSession = {
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 60
-        config.timeoutIntervalForResource = 3600
-        let delegate = SessionDelegate(fileSystem: self)
-        return URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
-    }()
+    private let session: URLSession
 
     // MARK: - Initialization
 
@@ -40,10 +35,22 @@ public final class WebDAVFileSystem: CloudFileSystem, @unchecked Sendable {
     ///   - baseURL: The root URL of the WebDAV server.
     ///   - username: Optional username for authentication.
     ///   - password: Optional password for authentication.
-    public init(baseURL: URL, username: String? = nil, password: String? = nil) {
+    ///   - session: Pass your own to control networking. Mainly for tests. A supplied session gets no
+    ///     credential delegate, so give it whatever authentication it needs itself.
+    public init(baseURL: URL, username: String? = nil, password: String? = nil, session: URLSession? = nil) {
         self.baseURL = baseURL
         if let username, let password {
             self.credential = URLCredential(user: username, password: password, persistence: .forSession)
+        }
+        if let session {
+            self.session = session
+        } else {
+            let config = URLSessionConfiguration.default
+            config.timeoutIntervalForRequest = 60
+            config.timeoutIntervalForResource = 3600
+            // The delegate answers the server's authentication challenge with the credential
+            let delegate = SessionDelegate(credential: self.credential)
+            self.session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
         }
     }
 
@@ -212,10 +219,10 @@ public final class WebDAVFileSystem: CloudFileSystem, @unchecked Sendable {
 
 private final class SessionDelegate: NSObject, URLSessionDelegate, URLSessionTaskDelegate, @unchecked Sendable {
 
-    weak var fileSystem: WebDAVFileSystem?
+    private let credential: URLCredential?
 
-    init(fileSystem: WebDAVFileSystem) {
-        self.fileSystem = fileSystem
+    init(credential: URLCredential?) {
+        self.credential = credential
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
@@ -227,7 +234,7 @@ private final class SessionDelegate: NSObject, URLSessionDelegate, URLSessionTas
             return
         }
 
-        if let credential = fileSystem?.credential, challenge.previousFailureCount == 0 {
+        if let credential, challenge.previousFailureCount == 0 {
             completionHandler(.useCredential, credential)
         } else {
             completionHandler(.performDefaultHandling, nil)

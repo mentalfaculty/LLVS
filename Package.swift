@@ -115,6 +115,10 @@ let package = Package(
             dependencies: ["LLVS"],
             swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(
+            name: "LLVSNetworkTests",
+            dependencies: ["LLVS", "LLVSWebDAV", "LLVSGoogleDrive", "LLVSOneDrive"],
+            swiftSettings: [.swiftLanguageMode(.v6)]),
+        .testTarget(
             name: "LLVSModelTests",
             dependencies: [
                 "LLVSModel",
