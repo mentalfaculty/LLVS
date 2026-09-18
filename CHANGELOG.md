@@ -22,8 +22,10 @@
 - SQLite: errors while reading rows (busy, corrupt) were read as "no rows", `NULL` was checked on the wrong column, and an empty blob crashed. A 5 second busy timeout is set for stores shared between processes.
 - `MultipeerExchange` dropped pushed versions that arrived before their predecessors. `Exchange.send()` also sends predecessors first now.
 - `CloudKitExchange` crashed on its first fetch with a shared database, and retried without limit when a fetch kept failing. It now retries once, and only when the change token really expired. Shared databases still do not work, because the zone owner is assumed to be the current user.
+- Restoring a snapshot verifies the downloaded chunks against a SHA-256 in the manifest (new; older snapshots are checked by size and version count), and unzips to a staging directory before it moves files into the store, version files last. A damaged download used to leave versions in the store without their values, after which the store could fail to open. Restoring into a store directory that already has files (for example `Coordinator.json`) no longer fails, and files in the archive that are not part of a store are ignored. A SQLite snapshot can only be restored into an empty store directory. Anything else now throws, where it used to fail inside the unzip.
 
 ### Added
 
 - `Store.headsToMerge(into:headSelection:)`.
 - `Version.MetadataValue.valueIfDecodable()`.
+- `SnapshotManifest.sha256`.

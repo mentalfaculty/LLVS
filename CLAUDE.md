@@ -11,7 +11,7 @@ LLVS (Low-Level Versioned Store) is a decentralized, versioned key-value storage
 ```bash
 swift build                                    # Build all targets (Box and pCloud compile to empty modules)
 swift build --enable-all-traits                # Also compile the SDK-backed backends (Box, pCloud)
-swift test                                     # Run all 196 tests (179 LLVSTests + 17 LLVSModelTests)
+swift test                                     # Run all 203 tests (186 LLVSTests + 17 LLVSModelTests)
 swift test --filter LLVSTests.StoreSetupTests  # Run a single suite
 swift test --filter storeCreatesDirectories    # Run a single test by name
 ```
@@ -74,7 +74,7 @@ Remote layout everywhere except CloudKit: `versions/{id}`, `changes/{id}`, `snap
 
 ### Cloud Snapshots
 
-Snapshots bootstrap a new device without replaying all history. They replaced compaction, which was removed because independent baselines conflict in multi-device sync. `SnapshotManifest` and `SnapshotPolicy` are in `Snapshot.swift`. The format is `zip-v1`: the store directory is zipped, split into chunks, and the manifest is written last. `SnapshotExchange` is an optional protocol; `FileSystemExchange`, `CloudFileSystemExchange`, and `CloudKitExchange` conform. `StoreCoordinator.bootstrapFromSnapshot()` restores one.
+Snapshots bootstrap a new device without replaying all history. They replaced compaction, which was removed because independent baselines conflict in multi-device sync. `SnapshotManifest` and `SnapshotPolicy` are in `Snapshot.swift`. The format is `zip-v1`: the store directory is zipped, split into chunks, and the manifest is written last. The manifest carries a SHA-256 of the archive (nil for snapshots made before 0.10). Restore verifies size and hash, unzips to a hidden staging directory inside the store, takes only `values/`, `maps/` and `versions/`, and moves `versions/` last, because a version file is what makes a version exist. Do not trust `unzipItem` to report damage: ZIPFoundation stops without an error at an entry it cannot read. `SnapshotExchange` is an optional protocol; `FileSystemExchange`, `CloudFileSystemExchange`, and `CloudKitExchange` conform. `StoreCoordinator.bootstrapFromSnapshot()` restores one.
 
 ### Map (Value Index)
 

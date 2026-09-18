@@ -32,8 +32,8 @@ Read-only audit at commit 92fe81b (tag 0.9). `swift test` passes: 170 tests. Fin
 ## Important — snapshots
 
 19. **Chunk names are not scoped by snapshot ID.** Chunks are overwritten in place and the manifest is written last, so a reader with the old manifest can assemble mixed chunks. No hash or size check.
-20. **Bootstrap unzips straight into the live store root.** A failure midway leaves version files without values, and those versions are never re-fetched.
-21. **The zip is taken from a live store with no lock.** `versionCount` and `latestVersionId` are scanned after zipping and can disagree with the archive.
+20. ✅ FIXED (staging directory, then move; size check against the manifest) **Bootstrap unzips straight into the live store root.** A failure midway leaves version files without values, and those versions are never re-fetched.
+21. ✅ PARTLY FIXED (manifest is scanned before zipping, so the archive is a superset; still no lock) **The zip is taken from a live store with no lock.** `versionCount` and `latestVersionId` are scanned after zipping and can disagree with the archive.
 
 ## Docs, tests, infrastructure
 
@@ -82,4 +82,7 @@ Open:
 - `StoreCoordinator` never calls `store.reloadHistory()` except in `bootstrapFromSnapshot`, so a process does not see versions written by another process (app extension) until the app calls it. Consider calling it at the start of `merge()`.
 - `StoreCoordinator.init(snapshotPolicy:)` passes `defaultStoreDirectory` as the cache directory; `defaultCacheDirectory` is unused.
 - CI has not run yet. The first run is also the first real Swift 6.1 build (local toolchain is newer).
+- Snapshot restore: done are the manifest SHA-256, the staging directory, versions-last moves, store directories only, and an error when an existing file differs in size (eg a SQLite database). Still open: chunk names are not scoped by snapshot ID (item 19), so a download during a replacement now fails cleanly and must be retried; a version file can be zipped without its values when the store is written during the zip.
+- Snapshots from 0.9 have no hash. The version-count guard for them depends on the order of entries in the archive. Comparing the staged file count with the archive's entry count would be stronger.
+- Zipping a live SQLite database in the middle of a transaction can capture a hot journal or a torn file.
 
