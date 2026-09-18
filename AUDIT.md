@@ -14,10 +14,10 @@ Read-only audit at commit 92fe81b (tag 0.9). `swift test` passes: 170 tests. Fin
 
 6. ✅ FIXED (branch `safety-pass`) **Optional merge loses data** — `Sources/LLVSModel/Mergeable.swift:59-60`. `(_, _, .none)` returns `self`, so (nil, some, nil) drops the value the other branch inserted.
 7. **Map bucketing degenerates with LLVSModel IDs** — `Map.swift:49`. IDs like `"Contact/uuid"` all land in node `"Co"`, so each save rewrites a node that lists every Contact. O(N) per write. Fix: bucket by a hash of the ID (needs a format migration).
-8. **SQLite** — `SQLiteDatabase.swift:129` treats BUSY/error as end-of-rows (reads as "missing"); no busy timeout; :190-201 checks NULL on column 0 instead of the requested column; zero-length blob crashes on `bytes!`; no transactions, WAL, or statement reuse.
+8. ✅ PARTLY FIXED (step errors now throw, NULL checked on the right column, empty blob, 5 s busy timeout; still open: no transactions, WAL or statement reuse, and `SQLiteZone` is not thread-safe while `Store` does not serialise zone access) **SQLite** — `SQLiteDatabase.swift:129` treats BUSY/error as end-of-rows (reads as "missing"); no busy timeout; :190-201 checks NULL on column 0 instead of the requested column; zero-length blob crashes on `bytes!`; no transactions, WAL, or statement reuse.
 9. **Unprotected shared state** — `Store.swift:50-58` lazy zones race on first access and use `try!`. `StoreCoordinator.swift:27-34,212`: `exchange`, `mergeArbiter`, `isExchanging` are unsynchronised in an `@unchecked Sendable` class. `save` (:169) is read-then-write.
 10. ✅ PARTLY FIXED (`Exchange.swift` done; `Version.swift:25` and `Store.swift:279` still open) **Force unwraps on remote data** — `Exchange.swift:99,124`, `Version.swift:25`, `Store.swift:279`. A backend that returns fewer changes than asked crashes the app.
-11. **Macro defects** — `MergeableModelMacro.swift:46,85`. Only `bindings.first` is merged (`var a, b` skips `b`). Generated methods have no access modifier, so a `public` struct does not compile.
+11. ✅ FIXED **Macro defects** — `MergeableModelMacro.swift:46,85`. Only `bindings.first` is merged (`var a, b` skips `b`). Generated methods have no access modifier, so a `public` struct does not compile.
 
 ## Important — exchanges
 
@@ -77,3 +77,5 @@ Open:
 - `.atomic` costs about 2x on small value writes (measured 0.43 s vs 0.85 s per 5000 writes). Accepted.
 - Criss-cross merges have more than one greatest common ancestor. LLVS picks one (the most recent). Like non-recursive git, this can silently pick a side: value R=0, X=0, Y=1; M1 keeps 1, M2 deliberately resolves back to 0; with base X the merge takes 1 with no conflict. A recursive merge base would fix it. Out of scope for now.
 - `Version.MetadataValue.value()` and `init(_:)` still use `try!` (documented; public API).
+- `@MergeableModel` silently skips tuple patterns (`var (a, b) = (1, 2)`), and `lazy var` gives a confusing compile error. Emit a macro diagnostic for both.
+- `SQLiteDatabase.Error.queryFailed` carries the code but not `sqlite3_errmsg`.
