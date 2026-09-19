@@ -26,7 +26,7 @@ public final class WebDAVFileSystem: CloudFileSystem, @unchecked Sendable {
     /// Set from the username and password at init. The session delegate answers challenges with it.
     public let credential: URLCredential?
 
-    private let session: URLSession
+    private let http: HTTPClient
 
     // MARK: - Initialization
 
@@ -37,7 +37,9 @@ public final class WebDAVFileSystem: CloudFileSystem, @unchecked Sendable {
     ///   - password: Optional password for authentication.
     ///   - session: Pass your own to control networking. Mainly for tests. A supplied session gets no
     ///     credential delegate, so give it whatever authentication it needs itself.
-    public init(baseURL: URL, username: String? = nil, password: String? = nil, session: URLSession? = nil) {
+    ///   - retryPolicy: How hard to try again when the server is busy or briefly broken.
+    ///   - sleeper: Waits between attempts. Tests supply their own, so they do not really sleep.
+    public init(baseURL: URL, username: String? = nil, password: String? = nil, session: URLSession? = nil, retryPolicy: HTTPClient.RetryPolicy = .default, sleeper: (any HTTPSleeper)? = nil) {
         self.baseURL = baseURL
         if let username, let password {
             self.credential = URLCredential(user: username, password: password, persistence: .forSession)
@@ -47,26 +49,27 @@ public final class WebDAVFileSystem: CloudFileSystem, @unchecked Sendable {
         // A supplied session has no credential delegate, so it must carry its own authentication
         precondition(session == nil || (username == nil && password == nil),
                      "A supplied URLSession must carry its own authentication; do not also pass a username and password")
+        let resolvedSession: URLSession
         if let session {
-            self.session = session
+            resolvedSession = session
         } else {
             let config = URLSessionConfiguration.default
             config.timeoutIntervalForRequest = 60
             config.timeoutIntervalForResource = 3600
             // The delegate answers the server's authentication challenge with the credential
             let delegate = SessionDelegate(credential: self.credential)
-            self.session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
+            resolvedSession = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
         }
+        self.http = HTTPClient(session: resolvedSession, policy: retryPolicy, sleeper: sleeper)
     }
 
     // MARK: - CloudFileSystem
 
     public func fileExists(at path: String) async throws -> Bool {
         let request = makePropfindRequest(forPath: path, depth: 0)
-        let (_, response) = try await session.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-        if statusCode == 404 { return false }
-        try checkHTTPResponse(statusCode: statusCode)
+        let response = try await http.perform(request)
+        if response.statusCode == 404 { return false }
+        try checkHTTPResponse(statusCode: response.statusCode)
         return true
     }
 
@@ -75,15 +78,14 @@ public final class WebDAVFileSystem: CloudFileSystem, @unchecked Sendable {
         if !dirPath.hasSuffix("/") { dirPath += "/" }
 
         let request = makePropfindRequest(forPath: dirPath, depth: 1)
-        let (data, response) = try await session.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let response = try await http.perform(request)
 
-        if statusCode == 404 {
+        if response.statusCode == 404 {
             throw CloudFileSystemError.fileNotFound
         }
-        try checkHTTPResponse(statusCode: statusCode)
+        try checkHTTPResponse(statusCode: response.statusCode)
 
-        let parser = WebDAVResponseParser(data: data)
+        let parser = WebDAVResponseParser(data: response.data)
         try parser.parse()
 
         // The first item is the directory itself — skip it
@@ -108,35 +110,33 @@ public final class WebDAVFileSystem: CloudFileSystem, @unchecked Sendable {
         request.setValue("\(data.count)", forHTTPHeaderField: "Content-Length")
         request.timeoutInterval = 3600
 
-        let (_, response) = try await session.upload(for: request, from: data)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-        try checkHTTPResponse(statusCode: statusCode)
+        // A PUT writes the whole file at a fixed path, so repeating it leaves the same result
+        let response = try await http.perform(request, uploading: data)
+        try checkHTTPResponse(statusCode: response.statusCode)
     }
 
     public func download(from path: String) async throws -> Data {
         var request = makeRequest(forPath: path)
         request.httpMethod = "GET"
 
-        let (data, response) = try await session.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let response = try await http.perform(request)
 
-        if statusCode == 404 {
+        if response.statusCode == 404 {
             throw CloudFileSystemError.fileNotFound
         }
-        try checkHTTPResponse(statusCode: statusCode)
-        return data
+        try checkHTTPResponse(statusCode: response.statusCode)
+        return response.data
     }
 
     public func remove(at path: String) async throws {
         var request = makeRequest(forPath: path)
         request.httpMethod = "DELETE"
 
-        let (_, response) = try await session.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let response = try await http.perform(request)
 
         // 404 means already gone — not an error
-        if statusCode == 404 { return }
-        try checkHTTPResponse(statusCode: statusCode)
+        if response.statusCode == 404 { return }
+        try checkHTTPResponse(statusCode: response.statusCode)
     }
 
     public func removeDirectory(at path: String) async throws {
@@ -147,12 +147,11 @@ public final class WebDAVFileSystem: CloudFileSystem, @unchecked Sendable {
         var request = makeRequest(forPath: dirPath)
         request.httpMethod = "DELETE"
 
-        let (_, response) = try await session.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let response = try await http.perform(request)
 
         // 404 means already gone — not an error
-        if statusCode == 404 { return }
-        try checkHTTPResponse(statusCode: statusCode)
+        if response.statusCode == 404 { return }
+        try checkHTTPResponse(statusCode: response.statusCode)
     }
 
     // MARK: - Directory Creation
@@ -164,19 +163,18 @@ public final class WebDAVFileSystem: CloudFileSystem, @unchecked Sendable {
             currentPath += "/\(component)"
             // Check if directory exists
             let request = makePropfindRequest(forPath: currentPath + "/", depth: 0)
-            let (_, response) = try await session.data(for: request)
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let response = try await http.perform(request)
 
-            if statusCode == 404 {
+            if response.statusCode == 404 {
                 // Create the directory
                 var mkcolRequest = makeRequest(forPath: currentPath)
                 mkcolRequest.httpMethod = "MKCOL"
                 mkcolRequest.setValue("application/xml", forHTTPHeaderField: "Content-Type")
-                let (_, mkcolResponse) = try await session.data(for: mkcolRequest)
-                let mkcolStatus = (mkcolResponse as? HTTPURLResponse)?.statusCode ?? 0
-                // 405 Method Not Allowed means the directory already exists
-                if mkcolStatus != 405 {
-                    try checkHTTPResponse(statusCode: mkcolStatus)
+                let mkcolResponse = try await http.perform(mkcolRequest)
+                // 405 Method Not Allowed means the directory already exists, and a retry that
+                // followed a lost reply would see exactly that
+                if mkcolResponse.statusCode != 405 {
+                    try checkHTTPResponse(statusCode: mkcolResponse.statusCode)
                 }
             }
         }

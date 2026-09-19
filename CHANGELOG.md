@@ -4,12 +4,27 @@
 
 ### Added
 
-- `HTTPClient` in the core library: makes an HTTP request and retries while the problem looks temporary (408, 429, 5xx, and transport failures such as a dropped connection). Waits double from half a second and are capped, and a `Retry-After` header wins over that, within the same cap. A 4xx comes back as a response rather than an error, because what a 404 means differs per service. Callers pass `isSafeToRepeat: false` for a request that would do the work twice if repeated. **Nothing uses it yet**: the WebDAV, Google Drive, OneDrive and pCloud backends still make their own unretried requests. Wiring them up, refresh-on-401 and PKCE are still to come.
+- `HTTPClient` in the core library: makes an HTTP request and retries while the problem looks temporary (408, 429, 5xx, and transport failures such as a dropped connection). Waits double from half a second and are capped, and a `Retry-After` header wins over that, within the same cap. A 4xx comes back as a response rather than an error, because what a 404 means differs per service. Callers pass `isSafeToRepeat: false` for a request that would do the work twice if repeated.
 - `HTTPClient.Response.requireSuccess(allowing:)`, for the codes a service treats as normal, such as WebDAV's 207, or its 405 for a directory that already exists.
+- Retry and backoff in the WebDAV, Google Drive, OneDrive and pCloud backends, which now send their requests through `HTTPClient`. A busy or briefly broken server is waited out instead of failing the sync. Two requests are deliberately never repeated, because repeating them would do the work twice: the Google Drive upload and its folder creation each create a new item with a new ID, so a retry after a lost reply would leave duplicates.
+- Refresh-on-401 in the Google Drive and OneDrive backends. A revoked access token now costs one refresh and one repeat of that request, rather than stopping the sync. The retry sits at a single request, below the pagination loops, so a token that expires part-way through a listing repeats only the page it was on.
+- `OAuthTokenStore` in the core library: holds an OAuth credential and allows only one refresh in flight. Several transfers running together all see the token expire at once; without this they each refresh, and because Google and Microsoft may retire a refresh token as they issue its replacement, the last reply home could leave a working credential broken. A caller whose own token was refused says so with `replacing:`, so that a refresh already under way cannot hand back the very token that just failed. It takes an `OAuthCredentialStorage`, which is the Keychain in an app and can be anything in a test.
+- PKCE (RFC 7636, S256) and a `state` parameter on the Google Drive and OneDrive OAuth flows. Both are public clients sending no client secret, so without PKCE any app registering the same redirect scheme could claim an intercepted authorization code. The `state` is compared in constant time, and a callback that does not carry the expected value is refused.
+- The WebDAV, Google Drive, OneDrive and pCloud backends, and both authenticators, accept a `retryPolicy` and a `sleeper`, so retry behaviour can be tuned, and tested without real waiting.
+
+### Fixed
+
+- pCloud downloads checked no HTTP status, so an error page from the CDN was returned as if it were the file's contents. They now require a success status.
+- The OAuth form encoding used `.urlQueryAllowed`, which leaves `+`, `&` and `=` unescaped. A token containing any of them was corrupted on its way to the server. It now escapes everything outside the RFC 3986 unreserved set.
+- `ASWebAuthenticationSession` was held only by a local that went out of scope as soon as `start()` returned, so the sign-in sheet could dismiss itself. It is now retained until its callback fires.
+- A failed Keychain write was silent, and the user was signed out at the next launch with no explanation. The `SecItemAdd` status is now logged.
 
 ### Changed
 
 - `WebDAVFileSystem`, `GoogleDriveFileSystem` and `OneDriveFileSystem` take an optional `URLSession`, so their networking can be tested. They built their own in a `lazy var` before, which no test could reach, and which is not thread-safe. `WebDAVFileSystem.credential` is now a `let`. Passing both a session and a username and password traps, because a supplied session gets no credential delegate and would otherwise make unauthenticated requests silently.
+- `GoogleDriveAuthenticator` and `OneDriveAuthenticator` are now properly `Sendable` rather than `@unchecked Sendable`. Their credential moved into `OAuthTokenStore`, an actor, so it is no longer an unguarded mutable property.
+- **Breaking:** `isAuthorized` and `deauthorize()` on both authenticators are now `async`, because the credential they read lives on an actor. `await` them.
+- `GoogleDriveAuthenticator` and `OneDriveAuthenticator` take an optional `URLSession`, for the same reason the file systems do.
 
 ## 0.11.0 (2026-09-18)
 

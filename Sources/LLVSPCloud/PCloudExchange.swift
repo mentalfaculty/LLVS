@@ -25,6 +25,8 @@ public final class PCloudExchange: FolderBasedExchange, @unchecked Sendable {
 
     public enum Error: Swift.Error {
         case missingDownloadLink
+        /// No longer thrown: a download that returns no data now fails on its status instead.
+        /// Kept because removing a public case would break anyone switching over this enum.
         case invalidResponse
     }
 
@@ -39,8 +41,11 @@ public final class PCloudExchange: FolderBasedExchange, @unchecked Sendable {
     /// Name of the folder on pCloud that holds LLVS data.
     public let folderName: String
 
-    /// URL session used for downloading file data from pCloud CDN links.
-    private let urlSession: URLSession
+    /// Downloads file data from pCloud CDN links, retrying when the CDN is busy or briefly broken.
+    ///
+    /// Only the CDN download goes through this. Everything else — listing, upload, folder creation —
+    /// goes through the pCloud SDK, which does its own networking.
+    private let http: HTTPClient
 
     @Guarded private var restoration = RestorationInfo()
 
@@ -62,12 +67,14 @@ public final class PCloudExchange: FolderBasedExchange, @unchecked Sendable {
     ///   - parentFolderID: pCloud folder ID in which to create the LLVS folder. Defaults to 0 (root).
     ///   - folderName: Name of the folder to create for LLVS data. Defaults to "LLVS".
     ///   - urlSession: URLSession for downloading file content from CDN links. Defaults to `.shared`.
-    public init(store: Store, client: PCloudClient, parentFolderID: UInt64 = 0, folderName: String = "LLVS", urlSession: URLSession = .shared) {
+    ///   - retryPolicy: How hard to try again when the CDN is busy or briefly broken.
+    ///   - sleeper: Waits between attempts. Tests supply their own, so they do not really sleep.
+    public init(store: Store, client: PCloudClient, parentFolderID: UInt64 = 0, folderName: String = "LLVS", urlSession: URLSession = .shared, retryPolicy: HTTPClient.RetryPolicy = .default, sleeper: (any HTTPSleeper)? = nil) {
         self.store = store
         self.client = client
         self.parentFolderID = parentFolderID
         self.folderName = folderName
-        self.urlSession = urlSession
+        self.http = HTTPClient(session: urlSession, policy: retryPolicy, sleeper: sleeper)
         let (stream, continuation) = AsyncStream<Void>.makeStream()
         self.newVersionsAvailable = stream
         self.newVersionsContinuation = continuation
@@ -131,18 +138,11 @@ public final class PCloudExchange: FolderBasedExchange, @unchecked Sendable {
                 .start()
         }
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let task = urlSession.dataTask(with: link) { data, _, error in
-                if let error = error {
-                    continuation.resume(throwing: error)
-                } else if let data = data {
-                    continuation.resume(returning: data)
-                } else {
-                    continuation.resume(throwing: Error.invalidResponse)
-                }
-            }
-            task.resume()
-        }
+        // A CDN link is a plain GET of a fixed file, so it is safe to repeat. The status was
+        // ignored here before, which turned an error page into a file body
+        let response = try await http.perform(URLRequest(url: link))
+        try response.requireSuccess()
+        return response.data
     }
 
     public func uploadData(_ data: Data, named name: String, toFolder folderID: UInt64) async throws {

@@ -41,7 +41,10 @@ public final class GoogleDriveFileSystem: CloudFileSystem, @unchecked Sendable {
     private static let uploadBaseURL = URL(string: "https://www.googleapis.com/upload/drive/v3/")!
     private static let folderMimeType = "application/vnd.google-apps.folder"
 
-    private let session: URLSession
+    private let http: HTTPClient
+
+    /// Asks the authenticator for a new token after a 401. Nil when the caller supplied a static token.
+    private let tokenRefresher: (@Sendable (String) async throws -> String)?
 
     /// The session used when none is supplied. Not lazy: a lazy var is not thread-safe.
     static func makeDefaultSession() -> URLSession {
@@ -54,18 +57,28 @@ public final class GoogleDriveFileSystem: CloudFileSystem, @unchecked Sendable {
     // MARK: - Initialization
 
     /// Creates a Google Drive file system with a static access token.
-    /// - Parameter session: Pass your own to control networking. Mainly for tests.
-    public init(accessToken: String, session: URLSession? = nil) {
+    ///
+    /// A static token cannot be refreshed, so a 401 is reported rather than retried.
+    /// - Parameters:
+    ///   - session: Pass your own to control networking. Mainly for tests.
+    ///   - retryPolicy: How hard to try again when the server is busy or briefly broken.
+    ///   - sleeper: Waits between attempts. Tests supply their own, so they do not really sleep.
+    public init(accessToken: String, session: URLSession? = nil, retryPolicy: HTTPClient.RetryPolicy = .default, sleeper: (any HTTPSleeper)? = nil) {
         self.tokenProvider = { accessToken }
-        self.session = session ?? Self.makeDefaultSession()
+        self.tokenRefresher = nil
+        self.http = HTTPClient(session: session ?? Self.makeDefaultSession(), policy: retryPolicy, sleeper: sleeper)
     }
 
     /// Creates a Google Drive file system with an authenticator that
     /// automatically refreshes expired tokens.
-    /// - Parameter session: Pass your own to control networking. Mainly for tests.
-    public init(authenticator: GoogleDriveAuthenticator, session: URLSession? = nil) {
+    /// - Parameters:
+    ///   - session: Pass your own to control networking. Mainly for tests.
+    ///   - retryPolicy: How hard to try again when the server is busy or briefly broken.
+    ///   - sleeper: Waits between attempts. Tests supply their own, so they do not really sleep.
+    public init(authenticator: GoogleDriveAuthenticator, session: URLSession? = nil, retryPolicy: HTTPClient.RetryPolicy = .default, sleeper: (any HTTPSleeper)? = nil) {
         self.tokenProvider = { try await authenticator.validAccessToken() }
-        self.session = session ?? Self.makeDefaultSession()
+        self.tokenRefresher = { staleToken in try await authenticator.freshAccessToken(replacing: staleToken) }
+        self.http = HTTPClient(session: session ?? Self.makeDefaultSession(), policy: retryPolicy, sleeper: sleeper)
     }
 
     // MARK: - CloudFileSystem
@@ -115,11 +128,13 @@ public final class GoogleDriveFileSystem: CloudFileSystem, @unchecked Sendable {
             ]
             if let pageToken { params["pageToken"] = pageToken }
 
-            let token = try await tokenProvider()
-            var request = URLRequest(url: urlWithQuery(Self.apiBaseURL.appendingPathComponent("files"), params: params))
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-            let json = try await performRequest(request)
+            let url = urlWithQuery(Self.apiBaseURL.appendingPathComponent("files"), params: params)
+            let response = try await performAuthorized { token in
+                var request = URLRequest(url: url)
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                return request
+            }
+            let json = try decodeJSON(response)
             let files = json["files"] as? [[String: Any]] ?? []
 
             for entry in files {
@@ -171,16 +186,9 @@ public final class GoogleDriveFileSystem: CloudFileSystem, @unchecked Sendable {
         let metadataData = try JSONSerialization.data(withJSONObject: metadata)
 
         let boundary = UUID().uuidString
-        let token = try await tokenProvider()
 
         var url = Self.uploadBaseURL.appendingPathComponent("files")
         url = urlWithQuery(url, params: ["uploadType": "multipart", "fields": "id"])
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("multipart/related; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 3600
 
         var body = Data()
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
@@ -191,14 +199,22 @@ public final class GoogleDriveFileSystem: CloudFileSystem, @unchecked Sendable {
         body.append(data)
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
 
-        let (responseData, response) = try await session.upload(for: request, from: body)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-
-        guard (200..<300).contains(statusCode) else {
-            throw mapHTTPError(statusCode: statusCode)
+        // This POST creates a new file with a new ID every time. A retry after a reply went missing
+        // would leave two copies of the same path, so it is sent once and once only
+        let response = try await performAuthorized(body: body, isSafeToRepeat: false) { token in
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.setValue("multipart/related; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = 3600
+            return request
         }
 
-        let json = try parseJSON(responseData)
+        guard (200..<300).contains(response.statusCode) else {
+            throw mapHTTPError(statusCode: response.statusCode)
+        }
+
+        let json = try parseJSON(response.data)
         if let fileID = json["id"] as? String {
             fileIDCache[absPath] = fileID
         }
@@ -208,23 +224,22 @@ public final class GoogleDriveFileSystem: CloudFileSystem, @unchecked Sendable {
         let absPath = absolutePath(for: path)
         let fileID = try await resolveFileID(forPath: absPath)
 
-        let token = try await tokenProvider()
         let url = urlWithQuery(
             Self.apiBaseURL.appendingPathComponent("files/\(fileID)"),
             params: ["alt": "media"]
         )
-        var request = URLRequest(url: url)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = 3600
-
-        let (data, response) = try await session.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-
-        guard (200..<300).contains(statusCode) else {
-            throw mapHTTPError(statusCode: statusCode)
+        let response = try await performAuthorized { token in
+            var request = URLRequest(url: url)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.timeoutInterval = 3600
+            return request
         }
 
-        return data
+        guard (200..<300).contains(response.statusCode) else {
+            throw mapHTTPError(statusCode: response.statusCode)
+        }
+
+        return response.data
     }
 
     public func remove(at path: String) async throws {
@@ -293,14 +308,20 @@ public final class GoogleDriveFileSystem: CloudFileSystem, @unchecked Sendable {
                 "parents": [currentID]
             ]
 
-            let token = try await tokenProvider()
-            var request = URLRequest(url: Self.apiBaseURL.appendingPathComponent("files"))
-            request.httpMethod = "POST"
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONSerialization.data(withJSONObject: metadata)
+            let metadataBody = try JSONSerialization.data(withJSONObject: metadata)
+            let url = Self.apiBaseURL.appendingPathComponent("files")
 
-            let json = try await performRequest(request)
+            // Creating a folder makes a new one each time, so a retry would leave two folders of
+            // the same name and later lookups could pick either
+            let response = try await performAuthorized(body: metadataBody, isSafeToRepeat: false) { token in
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                return request
+            }
+
+            let json = try decodeJSON(response)
             if let folderID = json["id"] as? String {
                 currentID = folderID
                 folderIDCache[nextPath] = currentID
@@ -387,47 +408,78 @@ public final class GoogleDriveFileSystem: CloudFileSystem, @unchecked Sendable {
     // MARK: - API Helpers
 
     private func queryFiles(query: String, fields: String) async throws -> [Any] {
-        let token = try await tokenProvider()
         let url = urlWithQuery(Self.apiBaseURL.appendingPathComponent("files"), params: [
             "q": query,
             "fields": fields
         ])
-        var request = URLRequest(url: url)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let response = try await performAuthorized { token in
+            var request = URLRequest(url: url)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            return request
+        }
 
-        let json = try await performRequest(request)
+        let json = try decodeJSON(response)
         return json["files"] as? [Any] ?? []
     }
 
     private func deleteItem(withID itemID: String) async throws {
-        let token = try await tokenProvider()
-        var request = URLRequest(url: Self.apiBaseURL.appendingPathComponent("files/\(itemID)"))
-        request.httpMethod = "DELETE"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let url = Self.apiBaseURL.appendingPathComponent("files/\(itemID)")
+        let response = try await performAuthorized { token in
+            var request = URLRequest(url: url)
+            request.httpMethod = "DELETE"
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            return request
+        }
 
-        let (_, response) = try await session.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-
-        // 204 No Content = success, 404 = already deleted
-        guard statusCode == 204 || statusCode == 404 else {
-            throw mapHTTPError(statusCode: statusCode)
+        // 204 No Content = success, 404 = already deleted, and a retry of a delete that got
+        // through would see exactly that
+        guard response.statusCode == 204 || response.statusCode == 404 else {
+            throw mapHTTPError(statusCode: response.statusCode)
         }
     }
 
-    private func performRequest(_ request: URLRequest) async throws -> [String: Any] {
+    /// Sends an authorized request, and on a 401 gets a fresh token and sends it once more.
+    ///
+    /// The retry sits here, at one request, rather than around a whole operation. A listing that
+    /// runs to several pages takes a fresh token per page, so a token that expires mid-listing
+    /// costs one repeated page instead of the whole listing.
+    ///
+    /// - Parameters:
+    ///   - makeRequest: Builds the request from a token. Called again with the new token on a retry.
+    ///   - body: Data to upload, for a PUT or POST.
+    ///   - isSafeToRepeat: Pass false when repeating the request could do the work twice.
+    private func performAuthorized(
+        body: Data? = nil,
+        isSafeToRepeat: Bool = true,
+        makeRequest: (String) -> URLRequest
+    ) async throws -> HTTPClient.Response {
+        let token = try await tokenProvider()
+        let response = try await http.perform(prepared(makeRequest(token)), uploading: body, isSafeToRepeat: isSafeToRepeat)
+
+        // A 401 usually means the token died in flight. Only a refreshable token is worth retrying
+        guard response.statusCode == 401, let tokenRefresher else { return response }
+
+        // Say which token was refused, so a refresh already running cannot answer with it
+        let freshToken = try await tokenRefresher(token)
+        return try await http.perform(prepared(makeRequest(freshToken)), uploading: body, isSafeToRepeat: isSafeToRepeat)
+    }
+
+    private func prepared(_ request: URLRequest) -> URLRequest {
         var req = request
         req.cachePolicy = .reloadIgnoringLocalCacheData
         if req.timeoutInterval == 0 { req.timeoutInterval = 60 }
+        return req
+    }
 
-        let (data, response) = try await session.data(for: req)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-
-        guard (200..<300).contains(statusCode) else {
-            throw mapHTTPError(statusCode: statusCode)
+    /// Turns a response into JSON, mapping the statuses this API uses onto `CloudFileSystemError`.
+    private func decodeJSON(_ response: HTTPClient.Response) throws -> [String: Any] {
+        guard (200..<300).contains(response.statusCode) else {
+            throw mapHTTPError(statusCode: response.statusCode)
         }
 
-        return try parseJSON(data)
+        return try parseJSON(response.data)
     }
+
 
     private func parseJSON(_ data: Data) throws -> [String: Any] {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {

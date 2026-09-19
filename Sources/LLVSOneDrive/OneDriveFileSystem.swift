@@ -30,7 +30,10 @@ public final class OneDriveFileSystem: CloudFileSystem, @unchecked Sendable {
 
     private static let graphBaseURL = URL(string: "https://graph.microsoft.com/v1.0")!
 
-    private let session: URLSession
+    private let http: HTTPClient
+
+    /// Asks the authenticator for a new token after a 401. Nil when the caller supplied a static token.
+    private let tokenRefresher: (@Sendable (String) async throws -> String)?
 
     /// The session used when none is supplied. Not lazy: a lazy var is not thread-safe.
     static func makeDefaultSession() -> URLSession {
@@ -43,34 +46,43 @@ public final class OneDriveFileSystem: CloudFileSystem, @unchecked Sendable {
     // MARK: - Initialization
 
     /// Creates a OneDrive file system with a static access token.
-    /// - Parameter session: Pass your own to control networking. Mainly for tests.
-    public init(accessToken: String, session: URLSession? = nil) {
+    ///
+    /// A static token cannot be refreshed, so a 401 is reported rather than retried.
+    /// - Parameters:
+    ///   - session: Pass your own to control networking. Mainly for tests.
+    ///   - retryPolicy: How hard to try again when the server is busy or briefly broken.
+    ///   - sleeper: Waits between attempts. Tests supply their own, so they do not really sleep.
+    public init(accessToken: String, session: URLSession? = nil, retryPolicy: HTTPClient.RetryPolicy = .default, sleeper: (any HTTPSleeper)? = nil) {
         self.tokenProvider = { accessToken }
-        self.session = session ?? Self.makeDefaultSession()
+        self.tokenRefresher = nil
+        self.http = HTTPClient(session: session ?? Self.makeDefaultSession(), policy: retryPolicy, sleeper: sleeper)
     }
 
     /// Creates a OneDrive file system with an authenticator that
     /// automatically refreshes expired tokens.
-    /// - Parameter session: Pass your own to control networking. Mainly for tests.
-    public init(authenticator: OneDriveAuthenticator, session: URLSession? = nil) {
+    /// - Parameters:
+    ///   - session: Pass your own to control networking. Mainly for tests.
+    ///   - retryPolicy: How hard to try again when the server is busy or briefly broken.
+    ///   - sleeper: Waits between attempts. Tests supply their own, so they do not really sleep.
+    public init(authenticator: OneDriveAuthenticator, session: URLSession? = nil, retryPolicy: HTTPClient.RetryPolicy = .default, sleeper: (any HTTPSleeper)? = nil) {
         self.tokenProvider = { try await authenticator.validAccessToken() }
-        self.session = session ?? Self.makeDefaultSession()
+        self.tokenRefresher = { staleToken in try await authenticator.freshAccessToken(replacing: staleToken) }
+        self.http = HTTPClient(session: session ?? Self.makeDefaultSession(), policy: retryPolicy, sleeper: sleeper)
     }
 
     // MARK: - CloudFileSystem
 
     public func fileExists(at path: String) async throws -> Bool {
-        let token = try await tokenProvider()
         let url = graphURL(forItemAtPath: path)
-        var request = URLRequest(url: url)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let response = try await performAuthorized { token in
+            var request = URLRequest(url: url)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            return request
+        }
 
-        let (_, response) = try await session.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-
-        if statusCode == 404 { return false }
-        if (200..<300).contains(statusCode) { return true }
-        throw mapHTTPError(statusCode: statusCode)
+        if response.statusCode == 404 { return false }
+        if (200..<300).contains(response.statusCode) { return true }
+        throw mapHTTPError(statusCode: response.statusCode)
     }
 
     public func contentsOfDirectory(at path: String) async throws -> [String] {
@@ -79,11 +91,12 @@ public final class OneDriveFileSystem: CloudFileSystem, @unchecked Sendable {
         var nextURL: URL? = graphURL(forChildrenAtPath: absPath)
 
         while let currentURL = nextURL {
-            let token = try await tokenProvider()
-            var request = URLRequest(url: currentURL)
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-            let json = try await performRequest(request)
+            let response = try await performAuthorized { token in
+                var request = URLRequest(url: currentURL)
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                return request
+            }
+            let json = try decodeJSON(response)
             let entries = json["value"] as? [[String: Any]] ?? []
 
             for entry in entries {
@@ -108,58 +121,56 @@ public final class OneDriveFileSystem: CloudFileSystem, @unchecked Sendable {
 
     public func upload(data: Data, to path: String) async throws {
         // OneDrive auto-creates intermediate folders on PUT
-        let token = try await tokenProvider()
         let url = graphURL(forContentAtPath: path)
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "PUT"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 3600
+        // A PUT writes the whole file at a fixed path, so repeating it leaves the same result
+        let response = try await performAuthorized(body: data) { token in
+            var request = URLRequest(url: url)
+            request.httpMethod = "PUT"
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = 3600
+            return request
+        }
 
-        let (_, response) = try await session.upload(for: request, from: data)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-
-        guard (200..<300).contains(statusCode) else {
-            throw mapHTTPError(statusCode: statusCode)
+        guard (200..<300).contains(response.statusCode) else {
+            throw mapHTTPError(statusCode: response.statusCode)
         }
     }
 
     public func download(from path: String) async throws -> Data {
-        let token = try await tokenProvider()
         let url = graphURL(forContentAtPath: path)
 
-        var request = URLRequest(url: url)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = 3600
+        let response = try await performAuthorized { token in
+            var request = URLRequest(url: url)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.timeoutInterval = 3600
+            return request
+        }
 
-        let (data, response) = try await session.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-
-        if statusCode == 404 {
+        if response.statusCode == 404 {
             throw CloudFileSystemError.fileNotFound
         }
 
-        guard (200..<300).contains(statusCode) else {
-            throw mapHTTPError(statusCode: statusCode)
+        guard (200..<300).contains(response.statusCode) else {
+            throw mapHTTPError(statusCode: response.statusCode)
         }
 
-        return data
+        return response.data
     }
 
     public func remove(at path: String) async throws {
-        let token = try await tokenProvider()
         let url = graphURL(forItemAtPath: path)
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-        let (_, response) = try await session.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let response = try await performAuthorized { token in
+            var request = URLRequest(url: url)
+            request.httpMethod = "DELETE"
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            return request
+        }
 
         // 204 No Content = success, 404 = already gone
-        guard statusCode == 204 || statusCode == 404 else {
-            throw mapHTTPError(statusCode: statusCode)
+        guard response.statusCode == 204 || response.statusCode == 404 else {
+            throw mapHTTPError(statusCode: response.statusCode)
         }
     }
 
@@ -226,23 +237,50 @@ public final class OneDriveFileSystem: CloudFileSystem, @unchecked Sendable {
 
     // MARK: - Request Helpers
 
-    private func performRequest(_ request: URLRequest) async throws -> [String: Any] {
+    /// Sends an authorized request, and on a 401 gets a fresh token and sends it once more.
+    ///
+    /// The retry sits here, at one request, rather than around a whole operation. A listing that
+    /// runs to several pages takes a fresh token per page, so a token that expires mid-listing
+    /// costs one repeated page instead of the whole listing.
+    ///
+    /// - Parameters:
+    ///   - makeRequest: Builds the request from a token. Called again with the new token on a retry.
+    ///   - body: Data to upload, for a PUT or POST.
+    ///   - isSafeToRepeat: Pass false when repeating the request could do the work twice.
+    private func performAuthorized(
+        body: Data? = nil,
+        isSafeToRepeat: Bool = true,
+        makeRequest: (String) -> URLRequest
+    ) async throws -> HTTPClient.Response {
+        let token = try await tokenProvider()
+        let response = try await http.perform(prepared(makeRequest(token)), uploading: body, isSafeToRepeat: isSafeToRepeat)
+
+        // A 401 usually means the token died in flight. Only a refreshable token is worth retrying
+        guard response.statusCode == 401, let tokenRefresher else { return response }
+
+        // Say which token was refused, so a refresh already running cannot answer with it
+        let freshToken = try await tokenRefresher(token)
+        return try await http.perform(prepared(makeRequest(freshToken)), uploading: body, isSafeToRepeat: isSafeToRepeat)
+    }
+
+    private func prepared(_ request: URLRequest) -> URLRequest {
         var req = request
         req.cachePolicy = .reloadIgnoringLocalCacheData
         if req.timeoutInterval == 0 { req.timeoutInterval = 60 }
+        return req
+    }
 
-        let (data, response) = try await session.data(for: req)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-
-        if statusCode == 404 {
+    /// Turns a response into JSON, mapping the statuses this API uses onto `CloudFileSystemError`.
+    private func decodeJSON(_ response: HTTPClient.Response) throws -> [String: Any] {
+        if response.statusCode == 404 {
             throw CloudFileSystemError.fileNotFound
         }
 
-        guard (200..<300).contains(statusCode) else {
-            throw mapHTTPError(statusCode: statusCode)
+        guard (200..<300).contains(response.statusCode) else {
+            throw mapHTTPError(statusCode: response.statusCode)
         }
 
-        return try parseJSON(data)
+        return try parseJSON(response.data)
     }
 
     private func parseJSON(_ data: Data) throws -> [String: Any] {

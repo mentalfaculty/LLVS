@@ -33,7 +33,7 @@ import AuthenticationServices
 /// // Create file system — tokens refresh automatically
 /// let fs = GoogleDriveFileSystem(authenticator: authenticator)
 /// ```
-public final class GoogleDriveAuthenticator: @unchecked Sendable {
+public final class GoogleDriveAuthenticator: Sendable {
 
     // MARK: - Configuration
 
@@ -60,7 +60,7 @@ public final class GoogleDriveAuthenticator: @unchecked Sendable {
 
     // MARK: - Stored Credential
 
-    private struct StoredCredential: Codable {
+    struct StoredCredential: OAuthCredential {
         var accessToken: String
         var refreshToken: String
         var expiresAt: Date
@@ -73,35 +73,56 @@ public final class GoogleDriveAuthenticator: @unchecked Sendable {
     private static let authorizationURL = URL(string: "https://accounts.google.com/o/oauth2/v2/auth")!
     private static let tokenURL = URL(string: "https://oauth2.googleapis.com/token")!
 
-    private var credential: StoredCredential?
+    /// Holds the credential and makes sure only one refresh is ever in flight.
+    private let tokens: OAuthTokenStore<StoredCredential>
 
-    private var keychainService: String {
-        "com.llvs.googledrive.\(configuration.clientID)"
-    }
-
-    private lazy var session: URLSession = {
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        return URLSession(configuration: config)
-    }()
+    private let http: HTTPClient
 
     // MARK: - Initialization
 
-    public init(configuration: Configuration) {
+    /// - Parameters:
+    ///   - session: Pass your own to control networking. Mainly for tests.
+    ///   - retryPolicy: How hard to try again when the identity service is busy or briefly broken.
+    ///   - sleeper: Waits between attempts. Tests supply their own, so they do not really sleep.
+    public convenience init(configuration: Configuration, session: URLSession? = nil, retryPolicy: HTTPClient.RetryPolicy = .default, sleeper: (any HTTPSleeper)? = nil) {
+        self.init(
+            configuration: configuration,
+            storage: nil,
+            session: session,
+            retryPolicy: retryPolicy,
+            sleeper: sleeper
+        )
+    }
+
+    /// - Parameter storage: Where to keep the credential. Nil uses the Keychain. Mainly for tests.
+    init(configuration: Configuration, storage: (any OAuthCredentialStorage)?, session: URLSession? = nil, retryPolicy: HTTPClient.RetryPolicy = .default, sleeper: (any HTTPSleeper)? = nil) {
         self.configuration = configuration
-        self.credential = loadCredentialFromKeychain()
+        let resolvedSession: URLSession
+        if let session {
+            resolvedSession = session
+        } else {
+            let config = URLSessionConfiguration.default
+            config.timeoutIntervalForRequest = 30
+            resolvedSession = URLSession(configuration: config)
+        }
+        self.http = HTTPClient(session: resolvedSession, policy: retryPolicy, sleeper: sleeper)
+        if let storage {
+            self.tokens = OAuthTokenStore(storage: storage)
+        } else {
+            self.tokens = OAuthTokenStore(keychainService: "com.llvs.googledrive.\(configuration.clientID)")
+        }
     }
 
     // MARK: - Public API
 
     /// Whether the user has previously authorized (has a stored refresh token).
     public var isAuthorized: Bool {
-        credential?.refreshToken != nil
+        get async { await tokens.credential?.refreshToken != nil }
     }
 
     /// Returns a valid access token, refreshing if expired.
     public func validAccessToken() async throws -> String {
-        guard let cred = credential else {
+        guard let cred = await tokens.credential else {
             throw CloudFileSystemError.authenticationFailed
         }
 
@@ -110,13 +131,27 @@ public final class GoogleDriveAuthenticator: @unchecked Sendable {
             return cred.accessToken
         }
 
-        return try await refreshAccessToken(refreshToken: cred.refreshToken)
+        return try await refreshAccessToken()
+    }
+
+    /// Discards the current access token and gets a new one.
+    ///
+    /// Call this after a 401. The stored token may look unexpired and still be refused, because the
+    /// server can revoke it early.
+    /// - Parameter staleAccessToken: The token that was refused, so a refresh already under way
+    ///   cannot answer with that same token.
+    public func freshAccessToken(replacing staleAccessToken: String? = nil) async throws -> String {
+        try await refreshAccessToken(replacing: staleAccessToken)
     }
 
     /// Clears stored tokens and deauthorizes.
-    public func deauthorize() {
-        credential = nil
-        deleteCredentialFromKeychain()
+    public func deauthorize() async {
+        await tokens.clear()
+    }
+
+    /// Puts a credential in place without going through the browser. For tests.
+    func seed(accessToken: String, refreshToken: String, expiresAt: Date) async {
+        await tokens.store(StoredCredential(accessToken: accessToken, refreshToken: refreshToken, expiresAt: expiresAt))
     }
 
     // MARK: - Interactive Authorization
@@ -125,12 +160,16 @@ public final class GoogleDriveAuthenticator: @unchecked Sendable {
 
     @MainActor
     public func authorize(presenting anchor: ASPresentationAnchor) async throws {
-        let code = try await obtainAuthorizationCode(presenting: anchor)
-        try await exchangeCodeForTokens(code)
+        // PKCE ties the code to this app: the verifier never leaves the device, and the code is
+        // worthless to anyone who intercepts it on the redirect without it
+        let pkce = PKCEChallenge()
+        let state = OAuthState.make()
+        let code = try await obtainAuthorizationCode(presenting: anchor, pkce: pkce, state: state)
+        try await exchangeCodeForTokens(code, verifier: pkce.verifier)
     }
 
     @MainActor
-    private func obtainAuthorizationCode(presenting anchor: ASPresentationAnchor) async throws -> String {
+    private func obtainAuthorizationCode(presenting anchor: ASPresentationAnchor, pkce: PKCEChallenge, state: String) async throws -> String {
         let scope = configuration.scopes.joined(separator: " ")
         var components = URLComponents(url: Self.authorizationURL, resolvingAgainstBaseURL: false)!
         components.queryItems = [
@@ -140,6 +179,9 @@ public final class GoogleDriveAuthenticator: @unchecked Sendable {
             URLQueryItem(name: "scope", value: scope),
             URLQueryItem(name: "access_type", value: "offline"),
             URLQueryItem(name: "prompt", value: "consent"),
+            URLQueryItem(name: "state", value: state),
+            URLQueryItem(name: "code_challenge", value: pkce.challenge),
+            URLQueryItem(name: "code_challenge_method", value: "S256"),
         ]
 
         let authURL = components.url!
@@ -150,11 +192,16 @@ public final class GoogleDriveAuthenticator: @unchecked Sendable {
 
         return try await withCheckedThrowingContinuation { continuation in
             let anchorProvider = AnchorProvider(anchor: anchor)
+            // Nothing else holds the session once start() returns, and a released session dismisses
+            // its own sheet. The box is captured by the closure, so the session lives until it fires
+            let sessionBox = SessionBox()
             let session = ASWebAuthenticationSession(
                 url: authURL,
                 callbackURLScheme: callbackScheme
             ) { callbackURL, error in
-                withExtendedLifetime(anchorProvider) {}
+                // Capturing the box is what keeps the session alive; letting go here breaks the
+                // cycle between the session and this closure
+                defer { sessionBox.session = nil; sessionBox.anchorProvider = nil }
 
                 if let error {
                     continuation.resume(throwing: error)
@@ -168,13 +215,32 @@ public final class GoogleDriveAuthenticator: @unchecked Sendable {
                     return
                 }
 
+                // A callback whose state is not the one we sent did not come from our request
+                let returnedState = components.queryItems?.first(where: { $0.name == "state" })?.value
+                guard let returnedState, OAuthState.matches(returnedState, state) else {
+                    continuation.resume(throwing: CloudFileSystemError.authenticationFailed)
+                    return
+                }
+
                 continuation.resume(returning: code)
             }
 
             session.presentationContextProvider = anchorProvider
             session.prefersEphemeralWebBrowserSession = false
+            sessionBox.session = session
+            sessionBox.anchorProvider = anchorProvider
             session.start()
         }
+    }
+
+    /// Holds the authentication session and its context provider alive while the sheet is up.
+    ///
+    /// Both need it. `presentationContextProvider` is a weak property, and nothing else refers to
+    /// the session once `start()` returns, so without this the sheet can dismiss itself.
+    @MainActor
+    private final class SessionBox {
+        var session: ASWebAuthenticationSession?
+        var anchorProvider: AnchorProvider?
     }
 
     private final class AnchorProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
@@ -193,12 +259,13 @@ public final class GoogleDriveAuthenticator: @unchecked Sendable {
 
     // MARK: - Token Exchange
 
-    private func exchangeCodeForTokens(_ code: String) async throws {
+    private func exchangeCodeForTokens(_ code: String, verifier: String) async throws {
         let body = [
             "code": code,
             "client_id": configuration.clientID,
             "redirect_uri": configuration.redirectURI,
             "grant_type": "authorization_code",
+            "code_verifier": verifier,
         ]
 
         let tokenResponse = try await performTokenRequest(body)
@@ -214,32 +281,39 @@ public final class GoogleDriveAuthenticator: @unchecked Sendable {
             refreshToken: refreshToken,
             expiresAt: Date().addingTimeInterval(TimeInterval(expiresIn))
         )
-        credential = cred
-        saveCredentialToKeychain(cred)
+        await tokens.store(cred)
     }
 
-    private func refreshAccessToken(refreshToken: String) async throws -> String {
-        let body = [
-            "refresh_token": refreshToken,
-            "client_id": configuration.clientID,
-            "grant_type": "refresh_token",
-        ]
+    /// Refreshes the access token, with only one refresh in flight at a time.
+    ///
+    /// Several uploads running at once all see the token expire together. Without this they would
+    /// each refresh, and Google may invalidate the older refresh tokens as it issues new ones, so
+    /// the last one home could leave a good credential broken. Callers arriving during a refresh
+    /// await the one already running instead of starting another.
+    private func refreshAccessToken(replacing staleAccessToken: String? = nil) async throws -> String {
+        try await tokens.refresh(replacing: staleAccessToken) { [self] refreshToken in
+            let body = [
+                "refresh_token": refreshToken,
+                "client_id": configuration.clientID,
+                "grant_type": "refresh_token",
+            ]
 
-        let tokenResponse = try await performTokenRequest(body)
+            let tokenResponse = try await performTokenRequest(body)
 
-        guard let accessToken = tokenResponse["access_token"] as? String,
-              let expiresIn = tokenResponse["expires_in"] as? Int else {
-            throw CloudFileSystemError.authenticationFailed
+            guard let accessToken = tokenResponse["access_token"] as? String,
+                  let expiresIn = tokenResponse["expires_in"] as? Int else {
+                throw CloudFileSystemError.authenticationFailed
+            }
+
+            // Google may return a new refresh token — use it if present
+            let newRefreshToken = tokenResponse["refresh_token"] as? String ?? refreshToken
+
+            return StoredCredential(
+                accessToken: accessToken,
+                refreshToken: newRefreshToken,
+                expiresAt: Date().addingTimeInterval(TimeInterval(expiresIn))
+            )
         }
-
-        let cred = StoredCredential(
-            accessToken: accessToken,
-            refreshToken: refreshToken,
-            expiresAt: Date().addingTimeInterval(TimeInterval(expiresIn))
-        )
-        credential = cred
-        saveCredentialToKeychain(cred)
-        return accessToken
     }
 
     private func performTokenRequest(_ body: [String: String]) async throws -> [String: Any] {
@@ -248,16 +322,17 @@ public final class GoogleDriveAuthenticator: @unchecked Sendable {
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
         let bodyString = body.map { "\($0.key)=\(urlEncode($0.value))" }.joined(separator: "&")
-        request.httpBody = bodyString.data(using: .utf8)
+        let bodyData = Data(bodyString.utf8)
 
-        let (data, response) = try await session.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        // A token request is safe to repeat: the same code or refresh token gives the same answer,
+        // and a busy identity service is exactly the case worth waiting out
+        let response = try await http.perform(request, uploading: bodyData)
 
-        guard (200..<300).contains(statusCode) else {
+        guard (200..<300).contains(response.statusCode) else {
             throw CloudFileSystemError.authenticationFailed
         }
 
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        guard let json = try JSONSerialization.jsonObject(with: response.data) as? [String: Any] else {
             throw CloudFileSystemError.authenticationFailed
         }
 
@@ -265,52 +340,7 @@ public final class GoogleDriveAuthenticator: @unchecked Sendable {
     }
 
     private func urlEncode(_ string: String) -> String {
-        string.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? string
-    }
-
-    // MARK: - Keychain
-
-    private func saveCredentialToKeychain(_ credential: StoredCredential) {
-        guard let data = try? JSONEncoder().encode(credential) else { return }
-
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: keychainService,
-            kSecAttrAccount as String: "credential",
-        ]
-
-        SecItemDelete(query as CFDictionary)
-
-        var addQuery = query
-        addQuery[kSecValueData as String] = data
-        SecItemAdd(addQuery as CFDictionary, nil)
-    }
-
-    private func loadCredentialFromKeychain() -> StoredCredential? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: keychainService,
-            kSecAttrAccount as String: "credential",
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-
-        guard status == errSecSuccess, let data = result as? Data else {
-            return nil
-        }
-
-        return try? JSONDecoder().decode(StoredCredential.self, from: data)
-    }
-
-    private func deleteCredentialFromKeychain() {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: keychainService,
-            kSecAttrAccount as String: "credential",
-        ]
-        SecItemDelete(query as CFDictionary)
+        // The default set leaves "+" and "&" alone, which would corrupt a form body
+        string.addingPercentEncoding(withAllowedCharacters: .oauthFormAllowed) ?? string
     }
 }
