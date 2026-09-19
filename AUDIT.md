@@ -31,7 +31,7 @@ Read-only audit at commit 92fe81b (tag 0.9). `swift test` passes: 170 tests. Fin
 
 ## Important — snapshots
 
-19. **Chunk names are not scoped by snapshot ID.** Chunks are overwritten in place and the manifest is written last, so a reader with the old manifest can assemble mixed chunks. No hash or size check.
+19. ✅ FIXED (chunks live under `snapshots/<snapshotId>/`; upload order is chunks, then manifest, then delete the replaced snapshot; a manifest id that is not path-safe is refused. The hash and size checks arrived with item 20) **Chunk names are not scoped by snapshot ID.** Chunks are overwritten in place and the manifest is written last, so a reader with the old manifest can assemble mixed chunks. No hash or size check.
 20. ✅ FIXED (staging directory, then move; size check against the manifest) **Bootstrap unzips straight into the live store root.** A failure midway leaves version files without values, and those versions are never re-fetched.
 21. ✅ PARTLY FIXED (manifest is scanned before zipping, so the archive is a superset; still no lock) **The zip is taken from a live store with no lock.** `versionCount` and `latestVersionId` are scanned after zipping and can disagree with the archive.
 
@@ -39,7 +39,8 @@ Read-only audit at commit 92fe81b (tag 0.9). `swift test` passes: 170 tests. Fin
 
 22. ✅ FIXED (README rewritten against the current API) **README code samples do not compile.** L68-72, L227-228, L264-268 use completion handlers; L219-221 omits `usesFileCoordination:`. L100 says macOS 10.15 / iOS 13; L88 says `from: "0.3.0"`; L293-300 says four targets and no dependencies. No mention of LLVSModel or the new backends. L328-332 lists samples that no longer exist.
 23. **`docs/` is a 2019 Jekyll blog** that teaches the removed Combine API and links to a deleted sample.
-24. **About 3,000 lines of backend code have no tests**: CloudKit, Google Drive, OneDrive, WebDAV (including the pure `WebDAVResponseParser`), Box, pCloud, `FolderBasedExchange`, `Cache`, `ExchangeSerializer`. No `assertMacroExpansion` tests. `StoreCoordinator` has no dedicated tests.
+24. 🔶 PARTLY FIXED (Google Drive, OneDrive and WebDAV are now covered through a `URLProtocol` fake server in `LLVSNetworkTests`; CloudKit, Box and pCloud still have none, because each needs its vendor SDK and a live account) **About 3,000 lines of backend code have no tests**: CloudKit, Google Drive, OneDrive, WebDAV (including the pure `WebDAVResponseParser`), Box, pCloud, `FolderBasedExchange`, `Cache`, `ExchangeSerializer`. No `assertMacroExpansion` tests. `StoreCoordinator` has no dedicated tests.
+    - Worth doing without a live account: `CloudKitExchange.chunkRecordName` and `legacyChunkRecordName` are `static` and pure, and they encode a wire format. Changing either silently makes every chunk in every existing store unreachable or un-deletable, and nothing would fail. They need a test target for `LLVSCloudKit`, which does not exist yet.
 25. ✅ ADDED `.github/workflows/ci.yml` (not yet seen to run on GitHub) **No CI.** No `.github/`.
 26. ✅ FIXED going forward (0.10.0 is three-part; the old tags are left as they are) **Tags 0.7, 0.8, 0.9 are two-part.** SPM `from:` needs three-part semver. Duplicate old tags exist (0.1 and 0.1.0, etc.).
 27. ✅ FIXED for Box and pCloud (branch `safety-pass`, package traits `Box` / `PCloud`; ZIPFoundation in core still open) **Box and pCloud SDKs are in every consumer's dependency graph**, because they are top-level package dependencies. Core LLVS depends on ZIPFoundation for one file.

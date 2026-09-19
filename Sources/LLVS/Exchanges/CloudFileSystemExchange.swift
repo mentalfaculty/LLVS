@@ -25,6 +25,8 @@ public final class CloudFileSystemExchange: Exchange, SnapshotExchange, @uncheck
         case versionFileInvalid
         case changesFileInvalid
         case snapshotChunkMissing(Int)
+        /// A manifest carried an id that could not be used as a path component.
+        case snapshotIdNotPathSafe(String)
     }
 
     public let store: Store
@@ -120,35 +122,57 @@ public final class CloudFileSystemExchange: Exchange, SnapshotExchange, @uncheck
             let exists = try await cloudFileSystem.fileExists(at: manifestPath)
             guard exists else { return nil }
             let data = try await cloudFileSystem.download(from: manifestPath)
-            return try JSONDecoder().decode(SnapshotManifest.self, from: data)
+            let manifest = try JSONDecoder().decode(SnapshotManifest.self, from: data)
+            // The id becomes part of a path, so refuse one that could point outside the snapshot
+            // directory before any caller builds a path or a delete out of it
+            guard manifest.hasPathSafeId else { throw Error.snapshotIdNotPathSafe(manifest.snapshotId) }
+            return manifest
         } catch let error as CloudFileSystemError where error.isNotFound {
             return nil
         }
     }
 
-    public func retrieveSnapshotChunk(index: Int) async throws -> Data {
-        let chunkPath = snapshotsPath + "/" + String(format: "chunk-%03d", index)
+    public func retrieveSnapshotChunk(snapshotId: String, index: Int) async throws -> Data {
         do {
-            return try await cloudFileSystem.download(from: chunkPath)
+            return try await cloudFileSystem.download(from: chunkPath(snapshotId: snapshotId, index: index))
         } catch {
             throw Error.snapshotChunkMissing(index)
         }
     }
 
     public func sendSnapshot(manifest: SnapshotManifest, chunkProvider: @escaping @Sendable (Int) throws -> Data) async throws {
-        // Remove previous snapshot if any
-        try? await cloudFileSystem.removeDirectory(at: snapshotsPath)
+        // Which snapshot, if any, this one replaces. Read before uploading, so the clean-up at the
+        // end removes the one that was current when we started and not some third party's
+        let replacedSnapshotId = try await retrieveSnapshotManifest()?.snapshotId
 
-        // Write chunks first
+        // Chunks first, under this snapshot's own id, so nothing the old manifest points at moves
         for i in 0..<manifest.chunkCount {
             let chunkData = try chunkProvider(i)
-            let chunkPath = snapshotsPath + "/" + String(format: "chunk-%03d", i)
-            try await cloudFileSystem.upload(data: chunkData, to: chunkPath)
+            try await cloudFileSystem.upload(data: chunkData, to: chunkPath(snapshotId: manifest.snapshotId, index: i))
         }
 
-        // Write manifest last
+        // Then the manifest, which is what makes the new snapshot the current one
         let manifestData = try JSONEncoder().encode(manifest)
-        try await cloudFileSystem.upload(data: manifestData, to: snapshotsPath + "/manifest.json")
+        try await cloudFileSystem.upload(data: manifestData, to: manifestPath)
+
+        // Only now is the old snapshot unreachable through the manifest, so its chunks can go.
+        // A reader that started before the manifest changed may still be fetching them, so a
+        // failure here is not worth reporting: the next upload will try again
+        if let replacedSnapshotId, replacedSnapshotId != manifest.snapshotId {
+            try? await cloudFileSystem.removeDirectory(at: snapshotDirectory(snapshotId: replacedSnapshotId))
+        }
+    }
+
+    // MARK: - Snapshot Paths
+
+    private var manifestPath: String { snapshotsPath + "/manifest.json" }
+
+    private func snapshotDirectory(snapshotId: String) -> String {
+        snapshotsPath + "/" + snapshotId
+    }
+
+    private func chunkPath(snapshotId: String, index: Int) -> String {
+        snapshotDirectory(snapshotId: snapshotId) + "/" + String(format: "chunk-%03d", index)
     }
 }
 

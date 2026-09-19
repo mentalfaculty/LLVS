@@ -30,6 +30,18 @@ public struct SnapshotManifest: Codable, Sendable {
         self.totalSize = totalSize
         self.sha256 = sha256
     }
+
+    /// Whether the id is safe to put in a path.
+    ///
+    /// Chunks live in a directory named after the snapshot, and the manifest comes from the remote,
+    /// so an id of `../versions` would send a delete outside the snapshots directory. Ids this
+    /// library writes are UUIDs; anything else is refused rather than sanitised, because a manifest
+    /// with a surprising id is not one to keep guessing about.
+    public var hasPathSafeId: Bool {
+        !snapshotId.isEmpty
+            && snapshotId.count <= 128
+            && snapshotId.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }
+    }
 }
 
 /// Policy controlling automatic snapshot creation after sync.

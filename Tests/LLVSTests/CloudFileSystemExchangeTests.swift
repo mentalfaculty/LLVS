@@ -186,14 +186,13 @@ final class MockCloudFileSystem: CloudFileSystem, @unchecked Sendable {
         }
 
         // Retrieve manifest
-        let retrieved = try await exchange2.retrieveSnapshotManifest()
-        #expect(retrieved != nil)
-        #expect(retrieved?.chunkCount == 3)
-        #expect(retrieved?.latestVersionId == manifest.latestVersionId)
+        let retrieved = try #require(try await exchange2.retrieveSnapshotManifest())
+        #expect(retrieved.chunkCount == 3)
+        #expect(retrieved.latestVersionId == manifest.latestVersionId)
 
-        // Retrieve chunks
+        // Retrieve chunks, addressed by the id the manifest carries, as a reader would
         for i in 0..<3 {
-            let chunkData = try await exchange2.retrieveSnapshotChunk(index: i)
+            let chunkData = try await exchange2.retrieveSnapshotChunk(snapshotId: retrieved.snapshotId, index: i)
             #expect(chunkData == chunks[i])
         }
     }
@@ -225,5 +224,229 @@ final class MockCloudFileSystem: CloudFileSystem, @unchecked Sendable {
         // Store2 should not see storeA's versions via exchangeB
         let idsFromB = try await exchangeB.retrieveAllVersionIdentifiers()
         #expect(idsFromB.count == 1) // Only storeB's version
+    }
+
+    // MARK: - Snapshot Chunk Isolation
+
+    private func manifest(chunkCount: Int, versionCount: Int = 5) -> SnapshotManifest {
+        SnapshotManifest(
+            format: "test",
+            latestVersionId: Version.ID(UUID().uuidString),
+            versionCount: versionCount,
+            chunkCount: chunkCount,
+            totalSize: Int64(chunkCount * 100)
+        )
+    }
+
+    @Test func chunksAreStoredUnderTheirOwnSnapshotId() async throws {
+        let manifest = manifest(chunkCount: 2)
+
+        try await exchange1.sendSnapshot(manifest: manifest) { index in
+            Data("chunk-\(index)".utf8)
+        }
+
+        // Every chunk sits inside a directory named for the snapshot, so a later snapshot
+        // writing chunk-000 cannot land on this one's
+        let chunkPaths = mockFS.storedPaths.filter { $0.contains("chunk-") }
+        #expect(chunkPaths.count == 2)
+        #expect(chunkPaths.allSatisfy { $0.contains("/\(manifest.snapshotId)/") },
+                "chunk paths were: \(chunkPaths)")
+    }
+
+    @Test func aReaderInterruptedByANewSnapshotFailsRatherThanMixingChunks() async throws {
+        // This is the bug. A reader fetched manifest A and is part-way through its chunks when a
+        // second device uploads snapshot B. Before, B's chunks overwrote A's in place, so the
+        // reader silently assembled halves of two different stores and restored the result.
+        //
+        // Now A's chunks live under A's id, so B cannot land on them. B's upload does delete them
+        // once B's manifest is live — keeping every snapshot would grow without bound — so the
+        // interrupted reader gets a missing chunk. That throws out of `bootstrapFromSnapshot`
+        // before anything is written to the store, and the next attempt picks up B cleanly.
+        // A loud failure that restores nothing beats a silent one that restores a mixture.
+        let manifestA = manifest(chunkCount: 2)
+        try await exchange1.sendSnapshot(manifest: manifestA) { index in
+            Data("A-chunk-\(index)".utf8)
+        }
+
+        // The reader takes the manifest, and one chunk, before anything changes
+        let readerManifest = try #require(try await exchange2.retrieveSnapshotManifest())
+        let firstChunk = try await exchange2.retrieveSnapshotChunk(snapshotId: readerManifest.snapshotId, index: 0)
+        #expect(String(data: firstChunk, encoding: .utf8) == "A-chunk-0")
+
+        // Now a second snapshot lands and replaces the first
+        let manifestB = manifest(chunkCount: 2)
+        try await exchange1.sendSnapshot(manifest: manifestB) { index in
+            Data("B-chunk-\(index)".utf8)
+        }
+
+        // The reader asks for A's second chunk. It must not be handed B's
+        // Gone, rather than silently replaced by B's. Matching the specific case matters: a bare
+        // `catch` would keep this test green if some unrelated failure started throwing here
+        do {
+            let chunk = try await exchange2.retrieveSnapshotChunk(snapshotId: readerManifest.snapshotId, index: 1)
+            Issue.record("expected the chunk to be gone, got \(String(data: chunk, encoding: .utf8) ?? "?")")
+        } catch let error as CloudFileSystemExchange.Error {
+            guard case .snapshotChunkMissing(1) = error else {
+                Issue.record("expected a missing chunk 1, got \(error)")
+                return
+            }
+        }
+
+        // And B's own chunks are intact and correct for a reader starting now
+        let freshManifest = try #require(try await exchange2.retrieveSnapshotManifest())
+        #expect(freshManifest.snapshotId == manifestB.snapshotId)
+        let bChunk = try await exchange2.retrieveSnapshotChunk(snapshotId: freshManifest.snapshotId, index: 1)
+        #expect(String(data: bChunk, encoding: .utf8) == "B-chunk-1")
+    }
+
+    @Test func theReplacedSnapshotsChunksAreCleanedUp() async throws {
+        // Keeping every snapshot forever would grow without bound
+        let manifestA = manifest(chunkCount: 2)
+        try await exchange1.sendSnapshot(manifest: manifestA) { index in Data("A\(index)".utf8) }
+
+        let manifestB = manifest(chunkCount: 2)
+        try await exchange1.sendSnapshot(manifest: manifestB) { index in Data("B\(index)".utf8) }
+
+        let remaining = mockFS.storedPaths.filter { $0.contains("chunk-") }
+        #expect(remaining.allSatisfy { $0.contains("/\(manifestB.snapshotId)/") },
+                "the old snapshot's chunks were left behind: \(remaining)")
+        #expect(remaining.count == 2)
+    }
+
+    @Test func theManifestIsWrittenAfterTheChunks() async throws {
+        // A reader that sees the new manifest must find its chunks already there. Uploading the
+        // manifest first would point readers at chunks that had not arrived.
+        let recordingFS = RecordingCloudFileSystem()
+        let exchange = CloudFileSystemExchange(cloudFileSystem: recordingFS, store: store1)
+        let manifest = manifest(chunkCount: 3)
+
+        try await exchange.sendSnapshot(manifest: manifest) { index in Data("c\(index)".utf8) }
+
+        let manifestIndex = try #require(recordingFS.uploadOrder.firstIndex { $0.hasSuffix("manifest.json") })
+        let lastChunkIndex = try #require(recordingFS.uploadOrder.lastIndex { $0.contains("chunk-") })
+        #expect(lastChunkIndex < manifestIndex, "upload order was: \(recordingFS.uploadOrder)")
+    }
+
+    @Test func theOldChunksGoOnlyAfterTheNewManifestIsWritten() async throws {
+        // The dangerous ordering: deleting first leaves a reader with a manifest pointing at
+        // chunks that are already gone
+        let recordingFS = RecordingCloudFileSystem()
+        let exchange = CloudFileSystemExchange(cloudFileSystem: recordingFS, store: store1)
+
+        let manifestA = manifest(chunkCount: 1)
+        try await exchange.sendSnapshot(manifest: manifestA) { _ in Data("A".utf8) }
+
+        recordingFS.resetLog()
+
+        let manifestB = manifest(chunkCount: 1)
+        try await exchange.sendSnapshot(manifest: manifestB) { _ in Data("B".utf8) }
+
+        // Uploads and deletes go into one log, so their positions are directly comparable
+        let log = recordingFS.operationLog
+        let manifestWrite = try #require(log.firstIndex {
+            if case let .upload(path) = $0 { return path.hasSuffix("snapshots/manifest.json") }
+            return false
+        })
+        let oldSnapshotRemoval = try #require(log.firstIndex {
+            if case let .removeDirectory(path) = $0 { return path.contains(manifestA.snapshotId) }
+            return false
+        })
+
+        #expect(oldSnapshotRemoval > manifestWrite,
+                "the old snapshot was removed before the new manifest landed: \(log)")
+    }
+
+    @Test func aManifestWithAnUnsafeIdIsRefused() async throws {
+        // The manifest comes from the remote, and its id becomes a path component. An id of
+        // "../versions" would send the clean-up delete outside the snapshots directory.
+        let hostile = SnapshotManifest(
+            snapshotId: "../../versions",
+            format: "test",
+            latestVersionId: Version.ID(UUID().uuidString),
+            versionCount: 1,
+            chunkCount: 1,
+            totalSize: 10
+        )
+        let data = try JSONEncoder().encode(hostile)
+        try await mockFS.upload(data: data, to: exchange2.basePath + "/snapshots/manifest.json")
+
+        await #expect(throws: CloudFileSystemExchange.Error.self) {
+            _ = try await self.exchange2.retrieveSnapshotManifest()
+        }
+    }
+
+    @Test func aPlainUUIDIdIsAccepted() async throws {
+        // The guard must not reject the ids this library actually writes
+        let manifest = manifest(chunkCount: 1)
+        #expect(manifest.hasPathSafeId)
+
+        try await exchange1.sendSnapshot(manifest: manifest) { _ in Data("x".utf8) }
+        let retrieved = try await exchange2.retrieveSnapshotManifest()
+        #expect(retrieved?.snapshotId == manifest.snapshotId)
+    }
+}
+
+// MARK: - Recording Cloud File System
+
+/// Records the order of writes and deletes, so a test can assert on their sequence.
+final class RecordingCloudFileSystem: CloudFileSystem, @unchecked Sendable {
+
+    enum Operation: Equatable {
+        case upload(String)
+        case removeDirectory(String)
+    }
+
+    private let lock = NSLock()
+    private var files: [String: Data] = [:]
+    private var log: [Operation] = []
+
+    var operationLog: [Operation] { lock.withLock { log } }
+
+    var uploadOrder: [String] {
+        operationLog.compactMap { if case let .upload(path) = $0 { return path } else { return nil } }
+    }
+
+    func resetLog() { lock.withLock { log = [] } }
+
+    func fileExists(at path: String) async throws -> Bool {
+        lock.withLock { files[path] != nil }
+    }
+
+    func contentsOfDirectory(at path: String) async throws -> [String] {
+        let prefix = path.hasSuffix("/") ? path : path + "/"
+        return lock.withLock {
+            var names: Set<String> = []
+            for key in files.keys where key.hasPrefix(prefix) {
+                let remainder = String(key.dropFirst(prefix.count))
+                if !remainder.contains("/") { names.insert(remainder) }
+            }
+            return Array(names).sorted()
+        }
+    }
+
+    func upload(data: Data, to path: String) async throws {
+        lock.withLock {
+            files[path] = data
+            log.append(.upload(path))
+        }
+    }
+
+    func download(from path: String) async throws -> Data {
+        try lock.withLock {
+            guard let data = files[path] else { throw CloudFileSystemError.fileNotFound }
+            return data
+        }
+    }
+
+    func remove(at path: String) async throws {
+        lock.withLock { files.removeValue(forKey: path) }
+    }
+
+    func removeDirectory(at path: String) async throws {
+        let prefix = path.hasSuffix("/") ? path : path + "/"
+        lock.withLock {
+            files = files.filter { !$0.key.hasPrefix(prefix) && $0.key != path }
+            log.append(.removeDirectory(path))
+        }
     }
 }

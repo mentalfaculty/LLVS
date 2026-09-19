@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed
+
+- Snapshot chunks are stored under the snapshot's own id (`snapshots/<snapshotId>/chunk-NNN`) rather than a shared path. A device uploading a new snapshot used to overwrite the chunks of the one a second device was still downloading, so the reader assembled halves of two different stores and restored the result. It now either completes with one snapshot's chunks or fails on a missing one, which throws before anything is written to the store.
+- A snapshot upload writes its chunks, then the manifest, then removes the snapshot it replaced. The previous order deleted first, so a failure part-way left no usable snapshot at all, and a reader mid-download lost the chunks it was fetching.
+- A manifest whose `snapshotId` is not usable as a path component is refused rather than used. The manifest is read from the remote and its id now names a directory, so an id such as `../versions` would have sent the clean-up delete outside the snapshots directory.
+- `CloudKitExchange` removes the chunk records left by earlier versions, which stored every snapshot's chunks under one set of record names. Those records carry no snapshot id, so the query that finds a replaced snapshot's chunks cannot see them, and they would have stayed in the user's iCloud storage for good. They are deleted by name on the first upload after the upgrade, using the chunk count from the manifest they belonged to.
+
 ### Added
 
 - `HTTPClient` in the core library: makes an HTTP request and retries while the problem looks temporary (408, 429, 5xx, and transport failures such as a dropped connection). Waits double from half a second and are capped, and a `Retry-After` header wins over that, within the same cap. A 4xx comes back as a response rather than an error, because what a 404 means differs per service. Callers pass `isSafeToRepeat: false` for a request that would do the work twice if repeated.
@@ -21,6 +28,7 @@
 
 ### Changed
 
+- **Breaking:** `SnapshotExchange.retrieveSnapshotChunk(index:)` is now `retrieveSnapshotChunk(snapshotId:index:)`. A chunk is addressed by the snapshot it belongs to, so a custom exchange must store chunks per snapshot rather than at a fixed path. All three built-in conformers were updated.
 - `WebDAVFileSystem`, `GoogleDriveFileSystem` and `OneDriveFileSystem` take an optional `URLSession`, so their networking can be tested. They built their own in a `lazy var` before, which no test could reach, and which is not thread-safe. `WebDAVFileSystem.credential` is now a `let`. Passing both a session and a username and password traps, because a supplied session gets no credential delegate and would otherwise make unauthenticated requests silently.
 - `GoogleDriveAuthenticator` and `OneDriveAuthenticator` are now properly `Sendable` rather than `@unchecked Sendable`. Their credential moved into `OAuthTokenStore`, an actor, so it is no longer an unguarded mutable property.
 - **Breaking:** `isAuthorized` and `deauthorize()` on both authenticators are now `async`, because the credential they read lives on an actor. `await` them.

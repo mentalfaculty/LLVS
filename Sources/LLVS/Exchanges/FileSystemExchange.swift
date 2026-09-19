@@ -13,6 +13,8 @@ public final class FileSystemExchange: NSObject, Exchange, NSFilePresenter, Snap
         case versionFileInvalid
         case changesFileInvalid
         case snapshotChunkMissing(Int)
+        /// A manifest carried an id that could not be used as a path component.
+        case snapshotIdNotPathSafe(String)
     }
 
     public let store: Store
@@ -26,6 +28,16 @@ public final class FileSystemExchange: NSObject, Exchange, NSFilePresenter, Snap
     public var versionsDirectory: URL { return rootDirectoryURL.appendingPathComponent("versions") }
     public var changesDirectory: URL { return rootDirectoryURL.appendingPathComponent("changes") }
     public var snapshotsDirectory: URL { return rootDirectoryURL.appendingPathComponent("snapshots") }
+
+    /// Each snapshot's chunks live under its own id, so a new snapshot never overwrites the one
+    /// a reader is still fetching.
+    func snapshotDirectory(snapshotId: String) -> URL {
+        snapshotsDirectory.appendingPathComponent(snapshotId)
+    }
+
+    func chunkURL(snapshotId: String, index: Int) -> URL {
+        snapshotDirectory(snapshotId: snapshotId).appendingPathComponent(String(format: "chunk-%03d", index))
+    }
 
     public let usesFileCoordination: Bool
 
@@ -169,6 +181,11 @@ public final class FileSystemExchange: NSObject, Exchange, NSFilePresenter, Snap
                 do {
                     let data = try Data(contentsOf: manifestURL)
                     let manifest = try JSONDecoder().decode(SnapshotManifest.self, from: data)
+                    // The id becomes a directory name, so refuse one that could point elsewhere
+                    guard manifest.hasPathSafeId else {
+                        continuation.resume(throwing: Error.snapshotIdNotPathSafe(manifest.snapshotId))
+                        return
+                    }
                     continuation.resume(returning: manifest)
                 } catch {
                     continuation.resume(throwing: error)
@@ -177,10 +194,10 @@ public final class FileSystemExchange: NSObject, Exchange, NSFilePresenter, Snap
         }
     }
 
-    public func retrieveSnapshotChunk(index: Int) async throws -> Data {
+    public func retrieveSnapshotChunk(snapshotId: String, index: Int) async throws -> Data {
         try await withCheckedThrowingContinuation { continuation in
             queue.addOperation {
-                let chunkURL = self.snapshotsDirectory.appendingPathComponent(String(format: "chunk-%03d", index))
+                let chunkURL = self.chunkURL(snapshotId: snapshotId, index: index)
                 guard self.fileManager.fileExists(atPath: chunkURL.path) else {
                     continuation.resume(throwing: Error.snapshotChunkMissing(index))
                     return
@@ -199,23 +216,33 @@ public final class FileSystemExchange: NSObject, Exchange, NSFilePresenter, Snap
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Swift.Error>) in
             queue.addOperation {
                 do {
-                    // Remove previous snapshot if any
-                    if self.fileManager.fileExists(atPath: self.snapshotsDirectory.path) {
-                        try self.fileManager.removeItem(at: self.snapshotsDirectory)
+                    // Which snapshot this one replaces, read before anything is written
+                    let manifestURL = self.snapshotsDirectory.appendingPathComponent("manifest.json")
+                    var replacedSnapshotId: String?
+                    if let existingData = try? Data(contentsOf: manifestURL),
+                       let existing = try? JSONDecoder().decode(SnapshotManifest.self, from: existingData),
+                       existing.hasPathSafeId {
+                        replacedSnapshotId = existing.snapshotId
                     }
-                    try self.fileManager.createDirectory(at: self.snapshotsDirectory, withIntermediateDirectories: true, attributes: nil)
 
-                    // Write chunks
+                    // Chunks first, in this snapshot's own directory, so the old one is untouched
+                    let chunkDirectory = self.snapshotDirectory(snapshotId: manifest.snapshotId)
+                    try self.fileManager.createDirectory(at: chunkDirectory, withIntermediateDirectories: true, attributes: nil)
                     for i in 0..<manifest.chunkCount {
                         let chunkData = try chunkProvider(i)
-                        let chunkURL = self.snapshotsDirectory.appendingPathComponent(String(format: "chunk-%03d", i))
-                        try chunkData.write(to: chunkURL)
+                        try chunkData.write(to: self.chunkURL(snapshotId: manifest.snapshotId, index: i))
                     }
 
-                    // Write manifest
+                    // Then the manifest, which is what makes this the current snapshot
                     let manifestData = try JSONEncoder().encode(manifest)
-                    let manifestURL = self.snapshotsDirectory.appendingPathComponent("manifest.json")
                     try manifestData.write(to: manifestURL)
+
+                    // Only now can the replaced snapshot's chunks go. A reader that started before
+                    // the manifest changed may still be reading them, so a failure here is left
+                    // for the next upload rather than reported
+                    if let replacedSnapshotId, replacedSnapshotId != manifest.snapshotId {
+                        try? self.fileManager.removeItem(at: self.snapshotDirectory(snapshotId: replacedSnapshotId))
+                    }
 
                     continuation.resume()
                 } catch {

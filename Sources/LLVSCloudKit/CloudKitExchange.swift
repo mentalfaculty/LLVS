@@ -47,6 +47,8 @@ public final class CloudKitExchange: Exchange, @unchecked Sendable {
         case snapshotManifestDecodingFailed
         case snapshotChunkMissing(Int)
         case snapshotChunkAssetMissing(Int)
+        /// A manifest carried an id that could not be used to address its chunks.
+        case snapshotIdNotPathSafe(String)
     }
 
     /// Not lazy: a lazy var is not thread-safe, and this is touched from callback queues.
@@ -523,6 +525,14 @@ extension CloudKitExchange: SnapshotExchange {
                 }
                 do {
                     let manifest = try JSONDecoder().decode(SnapshotManifest.self, from: manifestData)
+                    // The id goes into record names and a query. It cannot escape a directory
+                    // here as it can on a file system, but every conformer should hand back a
+                    // manifest whose id is usable, or callers have to check it themselves
+                    guard manifest.hasPathSafeId else {
+                        log.error("Ignoring a snapshot manifest whose id is not usable: \(manifest.snapshotId)")
+                        continuation.resume(throwing: Error.snapshotIdNotPathSafe(manifest.snapshotId))
+                        return
+                    }
                     log.trace("Retrieved snapshot manifest: \(manifest.snapshotId)")
                     continuation.resume(returning: manifest)
                 } catch {
@@ -534,10 +544,10 @@ extension CloudKitExchange: SnapshotExchange {
         }
     }
 
-    public func retrieveSnapshotChunk(index: Int) async throws -> Data {
-        log.trace("Retrieving snapshot chunk \(index) from CloudKit")
+    public func retrieveSnapshotChunk(snapshotId: String, index: Int) async throws -> Data {
+        log.trace("Retrieving snapshot chunk \(index) of \(snapshotId) from CloudKit")
         return try await withCheckedThrowingContinuation { continuation in
-            let recordName = "\(storeIdentifier)_snapshot_chunk_\(index)"
+            let recordName = Self.chunkRecordName(storeIdentifier: storeIdentifier, snapshotId: snapshotId, index: index)
             let recordID = CKRecord.ID(recordName: recordName, zoneID: zoneID ?? .default)
             let operation = CKFetchRecordsOperation(recordIDs: [recordID])
             operation.desiredKeys = [CKRecord.ExchangeKey.snapshotChunkData.rawValue]
@@ -573,23 +583,79 @@ extension CloudKitExchange: SnapshotExchange {
     public func sendSnapshot(manifest: SnapshotManifest, chunkProvider: @escaping @Sendable (Int) throws -> Data) async throws {
         log.trace("Sending snapshot to CloudKit: \(manifest.chunkCount) chunks")
 
-        try await deleteExcessSnapshotChunks(keepingCount: manifest.chunkCount)
+        // Which snapshot this replaces, read before anything is written
+        let replacedManifest = try await retrieveSnapshotManifest()
+        let replacedSnapshotId = replacedManifest?.snapshotId
+        let replacedChunkCount = replacedManifest?.chunkCount
+
+        // Chunks carry this snapshot's id, so they never overwrite the ones a reader is fetching
         try await uploadSnapshotChunks(manifest: manifest, chunkProvider: chunkProvider)
+
+        // The manifest is what makes this snapshot the current one
         try await uploadSnapshotManifest(manifest)
+
+        // Only now is the previous snapshot unreachable. A reader that started earlier may still be
+        // fetching it, so a failure here is left for the next upload rather than reported
+        if let replacedSnapshotId, replacedSnapshotId != manifest.snapshotId {
+            try? await deleteSnapshotChunks(snapshotId: replacedSnapshotId)
+        }
+
+        // Chunks written before snapshots were scoped by id carry no `snapshotId` field, so the
+        // query above cannot see them, and they would sit in the user's iCloud storage forever.
+        // The replaced manifest says how many there were, and it is the only surviving record.
+        //
+        // This does not catch every one of them. The old code wrote its manifest last, so a
+        // first-ever upload that failed at that step left chunks behind with no manifest at all,
+        // and there is then nothing to read a count from. Its batching could also leave more
+        // chunks than a later manifest counts. Both leave orphaned storage rather than anything
+        // incorrect, and closing them would mean guessing at a range on every upload
+        if let replacedChunkCount {
+            try? await deleteLegacySnapshotChunks(count: replacedChunkCount)
+        }
     }
 
     // MARK: Snapshot Helpers
 
-    private func deleteExcessSnapshotChunks(keepingCount: Int) async throws {
-        log.trace("Querying for excess snapshot chunks beyond index \(keepingCount)")
-        let predicate = NSPredicate(format: "storeIdentifier = %@ AND snapshotChunkIndex >= %d", storeIdentifier, keepingCount)
+    /// The record name for one chunk. It carries the snapshot id, so two snapshots never collide.
+    static func chunkRecordName(storeIdentifier: String, snapshotId: String, index: Int) -> String {
+        "\(storeIdentifier)_snapshot_\(snapshotId)_chunk_\(index)"
+    }
+
+    /// The record name a version before 0.12 used, when all snapshots shared one set of chunks.
+    static func legacyChunkRecordName(storeIdentifier: String, index: Int) -> String {
+        "\(storeIdentifier)_snapshot_chunk_\(index)"
+    }
+
+    /// Removes chunks left by a version that stored them all at one set of names.
+    ///
+    /// They carry no `snapshotId`, so they cannot be queried for; their names are predictable, so
+    /// they are deleted by name instead. Deleting a name that is not there is not an error, so
+    /// after the first upload following the upgrade this is a no-op that costs one request.
+    private func deleteLegacySnapshotChunks(count: Int) async throws {
+        guard count > 0 else { return }
+        let recordIDs = (0..<count).map { index in
+            CKRecord.ID(
+                recordName: Self.legacyChunkRecordName(storeIdentifier: storeIdentifier, index: index),
+                zoneID: zoneID ?? .default
+            )
+        }
+        do {
+            try await deleteRecords(recordIDs)
+        } catch let error as CKError where error.code == .unknownItem || error.code == .partialFailure {
+            // Nothing there to remove, which is the normal case after the first sweep
+        }
+    }
+
+    private func deleteSnapshotChunks(snapshotId: String) async throws {
+        log.trace("Deleting chunks of the replaced snapshot \(snapshotId)")
+        let predicate = NSPredicate(format: "storeIdentifier = %@ AND snapshotId = %@", storeIdentifier, snapshotId)
         let query = CKQuery(recordType: CKRecord.ExchangeType.SnapshotChunk.rawValue, predicate: predicate)
         do {
             let records = try await queryDatabase(with: .query(query))
             if records.isEmpty {
-                log.trace("No excess snapshot chunks to delete")
+                log.trace("No chunks of \(snapshotId) to delete")
             } else {
-                log.trace("Deleting \(records.count) excess snapshot chunks")
+                log.trace("Deleting \(records.count) chunks of \(snapshotId)")
                 try await deleteRecords(records.map { $0.recordID })
             }
         } catch let error as CKError where error.code == .unknownItem {
@@ -626,11 +692,13 @@ extension CloudKitExchange: SnapshotExchange {
                     var tempFileURLs: [URL] = []
                     let records: [CKRecord] = try range.map { index in
                         let chunkData = try chunkProvider(index)
-                        let recordName = "\(self.storeIdentifier)_snapshot_chunk_\(index)"
+                        let recordName = Self.chunkRecordName(storeIdentifier: self.storeIdentifier, snapshotId: manifest.snapshotId, index: index)
                         let recordID = CKRecord.ID(recordName: recordName, zoneID: self.zoneID ?? .default)
                         let record = CKRecord(recordType: .init(CKRecord.ExchangeType.SnapshotChunk.rawValue), recordID: recordID)
                         record.setExchangeValue(self.storeIdentifier, forKey: .storeIdentifier)
                         record.setExchangeValue(index, forKey: .snapshotChunkIndex)
+                        // Stamped so the chunks of a replaced snapshot can be found and removed
+                        record.setExchangeValue(manifest.snapshotId, forKey: .snapshotId)
 
                         let tempFileURL = self.temporaryDirectory.appendingPathComponent(UUID().uuidString)
                         try chunkData.write(to: tempFileURL)
@@ -788,7 +856,7 @@ fileprivate extension CKRecord {
 
     enum ExchangeKey: String {
         case version, storeIdentifier, valueChanges, valueChangesAsset
-        case snapshotManifest, snapshotChunkIndex, snapshotChunkData
+        case snapshotManifest, snapshotChunkIndex, snapshotChunkData, snapshotId
     }
 
     func exchangeValue(forKey key: ExchangeKey) -> Any? {

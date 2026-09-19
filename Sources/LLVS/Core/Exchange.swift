@@ -16,9 +16,26 @@ enum ExchangeError: Swift.Error {
 
 public typealias VersionChanges = (version: Version, valueChanges: [Value.Change])
 
+/// Sends and receives whole-store snapshots, so a new device does not have to replay all history.
+///
+/// A snapshot's chunks are addressed by its own id, not by position alone. Uploading a snapshot
+/// therefore never overwrites the chunks of the one before it, and a reader that has the older
+/// manifest keeps fetching the chunks that go with it. Assembling halves of two snapshots would
+/// produce an archive that passes neither the size nor the hash check, but only after the whole
+/// download; with per-snapshot addressing it cannot happen at all.
 public protocol SnapshotExchange {
     func retrieveSnapshotManifest() async throws -> SnapshotManifest?
-    func retrieveSnapshotChunk(index: Int) async throws -> Data
+
+    /// - Parameters:
+    ///   - snapshotId: The `snapshotId` of the manifest the chunk belongs to.
+    ///   - index: Which chunk, counting from zero.
+    func retrieveSnapshotChunk(snapshotId: String, index: Int) async throws -> Data
+
+    /// Uploads the chunks, then the manifest, then removes whatever snapshot the manifest replaced.
+    ///
+    /// That order is what makes a concurrent reader safe: until the new manifest lands, a reader
+    /// sees the old one and its chunks are still there; afterwards it sees the new one and those
+    /// chunks are already uploaded. A failure part-way leaves the previous snapshot usable.
     func sendSnapshot(manifest: SnapshotManifest, chunkProvider: @escaping @Sendable (Int) throws -> Data) async throws
 }
 

@@ -287,13 +287,19 @@ public class StoreCoordinator: @unchecked Sendable {
         // Check format matches
         guard manifest.format == snapshotStorage.snapshotFormat else { return }
 
+        // The id becomes part of a path, and this manifest came from the remote
+        guard manifest.hasPathSafeId else {
+            log.error("Ignoring a snapshot whose id is not safe to use in a path: \(manifest.snapshotId)")
+            return
+        }
+
         // Download chunks to temp directory
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true, attributes: nil)
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
         for i in 0..<manifest.chunkCount {
-            let data = try await snapshotExchange.retrieveSnapshotChunk(index: i)
+            let data = try await snapshotExchange.retrieveSnapshotChunk(snapshotId: manifest.snapshotId, index: i)
             let chunkFile = tempDir.appendingPathComponent(String(format: "chunk-%03d", i))
             try data.write(to: chunkFile)
         }

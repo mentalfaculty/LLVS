@@ -357,6 +357,108 @@ import Foundation
         #expect(downloadedManifest?.versionCount == 50)
     }
 
+    @Test func chunksLiveUnderTheirOwnSnapshotDirectory() async throws {
+        // A second snapshot must not overwrite the chunks of the one a reader is still fetching
+        let fm = FileManager.default
+        let storage = FileStorage()
+        let snapshotDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        defer { try? fm.removeItem(at: snapshotDir) }
+
+        let manifestA = try storage.writeSnapshotChunks(storeRootURL: rootURL1, to: snapshotDir, maxChunkSize: 5_000_000)
+        try await exchange1.sendSnapshot(manifest: manifestA, chunkProvider: { index in
+            let chunkFile = snapshotDir.appendingPathComponent(String(format: "chunk-%03d", index))
+            return try Data(contentsOf: chunkFile)
+        })
+
+        let snapshotsDir = exchangeURL.appendingPathComponent("snapshots")
+        let chunkDirA = snapshotsDir.appendingPathComponent(manifestA.snapshotId)
+        #expect(fm.fileExists(atPath: chunkDirA.path), "chunks should sit under the snapshot's own id")
+        #expect(fm.fileExists(atPath: snapshotsDir.appendingPathComponent("manifest.json").path))
+
+        // A second snapshot replaces the first, and the first's directory goes with it
+        let manifestB = SnapshotManifest(
+            format: manifestA.format,
+            latestVersionId: manifestA.latestVersionId,
+            versionCount: manifestA.versionCount,
+            chunkCount: 1,
+            totalSize: 4
+        )
+        try await exchange1.sendSnapshot(manifest: manifestB, chunkProvider: { _ in Data("test".utf8) })
+
+        #expect(!fm.fileExists(atPath: chunkDirA.path), "the replaced snapshot's chunks should be cleaned up")
+        #expect(fm.fileExists(atPath: snapshotsDir.appendingPathComponent(manifestB.snapshotId).path))
+
+        // And the current manifest names the new snapshot
+        let current = try #require(try await exchange1.retrieveSnapshotManifest())
+        #expect(current.snapshotId == manifestB.snapshotId)
+    }
+
+    @Test(arguments: [
+        "",                                  // no id at all
+        ".",                                 // the directory itself
+        "..",                                // the parent
+        "../versions",                       // the traversal this guard exists for
+        "/etc/passwd",                       // absolute
+        "%2e%2e",                            // percent-encoded traversal
+        "a\\b",                              // backslash, a separator on some filesystems
+        "a/b",                               // a nested path where a name is expected
+        "café",                              // non-ASCII, which normalises differently per filesystem
+        "ＡＢ",                               // fullwidth forms that fold to ASCII
+        "id with spaces",
+        String(repeating: "a", count: 129),  // longer than the cap
+    ])
+    func anIdThatIsNotSafeInAPathIsRefused(id: String) {
+        let manifest = SnapshotManifest(
+            snapshotId: id,
+            format: "zip-v1",
+            latestVersionId: Version.ID(UUID().uuidString),
+            versionCount: 1,
+            chunkCount: 1,
+            totalSize: 10
+        )
+        #expect(!manifest.hasPathSafeId, "'\(id)' should not be usable as a path component")
+    }
+
+    @Test(arguments: [
+        "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",  // the form this library writes
+        "e621e1f8c36c495a93fc0c247a3e6e5f",
+        "snapshot_1",
+        "a",
+        String(repeating: "a", count: 128),      // exactly at the cap
+    ])
+    func anOrdinaryIdIsAccepted(id: String) {
+        let manifest = SnapshotManifest(
+            snapshotId: id,
+            format: "zip-v1",
+            latestVersionId: Version.ID(UUID().uuidString),
+            versionCount: 1,
+            chunkCount: 1,
+            totalSize: 10
+        )
+        #expect(manifest.hasPathSafeId, "'\(id)' should be usable as a path component")
+    }
+
+    @Test func aManifestWithAnUnsafeIdIsRefused() async throws {
+        // The id becomes a directory name, and the manifest is read from a shared directory
+        let fm = FileManager.default
+        let snapshotsDir = exchangeURL.appendingPathComponent("snapshots")
+        try fm.createDirectory(at: snapshotsDir, withIntermediateDirectories: true)
+
+        let hostile = SnapshotManifest(
+            snapshotId: "../../versions",
+            format: "zip-v1",
+            latestVersionId: Version.ID(UUID().uuidString),
+            versionCount: 1,
+            chunkCount: 1,
+            totalSize: 10
+        )
+        try JSONEncoder().encode(hostile).write(to: snapshotsDir.appendingPathComponent("manifest.json"))
+
+        await #expect(throws: FileSystemExchange.Error.self) {
+            _ = try await self.exchange1.retrieveSnapshotManifest()
+        }
+    }
+
     @Test func bootstrapFromSnapshot() async throws {
         let versions = makeLinearChain(count: 50)
 
