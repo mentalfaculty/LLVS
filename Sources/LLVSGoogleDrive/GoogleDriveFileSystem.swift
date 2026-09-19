@@ -290,11 +290,7 @@ public final class GoogleDriveFileSystem: CloudFileSystem, @unchecked Sendable {
             }
 
             // Check if folder exists
-            let query = "'\(currentID)' in parents and name='\(escapedQuery(component))' and mimeType='\(Self.folderMimeType)' and trashed=false"
-            let existing = try await queryFiles(query: query, fields: "files(id)")
-
-            if let existingFolder = (existing.first as? [String: Any]),
-               let existingID = existingFolder["id"] as? String {
+            if let existingID = try await folderID(named: component, inParent: currentID) {
                 currentID = existingID
                 folderIDCache[nextPath] = currentID
                 currentPath = nextPath
@@ -322,14 +318,47 @@ public final class GoogleDriveFileSystem: CloudFileSystem, @unchecked Sendable {
             }
 
             let json = try decodeJSON(response)
-            if let folderID = json["id"] as? String {
-                currentID = folderID
-                folderIDCache[nextPath] = currentID
+
+            // Drive permits two folders with the same name in the same parent, and the check above
+            // is not atomic with the create. Two devices setting up at once therefore both create
+            // one, and each would go on using its own — a permanent split, with half the versions
+            // in each folder. Asking again afterwards and taking the agreed winner makes both
+            // devices converge on the same folder, whichever of them got there first.
+            if let settledID = try await folderID(named: component, inParent: currentID) {
+                currentID = settledID
+            } else if let createdID = json["id"] as? String {
+                // The re-query found nothing, which should not happen when we just created one.
+                // Use what we made rather than failing the sync
+                currentID = createdID
             }
+            folderIDCache[nextPath] = currentID
             currentPath = nextPath
         }
 
         return currentID
+    }
+
+    /// The id of the folder with this name in this parent, or nil if there is none.
+    ///
+    /// Drive allows several folders to share a name, so this may find more than one. Every device
+    /// must then pick the same one or they sync into different folders and never see each other's
+    /// versions. The lowest id wins: ids are stable and unique, so the choice is the same
+    /// everywhere without any device having to coordinate.
+    ///
+    /// The extra folders are left in place rather than deleted. Another device may have already
+    /// written versions into one, and deleting it would destroy them; a stray empty folder is a
+    /// much smaller problem than that.
+    private func folderID(named name: String, inParent parentID: String) async throws -> String? {
+        let query = "'\(parentID)' in parents and name='\(escapedQuery(name))' and mimeType='\(Self.folderMimeType)' and trashed=false"
+        // Every match, not one page of them: the lowest of an arbitrary subset is not the lowest,
+        // and Drive promises no order, so two devices seeing different pages would disagree
+        let matches = try await allQueryFiles(query: query, fields: "files(id)")
+
+        let ids = matches.compactMap { ($0 as? [String: Any])?["id"] as? String }
+        if ids.count > 1 {
+            log.warning("Google Drive has \(ids.count) folders named '\(name)'; using the one with the lowest id so every device agrees")
+        }
+        return ids.min()
     }
 
     // MARK: - Path Resolution
@@ -351,11 +380,9 @@ public final class GoogleDriveFileSystem: CloudFileSystem, @unchecked Sendable {
                 continue
             }
 
-            let query = "'\(currentID)' in parents and name='\(escapedQuery(component))' and mimeType='\(Self.folderMimeType)' and trashed=false"
-            let results = try await queryFiles(query: query, fields: "files(id,name)")
-
-            guard let folder = results.first as? [String: Any],
-                  let folderID = folder["id"] as? String else {
+            // Same tiebreak as when the folder is created, or a device that made one folder could
+            // go on to resolve a different one of the same name
+            guard let folderID = try await folderID(named: component, inParent: currentID) else {
                 throw CloudFileSystemError.fileNotFound
             }
 
@@ -373,11 +400,7 @@ public final class GoogleDriveFileSystem: CloudFileSystem, @unchecked Sendable {
         let name = (absPath as NSString).lastPathComponent
 
         let parentID = try await resolveFolderID(forPath: parentPath)
-        let query = "'\(parentID)' in parents and name='\(escapedQuery(name))' and mimeType='\(Self.folderMimeType)' and trashed=false"
-        let results = try await queryFiles(query: query, fields: "files(id)")
-
-        guard let folder = results.first as? [String: Any],
-              let folderID = folder["id"] as? String else {
+        guard let folderID = try await folderID(named: name, inParent: parentID) else {
             throw CloudFileSystemError.fileNotFound
         }
 
@@ -407,6 +430,10 @@ public final class GoogleDriveFileSystem: CloudFileSystem, @unchecked Sendable {
 
     // MARK: - API Helpers
 
+    /// Runs a Drive query and returns the first page of matches.
+    ///
+    /// Callers that only want to know whether something exists, or want any one match, are served
+    /// by one page. A caller that must see *every* match needs `allQueryFiles` instead.
     private func queryFiles(query: String, fields: String) async throws -> [Any] {
         let url = urlWithQuery(Self.apiBaseURL.appendingPathComponent("files"), params: [
             "q": query,
@@ -420,6 +447,38 @@ public final class GoogleDriveFileSystem: CloudFileSystem, @unchecked Sendable {
 
         let json = try decodeJSON(response)
         return json["files"] as? [Any] ?? []
+    }
+
+    /// Runs a Drive query and returns every match, following `nextPageToken`.
+    ///
+    /// The token has to be named in `fields` or Drive leaves it out of the response, which would
+    /// make a truncated result look exactly like a complete one. Choosing a winner from among
+    /// duplicates needs all of them, so this pages rather than trusting one response.
+    private func allQueryFiles(query: String, fields: String) async throws -> [Any] {
+        var all: [Any] = []
+        var pageToken: String?
+
+        repeat {
+            var params: [String: String] = [
+                "q": query,
+                "fields": "nextPageToken,\(fields)",
+                "pageSize": "1000"
+            ]
+            if let pageToken { params["pageToken"] = pageToken }
+
+            let url = urlWithQuery(Self.apiBaseURL.appendingPathComponent("files"), params: params)
+            let response = try await performAuthorized { token in
+                var request = URLRequest(url: url)
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                return request
+            }
+
+            let json = try decodeJSON(response)
+            all.append(contentsOf: json["files"] as? [Any] ?? [])
+            pageToken = json["nextPageToken"] as? String
+        } while pageToken != nil
+
+        return all
     }
 
     private func deleteItem(withID itemID: String) async throws {
