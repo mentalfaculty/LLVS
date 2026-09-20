@@ -544,16 +544,28 @@ extension Store {
             // Decide from the two versions themselves rather than from the fork label. A fork
             // describes how the branches relate to their common ancestor, which is more than is
             // needed here: what matters is only whether the value exists at each end.
-            let valueAtTo = try value(id: diff.valueId, at: toVersion)
-            let existedAtFrom = try valueReference(id: diff.valueId, at: fromVersion) != nil
-            switch (valueAtTo, existedAtFrom) {
-            case let (.some(value), false):
+            let referenceAtTo = try valueReference(id: diff.valueId, at: toVersion)
+            let referenceAtFrom = try valueReference(id: diff.valueId, at: fromVersion)
+
+            // Two references to the same stored version are the same bytes, so there is nothing
+            // to apply. This costs two map lookups and saves reading the value and writing it
+            // back unchanged. Comparing the data itself would mean reading both, which is the
+            // expensive half; identity of the stored version is the part that is free.
+            if let referenceAtTo, let referenceAtFrom,
+               referenceAtTo.storedVersionId == referenceAtFrom.storedVersionId {
+                continue
+            }
+
+            switch (referenceAtTo, referenceAtFrom) {
+            case let (.some(reference), .none):
+                guard let value = try value(storedAt: reference) else { break }
                 changes.append(.insert(value))
-            case let (.some(value), true):
+            case let (.some(reference), .some):
+                guard let value = try value(storedAt: reference) else { break }
                 changes.append(.update(value))
-            case (.none, true):
+            case (.none, .some):
                 changes.append(.remove(diff.valueId))
-            case (.none, false):
+            case (.none, .none):
                 break // Absent at both ends. The diff can report a value that changed only
                       // between the ancestor and a branch neither end kept; there is nothing to do.
             }

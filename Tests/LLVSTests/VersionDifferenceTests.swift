@@ -109,6 +109,27 @@ import Foundation
         #expect(removed == ["l"])
     }
 
+    /// A value both ends resolve to the same stored version for is unchanged between them,
+    /// however the diff came to mention it. Reporting it would have a consumer rewrite bytes
+    /// it already has.
+    @Test func reportsNothingForAValueBothEndsShare() throws {
+        let base = try store.makeVersion(basedOnPredecessor: nil, inserting: [
+            value("shared", "same"), value("a", "one"),
+        ])
+        // Each branch changes something else, so "shared" is untouched by both and the two
+        // heads still point at the copy stored in base.
+        let left = try store.makeVersion(basedOnPredecessor: base.id, updating: [value("a", "left")])
+        let right = try store.makeVersion(basedOnPredecessor: base.id, updating: [value("a", "right")])
+
+        let changes = try store.valueChanges(updatingFrom: left.id, to: right.id)
+
+        #expect(!changes.contains { change in
+            if case let .update(value) = change { return value.id.rawValue == "shared" }
+            if case let .insert(value) = change { return value.id.rawValue == "shared" }
+            return false
+        })
+    }
+
     @Test func reportsNothingBetweenAVersionAndItself() throws {
         let v1 = try store.makeVersion(basedOnPredecessor: nil, inserting: [value("a", "one")])
         #expect(try store.valueChanges(updatingFrom: v1.id, to: v1.id).isEmpty)
