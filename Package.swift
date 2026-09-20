@@ -123,7 +123,7 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(
             name: "LLVSProjectionTests",
-            dependencies: ["LLVS", "LLVSSQLite", "LLVSProjection"],
+            dependencies: ["LLVS", "LLVSSQLite", "LLVSProjection", "LLVSModel"],
             swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(
             name: "LLVSNetworkTests",

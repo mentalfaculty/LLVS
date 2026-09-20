@@ -176,6 +176,65 @@ try coordinator.removeModel(Contact.self, instanceIdentifier: contact.id.uuidStr
 ```
 
 
+## Querying with LLVSProjection
+
+LLVS answers "what is this value at this version". It does not answer "which contacts were edited this week", because every value is an opaque blob keyed by ID.
+
+`LLVSProjection` fills that gap without making LLVS query-aware. It keeps a SQLite table of current values, updated from version diffs, and you query that. The store stays the truth; the table is an index over it.
+
+```swift
+import LLVSProjection
+
+let contacts = ProjectedType(
+    typeIdentifier: Contact.modelTypeIdentifier,
+    tableName: "contacts",
+    columns: [
+        ProjectedColumn(name: "name", declaration: "TEXT"),
+        ProjectedColumn(name: "age", declaration: "INTEGER"),
+    ],
+    extract: { value in
+        let contact = try JSONDecoder().decode(Contact.self, from: value.data)
+        return ["name": .text(contact.name), "age": .integer(Int64(contact.age))]
+    }
+)
+
+let follower = try ProjectionFollower(
+    databaseURL: databaseURL,
+    coordinator: coordinator,
+    types: [contacts],
+    schemaVersion: 1)
+```
+
+Project after a save, then query:
+
+```swift
+try coordinator.save(inserting: [value])
+await follower.projectCurrentVersion()
+
+let names = try await follower.query { database in
+    var names: [String] = []
+    try database.forEach(matchingQuery: "SELECT name FROM contacts WHERE age > 30 ORDER BY name") { row in
+        if let name: String = row.value(inColumnAtIndex: 0) { names.append(name) }
+    }
+    return names
+}
+```
+
+`followUpdates(onResult:)` drives the same thing from the coordinator's version stream, for an app that would rather not await each save.
+
+Four things are worth knowing before building on it.
+
+**The projection is an index, not a copy.** Declare only the columns you query or sort on, and read the whole object from the store once a query has named the IDs. That keeps writes cheap and the database small.
+
+**Changing your columns is a rebuild, not a migration.** Raise `schemaVersion`, and the next pass throws the tables away and re-projects everything from the store. There is no migration to write, because the truth never lived in SQLite. Losing the database entirely is the same event, and equally survivable.
+
+**A value that will not decode is skipped, not fatal.** If `extract` throws, because another device wrote a model this build cannot read, that value is left out and its ID comes back in `ProjectionResult.unreadableIds`. One unreadable value never blocks the rest, and nothing disappears without your app being told.
+
+**A pass is all or nothing.** Rows and the version marker are written in one transaction, so a crash part-way leaves the projection on its previous version rather than half-updated. Running again repeats the same work.
+
+`ProjectionFollower` is an actor, and it owns both the projector and the SQLite connection. Neither is thread-safe, so neither is reachable from outside it — which is why the database is opened from a URL rather than handed in, and why queries go through `query`.
+
+
 ## Concepts
 
 `StoreCoordinator` is convenient for common cases, but `Store` gives you direct access to the version graph: branching, merging, diffing, and time travel.
@@ -416,6 +475,18 @@ The _Samples_ directory has two SwiftUI apps. They are Xcode projects, not part 
 - **TheMessage** is a minimal app that syncs a single shared message via the public CloudKit database. Good for understanding the basics.
 - **LoCo** is a contact book that uses `LLVSModel`, `@MergeableModel`, and `MergeableArbiter`, and syncs via a private CloudKit zone.
 
+
+## Upgrading to 0.12
+
+**`LLVSModel` value IDs changed shape.** They are now `"<instance-id>/<TypeName>"` rather than `"<TypeName>/<instance-id>"`.
+
+The `Map` buckets values by the first two characters of their ID. With the type name leading, every instance of a type landed in one bucket, and each save rewrote a node listing all of them — O(N) per write, which does not hold once a store grows. The instance identifier now leads, so instances spread across buckets.
+
+If you use `modelValueID`, `modelTypeIdentifier(from:)` and `instanceIdentifier(from:)`, nothing in your code changes: the signatures are the same, and both accessors now split on the last slash rather than the first, so an instance identifier may itself contain slashes. If you built or parsed these IDs by hand, adjust.
+
+An existing store keeps its old IDs and goes on working, crowded into one bucket as before. There is no migration, and objects written by this version do not match the IDs written by an earlier one, so do not point two builds at one synced store across the upgrade.
+
+`fetchAllModels` now compares the type identifier rather than matching an ID prefix, so it scans every reference at the version. For a large store, project the type into `LLVSProjection` and query that instead.
 
 ## Upgrading to 0.11
 
