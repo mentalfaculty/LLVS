@@ -71,6 +71,16 @@ That inverts normal database advice, deliberately. A rebuild is usually frighten
 
 **Raw SQLite, via the existing `LLVSSQLite` target — not SwiftData.** SwiftData wants to own the object graph, persistence, and increasingly sync; two owners of truth is a bug factory. It also cannot easily span "apply these rows" and "record this version" in one transaction, which this design depends on. Raw SQLite gives transaction control, no migration ceremony on rebuild, and is boring — the right property beneath a truth store. An app wanting SwiftData in its UI may still have it; reading a plain SQLite is not hard, and the choice stays with the app.
 
+## Concurrency
+
+**Added after implementation.** The design above says nothing about threads, and that turned out to be the hardest constraint in the work.
+
+A projection pass reads the store while the app goes on writing to it. `Store` is `@unchecked Sendable`, but only its `history` is behind a `Mutex`; `valuesMap` is unguarded (`AUDIT.md` item 9, open). Reading a diff on a background task while the app saves therefore puts two threads inside the value map, which crashed the test suite with a signal rather than failing an assertion. Neither `Projector` nor `SQLiteDatabase` is thread-safe either.
+
+So the follower is an actor, `ProjectionFollower`, and it owns both the projector and the SQLite connection rather than receiving them: the database is opened from a URL inside the initialiser, and the projected database is read through `query(_:)` on the actor. Nothing that is not thread-safe is reachable from outside.
+
+This narrows but does not close the underlying race: an app can still call `coordinator.save` from any thread while a pass runs, and the actor cannot prevent that. Closing it properly means serialising access inside `Store`, which is audit item 9 and out of scope here. Until then, an app should await `projectCurrentVersion()` after its saves rather than rely on `followUpdates` racing them.
+
 ## Rebuild
 
 One entry point: drop the table, read every value at the current version, project it all in one transaction. It runs on three occasions — first launch, a missing or corrupt database, and a schema-version mismatch when the app changes its indexed columns. The app stores a schema version number; a mismatch triggers rebuild. There are no migrations.
