@@ -35,13 +35,16 @@ public extension StoreCoordinator {
         try save(removing: [valueId], in: branch)
     }
 
-    /// Fetch all model values of a given type by scanning value references for matching prefixes.
+    /// Fetch all model values of a given type by scanning value references for a matching type.
+    ///
+    /// This scans every reference at the version. The type identifier is the suffix of the
+    /// value ID, so there is no prefix to narrow the scan with — instance identifiers lead,
+    /// which is what keeps the `Map` buckets spread. See `modelValueID(typeIdentifier:instanceIdentifier:)`.
     func fetchAllModels<T: StorableModel>(_ type: T.Type, at version: Version.ID? = nil) throws -> [T] {
-        let prefix = T.modelTypeIdentifier + "/"
         let refs = try valueReferences(at: version)
         let decoder = JSONDecoder()
         return try refs.compactMap { ref in
-            guard ref.valueId.rawValue.hasPrefix(prefix) else { return nil }
+            guard modelTypeIdentifier(from: ref.valueId) == T.modelTypeIdentifier else { return nil }
             guard let value = try store.value(storedAt: ref) else { return nil }
             return try decoder.decode(T.self, from: value.data)
         }
