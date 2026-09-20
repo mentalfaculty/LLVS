@@ -532,9 +532,18 @@ extension Store {
         }
         guard fromVersion != toVersion else { return [] }
 
+        // Finding the greatest common ancestor builds the full ancestor set of one version, so
+        // it costs the length of history — and a consumer keeping a derived view in step pays
+        // it on every update, not occasionally as a merge does. Two consecutive versions are
+        // usually on one line, though, and then `fromVersion` is itself the ancestor. A short
+        // bounded search back from `toVersion` settles that case without the full walk.
         var commonAncestor: Version.ID?
         try queryHistory { history in
-            commonAncestor = try history.greatestCommonAncestor(ofVersionsIdentifiedBy: (fromVersion, toVersion))
+            if history.isAncestor(fromVersion, ofVersionIdentifiedBy: toVersion) {
+                commonAncestor = fromVersion
+            } else {
+                commonAncestor = try history.greatestCommonAncestor(ofVersionsIdentifiedBy: (fromVersion, toVersion))
+            }
         }
 
         let diffs = try valuesMap.differences(between: toVersion, and: fromVersion, withCommonAncestor: commonAncestor)

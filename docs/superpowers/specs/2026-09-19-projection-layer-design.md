@@ -59,7 +59,13 @@ Consequences:
 - **Rollback is free.** Moving the current version backwards, or onto a branch, runs the same code path.
 - **Cost tracks the diff, not the distance.** Diffing across a thousand versions costs what diffing across one costs, if the same ten values changed. This is what makes the design viable at Agenda size.
 
-Open risk, not designed around: `differences` takes a common ancestor, and computing it walks the DAG proportionally to history length. Every merge already pays this today, so it is not new risk, but it is the one place where old history still costs something. Measure before trusting it.
+**Measured, and fixed.** `differences` takes a common ancestor, and finding it walks the DAG proportionally to history length. This was first recorded here as "not new risk, since every merge already pays it", which was wrong in the way that mattered: a merge is occasional, while a projection pass runs on every save. The design had moved an O(history) operation onto the write path.
+
+Measurement: one diff cost 0.68 ms at 100 versions and 17.19 ms at 3000, linear, per save.
+
+The fix takes the common case out of the walk. Two consecutive versions are almost always on one line, and then the source version *is* the common ancestor. `History.isAncestor(_:ofVersionIdentifiedBy:searchLimit:)` searches back from the target alone and stops on a hit, so it answers in a few steps or gives up; the full search runs only when it gives up. The same measurements became 0.13 ms and 0.36 ms.
+
+What remains is not the walk. Over fifteen times the history a diff still costs about 2.4x, and a probe isolating the parts shows the ancestry check flat at 0.002 ms and a map lookup flat, so the growth is the size of the `Map` node holding the bucket the IDs land in — audit item 7, from the read side this time. With IDs sharing a prefix it is about 11x instead, which is what that item is about. `PerformanceTests.diffCostDoesNotGrowWithHistoryLength` bounds it and fails if the ancestry shortcut is removed.
 
 ## What lands in the table
 

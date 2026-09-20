@@ -130,6 +130,35 @@ import Foundation
         })
     }
 
+    /// The ancestry shortcut must not change any answer. A branch far enough back that the
+    /// bounded search cannot reach it falls through to the full common-ancestor walk, and both
+    /// paths must agree with what the contents actually are.
+    @Test func aDistantForkStillDiffsCorrectly() throws {
+        var head = try store.makeVersion(basedOnPredecessor: nil, inserting: [value("a", "base")])
+        let forkPoint = head.id
+
+        // Walk well past the bounded search limit, so the shortcut cannot find the fork point.
+        for i in 0..<150 {
+            head = try store.makeVersion(basedOnPredecessor: head.id, inserting: [value("line\(i)", "x")])
+        }
+        let longBranch = head.id
+        let shortBranch = try store.makeVersion(basedOnPredecessor: forkPoint,
+            updating: [value("a", "other")]).id
+
+        let changes = try store.valueChanges(updatingFrom: longBranch, to: shortBranch)
+
+        // Everything the long branch added must go, and "a" must take the short branch's value.
+        let removed = Set(changes.compactMap { change -> String? in
+            if case let .remove(id) = change { return id.rawValue }
+            return nil
+        })
+        #expect(removed.count == 150)
+        #expect(changes.contains { change in
+            if case let .update(value) = change { return text(of: value) == "other" }
+            return false
+        })
+    }
+
     @Test func reportsNothingBetweenAVersionAndItself() throws {
         let v1 = try store.makeVersion(basedOnPredecessor: nil, inserting: [value("a", "one")])
         #expect(try store.valueChanges(updatingFrom: v1.id, to: v1.id).isEmpty)
