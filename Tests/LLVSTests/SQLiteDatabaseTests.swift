@@ -54,4 +54,47 @@ import Foundation
             try self.database.forEach(matchingQuery: "SELECT abs(-9223372036854775807 - 1)") { _ in }
         }
     }
+
+    // MARK: - Transactions
+
+    private func countOfT() throws -> Int {
+        var count = 0
+        try database.forEach(matchingQuery: "SELECT a FROM T") { _ in count += 1 }
+        return count
+    }
+
+    @Test func transactionCommitsOnSuccess() throws {
+        try database.inTransaction {
+            try self.database.execute(statement: "INSERT INTO T (a) VALUES (?)", withBindingsList: [["x"]])
+        }
+        #expect(try countOfT() == 1)
+    }
+
+    @Test func transactionRollsBackOnThrow() throws {
+        struct Boom: Swift.Error {}
+        #expect(throws: Boom.self) {
+            try self.database.inTransaction {
+                try self.database.execute(statement: "INSERT INTO T (a) VALUES (?)", withBindingsList: [["x"]])
+                throw Boom()
+            }
+        }
+        #expect(try countOfT() == 0)
+    }
+
+    @Test func transactionReturnsTheBlockValue() throws {
+        let result = try database.inTransaction { 42 }
+        #expect(result == 42)
+    }
+
+    @Test func aRolledBackTransactionLeavesTheDatabaseUsable() throws {
+        struct Boom: Swift.Error {}
+        #expect(throws: Boom.self) {
+            try self.database.inTransaction { throw Boom() }
+        }
+        // A rollback that did not run would leave the transaction open and this would fail.
+        try database.inTransaction {
+            try self.database.execute(statement: "INSERT INTO T (a) VALUES (?)", withBindingsList: [["y"]])
+        }
+        #expect(try countOfT() == 1)
+    }
 }

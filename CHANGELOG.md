@@ -13,6 +13,7 @@
 
 ### Added
 
+- `SQLiteDatabase.inTransaction(_:)`, which commits when its block returns and rolls back when it throws, returning the block's value. It is for writes that must land together or not at all, where a partial result would leave no way to tell what had been applied. It does not nest.
 - `HTTPClient` in the core library: makes an HTTP request and retries while the problem looks temporary (408, 429, 5xx, and transport failures such as a dropped connection). Waits double from half a second and are capped, and a `Retry-After` header wins over that, within the same cap. A 4xx comes back as a response rather than an error, because what a 404 means differs per service. Callers pass `isSafeToRepeat: false` for a request that would do the work twice if repeated.
 - `HTTPClient.Response.requireSuccess(allowing:)`, for the codes a service treats as normal, such as WebDAV's 207, or its 405 for a directory that already exists.
 - Retry and backoff in the WebDAV, Google Drive, OneDrive and pCloud backends, which now send their requests through `HTTPClient`. A busy or briefly broken server is waited out instead of failing the sync. Two requests are deliberately never repeated, because repeating them would do the work twice: the Google Drive upload and its folder creation each create a new item with a new ID, so a retry after a lost reply would leave duplicates.
