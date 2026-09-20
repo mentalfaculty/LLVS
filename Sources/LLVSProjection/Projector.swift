@@ -18,7 +18,18 @@ public struct ProjectionResult: Sendable {
     /// Values whose `ProjectedType.extract` refused them. These were skipped rather than
     /// applied, and the pass still completed: one value this build cannot decode does not
     /// hold up the rest. Report them, because to a reader they are simply missing.
+    ///
+    /// Capped at `maximumReportedUnreadableIds`. A version-skew event, where a newer device
+    /// writes a model shape this build cannot decode, can make every value in a rebuild
+    /// unreadable, and a list of all of them helps nobody and costs memory. Use
+    /// `unreadableCount` for how many there really were.
     public let unreadableIds: [Value.ID]
+
+    /// How many values were skipped, which may exceed `unreadableIds.count`.
+    public let unreadableCount: Int
+
+    /// The most IDs a result will carry. Beyond this the count still rises.
+    public static let maximumReportedUnreadableIds = 100
 }
 
 /// Maintains a SQLite view of the current values in an LLVS store, so an app can query
@@ -92,7 +103,7 @@ public final class Projector {
             return try rebuild(at: version)
         }
         guard projected != version else {
-            return ProjectionResult(appliedCount: 0, unreadableIds: [])
+            return ProjectionResult(appliedCount: 0, unreadableIds: [], unreadableCount: 0)
         }
         let changes = try store.valueChanges(updatingFrom: projected, to: version)
         return try apply(changes, at: version, clearingFirst: false)
@@ -123,6 +134,7 @@ public final class Projector {
 
             var appliedCount = 0
             var unreadableIds: [Value.ID] = []
+            var unreadableCount = 0
 
             for change in changes {
                 switch change {
@@ -132,7 +144,10 @@ public final class Projector {
                     do {
                         row = try type.extract(value)
                     } catch {
-                        unreadableIds.append(value.id)
+                        unreadableCount += 1
+                        if unreadableIds.count < ProjectionResult.maximumReportedUnreadableIds {
+                            unreadableIds.append(value.id)
+                        }
                         continue
                     }
                     try self.upsert(row, id: value.id, into: type)
@@ -159,7 +174,10 @@ public final class Projector {
                     """,
                 withBindingsList: [[version.rawValue, Int64(self.schemaVersion)]])
 
-            return ProjectionResult(appliedCount: appliedCount, unreadableIds: unreadableIds)
+            return ProjectionResult(
+                appliedCount: appliedCount,
+                unreadableIds: unreadableIds,
+                unreadableCount: unreadableCount)
         }
     }
 

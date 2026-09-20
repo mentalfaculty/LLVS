@@ -147,7 +147,7 @@ struct Contact: StorableModel, Equatable, Identifiable, Codable {
 }
 ```
 
-`StorableModel` is `Codable` plus a stable `modelTypeIdentifier`. Each instance is stored as JSON in one value, with the identifier `"Contact/<instanceIdentifier>"`.
+`StorableModel` is `Codable` plus a stable `modelTypeIdentifier`. Each instance is stored as JSON in one value, with the identifier `"<instanceIdentifier>/Contact"`. The instance identifier leads so that instances of one type spread across the value map rather than crowding into a single node; see _Upgrading to 0.12_ if you have a store written by an earlier version.
 
 `@MergeableModel` generates a `Mergeable` conformance that does a three-way merge of each stored property. If one device changes `firstName` and another changes `city`, both edits survive. Properties that are themselves `Mergeable` (including optionals of `Mergeable` types) are merged recursively; plain `Equatable` properties are compared against the common ancestor. Nested types only need `@MergeableModel`; `StorableModel` is just for the top-level types you save.
 
@@ -228,7 +228,7 @@ Four things are worth knowing before building on it.
 
 **Changing your columns is a rebuild, not a migration.** Raise `schemaVersion`, and the next pass throws the tables away and re-projects everything from the store. There is no migration to write, because the truth never lived in SQLite. Losing the database entirely is the same event, and equally survivable.
 
-**A value that will not decode is skipped, not fatal.** If `extract` throws, because another device wrote a model this build cannot read, that value is left out and its ID comes back in `ProjectionResult.unreadableIds`. One unreadable value never blocks the rest, and nothing disappears without your app being told.
+**A value that will not decode is skipped, not fatal.** If `extract` throws, because another device wrote a model this build cannot read, that value is left out and its ID comes back in `ProjectionResult.unreadableIds`. One unreadable value never blocks the rest, and nothing disappears without your app being told. The ID list is capped, since a version-skew event can make every value unreadable at once; `unreadableCount` always gives the true number.
 
 **A pass is all or nothing.** Rows and the version marker are written in one transaction, so a crash part-way leaves the projection on its previous version rather than half-updated. Running again repeats the same work.
 

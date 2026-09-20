@@ -212,6 +212,24 @@ import Foundation
         #expect(try titles() == ["Alpha", "Readable"])
     }
 
+    /// A version-skew event can make every value unreadable at once. The reported list is
+    /// capped so a rebuild cannot hand the app a copy of every ID in the store, while the
+    /// count still says how bad it was.
+    @Test func theReportedUnreadableIdsAreCapped() throws {
+        let projector = try makeProjector()
+        let total = ProjectionResult.maximumReportedUnreadableIds + 25
+        let notes = (0..<total).map { ProjectionTestSupport.note("n\($0)", "CORRUPT") }
+        let v1 = try store.makeVersion(basedOnPredecessor: nil, inserting: notes)
+
+        let result = try projector.update(to: v1.id)
+
+        #expect(result.unreadableCount == total)
+        #expect(result.unreadableIds.count == ProjectionResult.maximumReportedUnreadableIds)
+        #expect(try titles() == [])
+        // The pass still completed, so the projection is at the new version with no rows.
+        #expect(try projector.projectedVersion() == v1.id)
+    }
+
     /// `update` is `@discardableResult`, so this wrapper exists only to give the throwing
     /// expectations above something to call that is unambiguous to the compiler.
     private func projectorUpdate(_ projector: Projector, to version: Version.ID) throws {
