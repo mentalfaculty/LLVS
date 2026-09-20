@@ -45,7 +45,11 @@ Two non-goals, stated so they are not eroded later:
 
 The naive loop assumes the new version descends from the old one. Often it does not: after a sync and merge, the current version jumps to a merge commit whose history includes edits that happened before edits already projected. History is a DAG, not a line.
 
-`Map.differences` is a set difference between two arbitrary versions, not a replay of the steps between them. It answers correctly when the target is sideways from the source, not after it.
+`Map.differences(between:and:withCommonAncestor:)` is a set difference between two arbitrary versions, not a replay of the steps between them. Given a true common ancestor it answers correctly when the target is sideways from the source, not after it.
+
+**Correction, found while planning.** No public API delivers this today, and the earlier draft of this section was wrong to imply otherwise. `Map` and `Map.Diff` are internal, so a separate library cannot reach them. The one public route, `Store.valueChanges(madeBetween:and:)` (`Store.swift:489`), passes `versionId1` itself as the common ancestor, which is only valid when the first version is an ancestor of the second. Its `switch` calls `fatalError` on the two-branch forks (`.twiceUpdated`, `.removedAndUpdated`, `.twiceInserted`, `.twiceRemoved`), so on two sideways versions it traps rather than answering.
+
+`History.greatestCommonAncestor(ofVersionsIdentifiedBy:)` (`History.swift:97`) is public and reachable through `store.queryHistory`. So the pieces exist; the join does not. Making that join public is a prerequisite task, and it must fold the two-branch forks into insert/update/remove against the target version rather than trapping on them.
 
 So the projector never replays history. It asks one question — what differs between where I am and where I need to be — and applies the answer as an upsert-and-delete set. No undo, no reverse diff, no ordering problem.
 
@@ -92,7 +96,9 @@ It is not free, and the cost was missed on first pass. Today's collision is both
 ## Order of work
 
 1. Fix Map bucketing.
-2. Settle the decode-failure reporting interface (policy decided above: skip and report).
-3. Build `LLVSProjection`.
+2. Add a public diff between two arbitrary versions, resolving the common ancestor and folding two-branch forks into a flat change set. See the correction under "Going backwards through a DAG".
+3. Build `LLVSProjection`, on top of that API.
+
+The decode-failure policy is settled above: skip and report.
 
 Coalescing stays untouched. Snapshots already cover the new-device case; cloud growth is real but is next year's problem, and easier once a projection exists.
