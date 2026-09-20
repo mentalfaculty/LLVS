@@ -16,6 +16,11 @@ import LLVSSQLite
 /// threads in one SQLite connection crash the process, so every pass and every query runs
 /// here instead.
 ///
+/// A pass also reads the `Store`, which offers no serialisation contract of its own
+/// (`AUDIT.md` item 9). That it is safe to do so while the app saves is a property of today's
+/// implementation rather than a promise; `StoreConcurrencyTests` in `LLVSTests` is what holds
+/// it in place.
+///
 /// ```swift
 /// let follower = try ProjectionFollower(
 ///     databaseURL: url, coordinator: coordinator, types: types, schemaVersion: 1)
@@ -65,7 +70,8 @@ public actor ProjectionFollower {
     /// Reads the projected database. This is how an app queries it: the connection stays on
     /// the actor, so a query cannot run while a projection pass is writing.
     ///
-    /// Do not let the `SQLiteDatabase` escape the block.
+    /// The `SQLiteDatabase` cannot escape the block: it is not `Sendable`, the block is not
+    /// `@Sendable`, and the return type must be. Extract what you need and return that.
     public func query<T: Sendable>(_ block: (SQLiteDatabase) throws -> T) throws -> T {
         try block(database)
     }

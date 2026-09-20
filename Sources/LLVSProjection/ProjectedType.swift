@@ -53,16 +53,36 @@ public struct ProjectedType: Sendable {
     /// its ID, rather than failing the whole pass.
     public let extract: @Sendable (Value) throws -> [String: SQLiteValue]
 
+    /// - Precondition: `tableName` and every column name must be a plain SQL identifier —
+    ///   a letter or underscore, then letters, digits or underscores. SQLite has no parameter
+    ///   binding for identifiers, so these are written into the statement as they are given.
+    ///   Checking here turns a typo into a clear failure at construction rather than a
+    ///   puzzling syntax error at the first write.
     public init(
         typeIdentifier: String,
         tableName: String,
         columns: [ProjectedColumn],
         extract: @escaping @Sendable (Value) throws -> [String: SQLiteValue]
     ) {
+        precondition(ProjectedType.isPlainIdentifier(tableName),
+            "ProjectedType table name is not a plain SQL identifier: \"\(tableName)\"")
+        for column in columns {
+            precondition(ProjectedType.isPlainIdentifier(column.name),
+                "ProjectedType column name is not a plain SQL identifier: \"\(column.name)\"")
+        }
+
         self.typeIdentifier = typeIdentifier
         self.tableName = tableName
         self.columns = columns
         self.extract = extract
+    }
+
+    /// ASCII only, deliberately: `Character.isLetter` accepts letters from any script, which
+    /// SQLite will not take in an unquoted identifier.
+    static func isPlainIdentifier(_ name: String) -> Bool {
+        guard let first = name.first else { return false }
+        guard first.isASCII, first.isLetter || first == "_" else { return false }
+        return name.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_") }
     }
 
     /// The table always carries `llvs_id`, the value ID, as its primary key. That is what

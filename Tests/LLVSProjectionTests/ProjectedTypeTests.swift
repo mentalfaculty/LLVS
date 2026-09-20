@@ -31,6 +31,21 @@ import Foundation
         #expect(type.createTableStatement() == "CREATE TABLE IF NOT EXISTS notes (llvs_id TEXT PRIMARY KEY)")
     }
 
+    @Test func acceptsPlainIdentifiers() {
+        #expect(ProjectedType.isPlainIdentifier("notes"))
+        #expect(ProjectedType.isPlainIdentifier("_private"))
+        #expect(ProjectedType.isPlainIdentifier("updated_at2"))
+    }
+
+    @Test func rejectsIdentifiersSQLiteWouldNotTakeUnquoted() {
+        #expect(!ProjectedType.isPlainIdentifier(""))
+        #expect(!ProjectedType.isPlainIdentifier("2fast"))          // leading digit
+        #expect(!ProjectedType.isPlainIdentifier("my table"))       // space
+        #expect(!ProjectedType.isPlainIdentifier("notes-archive"))  // hyphen
+        #expect(!ProjectedType.isPlainIdentifier("notes\"; DROP"))  // quote
+        #expect(!ProjectedType.isPlainIdentifier("notas_españolas")) // non-ASCII letter
+    }
+
     @Test func extractReturnsTheColumnValues() throws {
         let type = ProjectedType(
             typeIdentifier: "Note",
