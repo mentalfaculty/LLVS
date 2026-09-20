@@ -11,10 +11,10 @@ import LLVSSQLite
 
 /// Keeps a projection in step with a `StoreCoordinator`.
 ///
-/// An actor, because a projection pass reads the store while the app goes on writing to it,
-/// and neither `Projector` nor `Store`'s value map is thread-safe. Every pass therefore runs
-/// on this actor, and the app awaits `projectCurrentVersion()` after a save rather than
-/// letting a background loop read the store underneath it.
+/// An actor, because neither `Projector` nor the `SQLiteDatabase` beneath it is thread-safe,
+/// and a projection pass writes that database while the app reads it to answer queries. Two
+/// threads in one SQLite connection crash the process, so every pass and every query runs
+/// here instead.
 ///
 /// ```swift
 /// let follower = try ProjectionFollower(

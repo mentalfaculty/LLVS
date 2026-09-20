@@ -75,11 +75,15 @@ That inverts normal database advice, deliberately. A rebuild is usually frighten
 
 **Added after implementation.** The design above says nothing about threads, and that turned out to be the hardest constraint in the work.
 
-A projection pass reads the store while the app goes on writing to it. `Store` is `@unchecked Sendable`, but only its `history` is behind a `Mutex`; `valuesMap` is unguarded (`AUDIT.md` item 9, open). Reading a diff on a background task while the app saves therefore puts two threads inside the value map, which crashed the test suite with a signal rather than failing an assertion. Neither `Projector` nor `SQLiteDatabase` is thread-safe either.
+A first attempt followed the coordinator from a background `Task` while the app went on saving, and the test suite died with SIGSEGV and SIGBUS rather than a failed assertion.
 
-So the follower is an actor, `ProjectionFollower`, and it owns both the projector and the SQLite connection rather than receiving them: the database is opened from a URL inside the initialiser, and the projected database is read through `query(_:)` on the actor. Nothing that is not thread-safe is reachable from outside.
+**The first diagnosis was wrong, and the correction is the useful part.** It was recorded here as a `Store` data race, on the grounds that `Store` is `@unchecked Sendable` with only its `history` behind a `Mutex`. Code review checked that under Thread Sanitizer — 300 concurrent saves against 300 concurrent passes — and found no race. `Map` holds only a `let zone` and a `Mutex`-protected `Cache`, and `FileZone` is the same, so there was no unguarded state to race on.
 
-This narrows but does not close the underlying race: an app can still call `coordinator.save` from any thread while a pass runs, and the actor cannot prevent that. Closing it properly means serialising access inside `Store`, which is audit item 9 and out of scope here. Until then, an app should await `projectCurrentVersion()` after its saves rather than rely on `followUpdates` racing them.
+The real cause is `SQLiteDatabase`, which documents itself as not thread-safe and does no internal serialising. In the crashing design the test read the projected database while the follower's task wrote it. Reduced to a probe — four threads sharing one `SQLiteDatabase`, no LLVS store involved — it reproduces the same signal on its own.
+
+The fix is unchanged and still correct: `ProjectionFollower` is an actor owning both the projector and the SQLite connection rather than receiving them. The database is opened from a URL inside the initialiser and read through `query(_:)` on the actor, so the connection is used from one place. What changed is why: it serialises the database, not the store.
+
+`Store`'s own serialisation (`AUDIT.md` item 9) remains open, and this design does not depend on it. An app that saves on one thread while a pass runs on another is outside what either has been shown to support, so awaiting `projectCurrentVersion()` after a save remains the advice.
 
 ## Rebuild
 

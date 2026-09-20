@@ -234,7 +234,7 @@ Four things are worth knowing before building on it.
 
 `ProjectionFollower` is an actor, and it owns both the projector and the SQLite connection. Neither is thread-safe, so neither is reachable from outside it — which is why the database is opened from a URL rather than handed in, and why queries go through `query`.
 
-One caveat while `Store` itself is not fully serialised: a projection pass reads the store, so do not save from another thread while one is running. Awaiting `projectCurrentVersion()` after each save gives you that ordering. `followUpdates(onResult:)` is convenient but does not by itself keep a pass and a save apart.
+That matters most for the SQLite connection, which is not thread-safe and would crash if used from two threads at once. Keeping it inside the actor is what makes `query` and a projection pass safe against each other.
 
 
 ## Concepts
