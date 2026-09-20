@@ -505,10 +505,63 @@ extension Store {
                 fatalError("Should not be possible with only a single branch")
             }
         }
-        
+
         return changes
     }
-    
+
+    /// Returns the changes that turn the contents at `fromVersion` into the contents at `toVersion`.
+    ///
+    /// The two versions need not lie on one line of history. This is a set difference, not a
+    /// replay of the steps between them, so it is correct when `toVersion` is a merge commit,
+    /// is on another branch, or is an ancestor of `fromVersion`. That makes it the right call
+    /// for keeping a derived view — an index, a cache, a projection — in step with a store
+    /// whose current version moves around the history graph rather than only forwards.
+    ///
+    /// Every change is expressed against `toVersion`: an `.insert` or `.update` carries the
+    /// value as it exists there, and a `.remove` names a value that does not. `.preserve` and
+    /// `.preserveRemoval` are never returned.
+    ///
+    /// Prefer this to `valueChanges(madeBetween:and:)`, which assumes the first version is an
+    /// ancestor of the second and traps on the forks that only arise when it is not.
+    ///
+    /// Resolving the common ancestor walks the history graph, so the cost grows with the
+    /// length of history rather than with the size of the difference.
+    public func valueChanges(updatingFrom fromVersion: Version.ID, to toVersion: Version.ID) throws -> [Value.Change] {
+        guard let _ = try version(identifiedBy: fromVersion), let _ = try version(identifiedBy: toVersion) else {
+            throw Error.missingVersion
+        }
+        guard fromVersion != toVersion else { return [] }
+
+        var commonAncestor: Version.ID?
+        try queryHistory { history in
+            commonAncestor = try history.greatestCommonAncestor(ofVersionsIdentifiedBy: (fromVersion, toVersion))
+        }
+
+        let diffs = try valuesMap.differences(between: toVersion, and: fromVersion, withCommonAncestor: commonAncestor)
+
+        var changes: [Value.Change] = []
+        for diff in diffs {
+            // Decide from the two versions themselves rather than from the fork label. A fork
+            // describes how the branches relate to their common ancestor, which is more than is
+            // needed here: what matters is only whether the value exists at each end.
+            let valueAtTo = try value(id: diff.valueId, at: toVersion)
+            let existedAtFrom = try valueReference(id: diff.valueId, at: fromVersion) != nil
+            switch (valueAtTo, existedAtFrom) {
+            case let (.some(value), false):
+                changes.append(.insert(value))
+            case let (.some(value), true):
+                changes.append(.update(value))
+            case (.none, true):
+                changes.append(.remove(diff.valueId))
+            case (.none, false):
+                break // Absent at both ends. The diff can report a value that changed only
+                      // between the ancestor and a branch neither end kept; there is nothing to do.
+            }
+        }
+
+        return changes
+    }
+
 }
 
 
