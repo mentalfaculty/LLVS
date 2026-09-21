@@ -47,8 +47,9 @@ private func columnName(forProperty property: String) -> String {
 /// The SQLite type for a declared Swift type, or nil when the type has no column shape and
 /// the property should be stored as JSON.
 ///
-/// An optional is the same column, nullable, so the wrapped type decides. `Bool` and `Date`
-/// are both `INTEGER`, which is how SQLite holds them: 0 or 1, and seconds since 1970.
+/// An optional is the same column, nullable, so the wrapped type decides. `Bool` is
+/// `INTEGER`, holding 0 or 1. `Date` is handled separately, because its column holds Unix
+/// seconds while Codable encodes seconds since 2001.
 private func sqliteDeclaration(forSwiftType swiftType: String) -> String? {
     var bare = swiftType.trimmingCharacters(in: .whitespaces)
     if bare.hasSuffix("?") { bare = String(bare.dropLast()).trimmingCharacters(in: .whitespaces) }
@@ -65,11 +66,23 @@ private func sqliteDeclaration(forSwiftType swiftType: String) -> String? {
     case "Int", "Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32": return "INTEGER"
     case "Double", "Float": return "REAL"
     case "Bool": return "INTEGER"
-    case "Date": return "INTEGER"
     case "UUID": return "TEXT"
     case "Data": return "BLOB"
     default: return nil
     }
+}
+
+/// Whether a declared type is `Date`, optional or qualified.
+private func isDate(_ swiftType: String) -> Bool {
+    var bare = swiftType.trimmingCharacters(in: .whitespaces)
+    if bare.hasSuffix("?") { bare = String(bare.dropLast()).trimmingCharacters(in: .whitespaces) }
+    if bare.hasPrefix("Optional<") && bare.hasSuffix(">") {
+        bare = String(bare.dropFirst("Optional<".count).dropLast()).trimmingCharacters(in: .whitespaces)
+    }
+    if let lastDot = bare.lastIndex(of: ".") {
+        bare = String(bare[bare.index(after: lastDot)...])
+    }
+    return bare == "Date"
 }
 
 /// A stored property, with its declared type when one is written down. The type is nil for
@@ -170,7 +183,11 @@ public struct MergeableModelMacro: ExtensionMacro {
                 propertiesWithoutColumns.append(property.name)
                 continue
             }
-            if let declaration = sqliteDeclaration(forSwiftType: declaredType) {
+            if isDate(declaredType) {
+                columnLiterals.append("""
+                    LLVSModel.ModelColumn(propertyName: "\(property.name)", columnName: "\(column)", declaration: "INTEGER", storage: .date)
+                    """)
+            } else if let declaration = sqliteDeclaration(forSwiftType: declaredType) {
                 columnLiterals.append("""
                     LLVSModel.ModelColumn(propertyName: "\(property.name)", columnName: "\(column)", declaration: "\(declaration)", storage: .scalar)
                     """)

@@ -16,6 +16,15 @@ public enum ColumnStorage: Sendable, Equatable {
     /// array, a dictionary, a nested struct. Still queryable through `json_extract` and
     /// `json_each`, and an expression index can be built over it.
     case json
+
+    /// An `INTEGER` column holding Unix seconds, for a `Date`.
+    ///
+    /// This needs its own case because `Codable` encodes a `Date` as seconds since 2001,
+    /// while every SQLite tool and every other app means seconds since 1970. Storing
+    /// Codable's number would make `strftime('%s', 'now')` — the obvious thing to write —
+    /// silently 31 years wrong. The column holds Unix seconds and the conversion happens at
+    /// the boundary, so ordinary SQL means what it says.
+    case date
 }
 
 /// One column of the table a model maps to.

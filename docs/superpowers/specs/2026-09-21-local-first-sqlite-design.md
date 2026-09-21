@@ -65,6 +65,7 @@ struct Note: StorableModel {
 Mapping:
 
 - `String`, `Int`, `Double`, `Bool`, `Date`, `UUID`, `Data` → a real column, directly indexable with ordinary `CREATE INDEX`.
+  - **A `Date` column holds Unix seconds**, found while implementing. `Codable` encodes a `Date` as seconds since 2001, but `strftime('%s')`, a database browser and every other SQLite tool mean seconds since 1970. Storing Codable's number would make the obvious query silently 31 years wrong — no error, just a date in 2056. The column holds Unix seconds and the conversion happens at the boundary, so ordinary SQL means what it says. This is what the design promises, so it cannot be left to a convention the app has to know.
 - `Optional` of any of those → the same column, nullable.
 - Everything else — arrays, dictionaries, nested structs → a JSON text column.
 

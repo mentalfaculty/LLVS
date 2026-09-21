@@ -297,6 +297,8 @@ try table.apply(changes, in: database)
 
 Only the awkward property becomes JSON. A model with an array of tags still gets a plain indexed `TEXT` column for its title.
 
+A `Date` column holds Unix seconds, so `WHERE updated_at > strftime('%s', 'now', '-7 days')` means what it looks like. (`Codable` encodes dates as seconds since 2001; the conversion happens at the boundary so you never see it.)
+
 A property whose type is inferred rather than written down, such as `var count = 0`, gets no column, because a macro sees only syntax and guessing would be wrong. Annotate it — `var count: Int = 0` — and it gets one. Anything skipped is listed in `sqliteSchema.propertiesWithoutColumns`.
 
 Column names are snake_cased, and one that would collide with a SQLite keyword takes a trailing underscore, so `var when: Date` becomes `when_`.

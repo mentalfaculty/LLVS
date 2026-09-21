@@ -106,6 +106,12 @@ extension OwnedTable {
     /// Shared with the typed read, which needs the same mapping in the same direction.
     static func propertyValue(from row: SQLiteDatabase.Row, at index: Int, column: ModelColumn) -> Any? {
         switch column.storage {
+        case .date:
+            // The column holds Unix seconds, because that is what SQL means by a timestamp.
+            // Codable wants seconds since 2001, so convert here rather than storing a number
+            // that ordinary SQL would read as 31 years out.
+            guard let unixSeconds: Int64 = row.value(inColumnAtIndex: index) else { return nil }
+            return Date(timeIntervalSince1970: TimeInterval(unixSeconds)).timeIntervalSinceReferenceDate
         case .json:
             guard let text: String = row.value(inColumnAtIndex: index) else { return nil }
             return try? JSONSerialization.jsonObject(with: Data(text.utf8))

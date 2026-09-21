@@ -78,6 +78,11 @@ extension OwnedTable {
         guard let propertyValue, !(propertyValue is NSNull) else { return nil }
 
         switch column.storage {
+        case .date:
+            // Codable gives seconds since 2001; the column holds Unix seconds, so that
+            // `strftime('%s', 'now')` and every other SQLite tool mean what they say.
+            guard let referenceSeconds = (propertyValue as? NSNumber)?.doubleValue else { return nil }
+            return Int64(Date(timeIntervalSinceReferenceDate: referenceSeconds).timeIntervalSince1970)
         case .json:
             guard let data = try? JSONSerialization.data(withJSONObject: propertyValue, options: [.sortedKeys]) else {
                 return nil

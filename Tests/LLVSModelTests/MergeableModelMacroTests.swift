@@ -67,7 +67,10 @@ struct InferredTypeModel: Codable, Equatable {
         #expect(byProperty["count"]?.declaration == "INTEGER")
         #expect(byProperty["ratio"]?.declaration == "REAL")
         #expect(byProperty["starred"]?.declaration == "INTEGER")
+        // A Date is INTEGER, but its own storage case: the column holds Unix seconds while
+        // Codable encodes seconds since 2001, so the two need telling apart.
         #expect(byProperty["when"]?.declaration == "INTEGER")
+        #expect(byProperty["when"]?.storage == .date)
         #expect(byProperty["identifier"]?.declaration == "TEXT")
         #expect(byProperty["payload"]?.declaration == "BLOB")
         #expect(byProperty["title"]?.storage == .scalar)
