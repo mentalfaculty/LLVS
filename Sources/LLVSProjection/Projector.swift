@@ -52,6 +52,11 @@ public final class Projector {
     private let typesByIdentifier: [String: ProjectedType]
     private let schemaVersion: Int
 
+    /// Owned tables whose pending local edits must reach LLVS before a rebuild discards
+    /// their rows. The only mutable state here; the class is documented as single-isolation
+    /// and lives inside `ProjectionFollower`'s actor, so this does not change that.
+    private var ownedTables: [OwnedTable] = []
+
     /// - Parameters:
     ///   - schemaVersion: The app's own number for the shape of its projected tables. Raise it
     ///     when the columns change, and the next pass rebuilds from the store instead of
@@ -73,6 +78,28 @@ public final class Projector {
         for type in types {
             try database.execute(statement: type.createTableStatement())
         }
+    }
+
+    /// Registers an owned table, so its pending local edits are drained into the store before
+    /// a rebuild throws its rows away.
+    public func registerOwnedTable(_ table: OwnedTable) {
+        ownedTables.append(table)
+    }
+
+    /// Drains every registered owned table into `store`, returning the version that resulted,
+    /// or `predecessor` when nothing was pending.
+    ///
+    /// Call this before rebuilding. The order is forced: a rebuild discards the table, so an
+    /// edit that has not yet reached LLVS would be lost with it. A drain that throws stops
+    /// the whole thing — running on the old schema is better than losing unsynced work.
+    @discardableResult
+    public func drainOwnedTables(store: Store, basedOn predecessor: Version.ID?) throws -> Version.ID? {
+        var head = predecessor
+        for table in ownedTables {
+            let result = try table.drain(in: database, store: store, basedOn: head)
+            if let version = result.version { head = version }
+        }
+        return head
     }
 
     /// The version the database currently reflects, or `nil` if nothing has been projected yet.

@@ -237,6 +237,94 @@ Four things are worth knowing before building on it.
 That matters most for the SQLite connection, which is not thread-safe and would crash if used from two threads at once. Keeping it inside the actor is what makes `query` and a projection pass safe against each other.
 
 
+## Local-First SQLite
+
+The section above is one-way: LLVS is the truth, the SQLite an index over it, and you write through `StoreCoordinator`. An owned table turns that around. You write ordinary SQL, and those writes become versions that sync and merge.
+
+Think of it as a checkout. The SQLite holds the state at some version, and writing to it makes a new one.
+
+```swift
+@MergeableModel
+struct Note: StorableModel, Codable, Equatable {
+    static let modelTypeIdentifier = "Note"
+    var title: String = ""
+    var body: String = ""
+    var updatedAt: Date = .now
+    var tags: [String] = []
+}
+
+let table = OwnedTable(
+    typeIdentifier: Note.modelTypeIdentifier,
+    tableName: "notes",
+    schema: Note.sqliteSchema)
+for statement in table.createStatements() {
+    try database.execute(statement: statement)
+}
+```
+
+The table is ordinary. Index it however you like:
+
+```swift
+try database.execute(statement: "CREATE INDEX notes_updated ON notes(updated_at)")
+```
+
+Write ordinary SQL. Triggers record what changed, and a drain turns it into a version:
+
+```swift
+try database.execute(statement: "UPDATE notes SET title = ? WHERE llvs_id = ?",
+                     withBindingsList: [["New title", noteId]])
+
+let result = try table.drain(in: database, store: store, basedOn: currentVersion)
+```
+
+Read rows back as models:
+
+```swift
+let rows = try table.fetch(Note.self, in: database, where: "updated_at > ?", bindings: [cutoff])
+for row in rows { print(row.model.title, row.id) }
+```
+
+And apply what arrives from elsewhere:
+
+```swift
+let changes = try store.valueChanges(updatingFrom: oldVersion, to: newVersion)
+try table.apply(changes, in: database)
+```
+
+### A column per property
+
+`@MergeableModel` generates the schema. A property typed `String`, `Int`, `Double`, `Bool`, `Date`, `UUID` or `Data` — or an optional of one — becomes a real column you can index. Anything else becomes a `TEXT` column holding JSON, still queryable through `json_extract` and `json_each`.
+
+Only the awkward property becomes JSON. A model with an array of tags still gets a plain indexed `TEXT` column for its title.
+
+A property whose type is inferred rather than written down, such as `var count = 0`, gets no column, because a macro sees only syntax and guessing would be wrong. Annotate it — `var count: Int = 0` — and it gets one. Anything skipped is listed in `sqliteSchema.propertiesWithoutColumns`.
+
+Column names are snake_cased, and one that would collide with a SQLite keyword takes a trailing underscore, so `var when: Date` becomes `when_`.
+
+### How conflicts resolve
+
+The merge happens in LLVS. SQLite never sees a conflict.
+
+A row change becomes a value, and values merge the way they always have. Because a column is a property, `MergeableArbiter` merges them independently: if you edit a note's title on your phone while a share extension edits its body, both survive. Register your types and that is what you get.
+
+```swift
+let arbiter = MergeableArbiter()
+arbiter.register(Note.self)
+coordinator.mergeArbiter = arbiter
+```
+
+Two devices changing the *same* column is a real conflict, and it goes to your `MergeArbiter`, which is what it is for.
+
+A delete racing an edit brings the row back carrying the edit, because the default arbiter favours the more recent change. A row that reappears is visible and fixable; an edit that silently vanished is neither. Change it in your arbiter if your app wants the opposite.
+
+### Three rules worth knowing
+
+**Writes are SQL, reads are typed.** That is deliberate. `UPDATE notes SET title = ?` says only the title changed, and that is what lets your edit and another device's merge. A `save(note)` writing every column would claim they all changed and throw that away. A typed write is possible, but it has to diff against the stored row first.
+
+**A rebuild drains first.** Rebuilding discards the table, so anything written but not yet drained must reach LLVS before that happens. Register the table with `registerOwnedTable` and call `drainOwnedTables` before rebuilding; a failed drain stops the whole thing rather than losing the work.
+
+**Your own transactions need nothing special.** Triggers fire inside your transaction, so a committed one yields exactly one version and a rolled-back one yields nothing at all.
+
 ## Concepts
 
 `StoreCoordinator` is convenient for common cases, but `Store` gives you direct access to the version graph: branching, merging, diffing, and time travel.
