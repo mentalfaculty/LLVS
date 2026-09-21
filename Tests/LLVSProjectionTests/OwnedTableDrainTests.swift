@@ -221,4 +221,91 @@ import Foundation
         let versionId = try #require(second.version)
         #expect(try store.value(id: .init("n1/Note"), at: versionId) == nil)
     }
+
+    // MARK: - The table's own version
+
+    /// The table records what it is a working copy of, so an app need not carry the version
+    /// across a launch. Forgetting it used to base the next drain on nothing, which silently
+    /// started a second root: two heads and a forked history on one device.
+    @Test func aSecondDrainContinuesTheFirstWithoutBeingTold() throws {
+        try insertNote("n1/Note", title: "First", body: "a")
+        let first = try #require(try table.drain(in: database, store: store).version)
+
+        try database.execute(statement: "UPDATE notes SET title = ? WHERE llvs_id = ?",
+            withBindingsList: [["Second", "n1/Note"]])
+        let second = try #require(try table.drain(in: database, store: store).version)
+
+        let version = try #require(try store.version(identifiedBy: second))
+        #expect(version.predecessors?.idOfFirst == first)
+
+        var headCount = 0
+        store.queryHistory { history in headCount = history.headIdentifiers.count }
+        #expect(headCount == 1, "a forgotten version would leave two heads")
+    }
+
+    @Test func theTableRecordsTheVersionItDrainedTo() throws {
+        #expect(try table.currentVersion(in: database) == nil)
+
+        try insertNote("n1/Note", title: "First", body: "a")
+        let drained = try #require(try table.drain(in: database, store: store).version)
+
+        #expect(try table.currentVersion(in: database) == drained)
+    }
+
+    @Test func drainingNothingLeavesTheVersionAlone() throws {
+        try insertNote("n1/Note", title: "First", body: "a")
+        let drained = try #require(try table.drain(in: database, store: store).version)
+
+        _ = try table.drain(in: database, store: store)
+
+        #expect(try table.currentVersion(in: database) == drained)
+    }
+
+    @Test func anExplicitPredecessorOverridesTheRecordedOne() throws {
+        try insertNote("n1/Note", title: "First", body: "a")
+        let first = try #require(try table.drain(in: database, store: store).version)
+
+        try insertNote("n2/Note", title: "Second", body: "b")
+        let second = try #require(try table.drain(in: database, store: store).version)
+
+        // Deliberately rebase onto the first version rather than the recorded second.
+        try database.execute(statement: "UPDATE notes SET title = ? WHERE llvs_id = ?",
+            withBindingsList: [["Rebased", "n1/Note"]])
+        let third = try #require(try table.drain(in: database, store: store, basedOn: first).version)
+
+        let version = try #require(try store.version(identifiedBy: third))
+        #expect(version.predecessors?.idOfFirst == first)
+        #expect(third != second)
+    }
+
+    /// Applying changes can record the version they brought the table to, so a drain after a
+    /// sync continues from what arrived rather than from what this device last wrote.
+    @Test func applyCanRecordTheVersionItBrought() throws {
+        try insertNote("n1/Note", title: "First", body: "a")
+        let first = try #require(try table.drain(in: database, store: store).version)
+
+        let remote = try store.makeVersion(basedOnPredecessor: first,
+            inserting: [Value(id: .init("n2/Note"), data: Data(#"{"title":"Remote","body":"b"}"#.utf8))])
+        let changes = try store.valueChanges(updatingFrom: first, to: remote.id)
+        try table.apply(changes, in: database, atVersion: remote.id)
+
+        #expect(try table.currentVersion(in: database) == remote.id)
+
+        try database.execute(statement: "UPDATE notes SET title = ? WHERE llvs_id = ?",
+            withBindingsList: [["Local edit", "n1/Note"]])
+        let next = try #require(try table.drain(in: database, store: store).version)
+
+        let version = try #require(try store.version(identifiedBy: next))
+        #expect(version.predecessors?.idOfFirst == remote.id)
+    }
+
+    @Test func applyWithoutAVersionLeavesTheRecordedOneAlone() throws {
+        try insertNote("n1/Note", title: "First", body: "a")
+        let first = try #require(try table.drain(in: database, store: store).version)
+
+        try table.apply([.insert(Value(id: .init("n2/Note"),
+            data: Data(#"{"title":"Other","body":"b"}"#.utf8)))], in: database)
+
+        #expect(try table.currentVersion(in: database) == first)
+    }
 }

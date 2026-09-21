@@ -50,14 +50,16 @@ func readmeOwnedTableExample(
     try database.execute(statement: "UPDATE notes SET title = ? WHERE llvs_id = ?",
                          withBindingsList: [["New title", noteId]])
 
-    let result = try table.drain(in: database, store: store, basedOn: currentVersion)
+    let result = try table.drain(in: database, store: store)
     _ = result
+    _ = try table.currentVersion(in: database)
+    _ = currentVersion
 
     let rows = try table.fetch(ReadmeNote.self, in: database, where: "updated_at > ?", bindings: [cutoff])
     for row in rows { print(row.model.title, row.id) }
 
     let changes = try store.valueChanges(updatingFrom: oldVersion, to: newVersion)
-    try table.apply(changes, in: database)
+    try table.apply(changes, in: database, atVersion: newVersion)
 
     let arbiter = MergeableArbiter()
     arbiter.register(ReadmeNote.self)

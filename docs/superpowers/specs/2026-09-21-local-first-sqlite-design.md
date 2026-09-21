@@ -116,6 +116,14 @@ That is the right default for a sync system: a returning row is visible and fixa
 
 The one case left is an app that writes without an explicit transaction and wants several statements in one version. It can open a transaction. That is ordinary SQLite, which is the point of the design, so no API is added for it.
 
+## The table records its own version
+
+**Added after review.** The design says SQLite is the working copy *at a version*, but nothing recorded which one: the caller passed `basedOn:` and had to remember it. A checkout that does not know its own revision is not really a checkout.
+
+The consequence was not a missing convenience. A drain based on nothing, when the store already holds versions, makes a version with no predecessor — a second root. One device that never synced ends up with a forked history and two heads.
+
+An owned table now keeps a state row, written in the same transaction as the changelog clearing, exactly as `Projector` does for its own version. `drain` defaults to it, `apply` can record what it brought, and `basedOn:` remains for deliberately building on something else.
+
 ## One drain is one version, and that is the open scaling question
 
 **Raised in review, recorded rather than solved.** The drain reads one row per touched value, so its cost follows what changed rather than what the table holds — measured flat, 1.85 ms against 100 rows and 2.50 ms against 5000, and guarded by a test. That part is the right shape.

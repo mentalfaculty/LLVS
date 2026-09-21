@@ -27,8 +27,16 @@ extension OwnedTable {
     ///
     /// The changelog is read, turned into a version, and only then cleared — and only up to
     /// the sequence that was read, so a write arriving mid-drain survives for the next one.
+    /// The new version is recorded on the table in the same transaction as that clearing.
+    ///
+    /// `basedOn` defaults to the table's own `currentVersion(in:)`, so an app does not have
+    /// to carry it across a launch.
     @discardableResult
-    public func drain(in database: SQLiteDatabase, store: Store, basedOn predecessor: Version.ID?) throws -> DrainResult {
+    public func drain(in database: SQLiteDatabase, store: Store, basedOn explicitPredecessor: Version.ID? = nil) throws -> DrainResult {
+        // The table's own record by default. Passing nothing when the store already holds
+        // versions would base this on nothing and start a second root, so the caller has to
+        // ask for that explicitly rather than get it by forgetting.
+        let predecessor = try explicitPredecessor ?? currentVersion(in: database)
         let entries = try changelogEntries(in: database)
         guard let highestSequence = entries.last?.sequence else {
             return DrainResult(version: nil, changeCount: 0)
@@ -70,7 +78,10 @@ extension OwnedTable {
         }
 
         let version = try store.makeVersion(basedOnPredecessor: predecessor, storing: changes)
-        try clearChangelog(in: database, throughSequence: highestSequence)
+        try database.inTransaction {
+            try self.setCurrentVersion(version.id, in: database)
+            try self.clearChangelog(in: database, throughSequence: highestSequence)
+        }
         return DrainResult(version: version.id, changeCount: changes.count)
     }
 

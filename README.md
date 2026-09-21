@@ -274,8 +274,10 @@ Write ordinary SQL. Triggers record what changed, and a drain turns it into a ve
 try database.execute(statement: "UPDATE notes SET title = ? WHERE llvs_id = ?",
                      withBindingsList: [["New title", noteId]])
 
-let result = try table.drain(in: database, store: store, basedOn: currentVersion)
+let result = try table.drain(in: database, store: store)
 ```
+
+The table records which version it is a working copy of, so you do not have to carry that across a launch. `table.currentVersion(in: database)` reads it back, and `basedOn:` overrides it when you deliberately want to build on something else.
 
 Read rows back as models:
 
@@ -288,8 +290,10 @@ And apply what arrives from elsewhere:
 
 ```swift
 let changes = try store.valueChanges(updatingFrom: oldVersion, to: newVersion)
-try table.apply(changes, in: database)
+try table.apply(changes, in: database, atVersion: newVersion)
 ```
+
+Passing `atVersion` records what those changes brought the table to, in the same transaction as the rows, so the next drain continues from what arrived rather than from what this device last wrote.
 
 ### A column per property
 

@@ -68,6 +68,7 @@ public struct OwnedTable: Sendable {
 
     var changelogName: String { "\(tableName)_changelog" }
     var suppressionName: String { "\(tableName)_applying" }
+    var stateName: String { "\(tableName)_state" }
 
     /// Everything needed to stand the table up, in the order it must run.
     public func createStatements() -> [String] {
@@ -84,6 +85,21 @@ public struct OwnedTable: Sendable {
                 column_name TEXT,
                 op TEXT NOT NULL
             )
+            """)
+
+        // The version this table is a working copy of. Recorded here rather than left to the
+        // caller, because a drain that forgets it bases a version on nothing and silently
+        // starts a second root: two heads and a forked history, from one device that never
+        // synced with anything.
+        statements.append("""
+            CREATE TABLE IF NOT EXISTS \(stateName) (
+                id INTEGER PRIMARY KEY CHECK (id = 0),
+                version_id TEXT
+            )
+            """)
+        statements.append("""
+            INSERT INTO \(stateName) (id, version_id)
+                SELECT 0, NULL WHERE NOT EXISTS (SELECT 1 FROM \(stateName))
             """)
 
         // A single row saying whether capture is suppressed. A table rather than a Swift
@@ -145,6 +161,30 @@ public struct OwnedTable: Sendable {
     func owns(_ valueId: Value.ID) -> Bool {
         guard let slashIndex = valueId.rawValue.lastIndex(of: "/") else { return false }
         return valueId.rawValue[valueId.rawValue.index(after: slashIndex)...] == typeIdentifier
+    }
+
+    /// The version this table is a working copy of, or nil before anything has been drained
+    /// or applied.
+    ///
+    /// This is the table's own record, so an app need not remember it across a launch. A
+    /// drain based on nothing when the store already holds versions starts a second root.
+    public func currentVersion(in database: SQLiteDatabase) throws -> Version.ID? {
+        var rawValue: String?
+        try database.forEach(matchingQuery: "SELECT version_id FROM \(stateName) WHERE id = 0") { row in
+            rawValue = row.value(inColumnAtIndex: 0)
+        }
+        return rawValue.map { Version.ID($0) }
+    }
+
+    /// Records the version this table now reflects. Call inside the same transaction as the
+    /// rows it describes, so the marker cannot claim a version whose rows did not land.
+    func setCurrentVersion(_ version: Version.ID, in database: SQLiteDatabase) throws {
+        try database.execute(
+            statement: """
+                INSERT INTO \(stateName) (id, version_id) VALUES (0, ?)
+                ON CONFLICT(id) DO UPDATE SET version_id = excluded.version_id
+                """,
+            withBindingsList: [[version.rawValue]])
     }
 
     /// Everything captured so far, oldest first.

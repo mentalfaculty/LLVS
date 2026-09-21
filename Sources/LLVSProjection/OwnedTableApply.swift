@@ -20,8 +20,12 @@ extension OwnedTable {
     /// Returns how many rows were written or deleted. A value that is not a JSON object is
     /// skipped rather than throwing, because one value this build cannot read must not stop
     /// the rest — the same rule the read-only projection follows.
+    ///
+    /// Pass `atVersion` when the changes bring the table to a known version, and it is
+    /// recorded in the same transaction as the rows, so the marker cannot claim a version
+    /// whose rows did not land.
     @discardableResult
-    public func apply(_ changes: [Value.Change], in database: SQLiteDatabase) throws -> Int {
+    public func apply(_ changes: [Value.Change], in database: SQLiteDatabase, atVersion version: Version.ID? = nil) throws -> Int {
         var applied = 0
         // The write lock is taken first, then suppression is set inside it. The other order
         // leaves a window in which the app's own write is swallowed by the flag: the row
@@ -53,6 +57,7 @@ extension OwnedTable {
                         continue
                     }
                 }
+                if let version { try self.setCurrentVersion(version, in: database) }
             }
         }
         return applied
