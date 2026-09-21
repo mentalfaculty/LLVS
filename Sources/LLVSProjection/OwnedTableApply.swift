@@ -111,6 +111,19 @@ extension OwnedTable {
             // Codable encodes Data as base64, which is what the stored JSON carries.
             return (propertyValue as? String).flatMap { Data(base64Encoded: $0) }
         case .json:
+            // `JSONSerialization` raises an Objective-C exception, which `try?` cannot catch
+            // and which kills the process, for a top-level value that is not an array or a
+            // dictionary. A scalar reaches here whenever a property's declared type could not
+            // be resolved to a column — a typealias, or an enum with a raw value — and since
+            // the value can arrive from another device, this would be a sync-time crash on a
+            // device that did nothing wrong. `.fragmentsAllowed` accepts the scalar instead.
+            guard JSONSerialization.isValidJSONObject(propertyValue) else {
+                guard let data = try? JSONSerialization.data(
+                    withJSONObject: propertyValue, options: [.sortedKeys, .fragmentsAllowed]) else {
+                    return nil
+                }
+                return String(decoding: data, as: UTF8.self)
+            }
             guard let data = try? JSONSerialization.data(withJSONObject: propertyValue, options: [.sortedKeys]) else {
                 return nil
             }

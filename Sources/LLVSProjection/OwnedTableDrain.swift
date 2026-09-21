@@ -137,7 +137,10 @@ extension OwnedTable {
             return (row.value(inColumnAtIndex: index) as Data?)?.base64EncodedString()
         case .json:
             guard let text: String = row.value(inColumnAtIndex: index) else { return nil }
-            return try? JSONSerialization.jsonObject(with: Data(text.utf8))
+            // `.fragmentsAllowed` so a scalar written by `binding` reads back. A property
+            // whose type could not be resolved to a column — a typealias, or a raw-value
+            // enum — stores its scalar here rather than an array or dictionary.
+            return try? JSONSerialization.jsonObject(with: Data(text.utf8), options: [.fragmentsAllowed])
         }
     }
 }

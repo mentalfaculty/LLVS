@@ -116,6 +116,14 @@ That is the right default for a sync system: a returning row is visible and fixa
 
 The one case left is an app that writes without an explicit transaction and wants several statements in one version. It can open a transaction. That is ordinary SQLite, which is the point of the design, so no API is added for it.
 
+## One drain is one version, and that is the open scaling question
+
+**Raised in review, recorded rather than solved.** The drain reads one row per touched value, so its cost follows what changed rather than what the table holds — measured flat, 1.85 ms against 100 rows and 2.50 ms against 5000, and guarded by a test. That part is the right shape.
+
+The unmeasured risk is the version, not the reads. `UPDATE notes SET archived = 1 WHERE updated_at < ?` over 50,000 rows yields 50,000 changelog rows and one version carrying 50,000 values, which must serialise, sync, and merge as a unit, and land on the receiving device in a single transaction.
+
+The fix is a batching policy: a drain that exceeds some size becomes several versions. That changes `drain` to return a list rather than one `Version.ID?`, which is cheap now and an API break later. Decide it before an app depends on the current signature, even if the code waits.
+
 ## Order of work
 
 1. Generate the table and triggers from `@MergeableModel`, with the scalar and JSON mapping.
