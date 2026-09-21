@@ -18,7 +18,13 @@ import LLVSSQLite
 public struct ModelRow<Model: StorableModel & Sendable>: Sendable {
     public let model: Model
     public let id: Value.ID
-    /// The version the table held when this was read, when the caller knows it.
+
+    /// The version the caller said the table was at, passed straight through.
+    ///
+    /// `fetch` cannot check this: an owned table records no version of its own, and the one
+    /// that matters lives in `Projector.projectedVersion()`. It is a label the caller
+    /// attaches, so pass the projected version or nothing — a guessed one would be a lie
+    /// that a later optimistic write would trust.
     public let version: Version.ID?
 }
 
@@ -44,6 +50,7 @@ extension OwnedTable {
         bindings: [Any?] = [],
         atVersion version: Version.ID? = nil
     ) throws -> [ModelRow<Model>] {
+        // `version` is stamped onto each row unchecked; see `ModelRow.version`.
         let columnList = (["llvs_id"] + schema.columns.map(\.columnName)).joined(separator: ", ")
         var query = "SELECT \(columnList) FROM \(tableName)"
         if let clause { query += " WHERE \(clause)" }

@@ -91,13 +91,20 @@ struct TypedNote: StorableModel, Codable, Equatable {
         #expect(rows.first?.model.tags == ["a", "b"])
     }
 
-    @Test func fetchCarriesTheVersionItWasReadAt() throws {
+    /// The version is a label the caller attaches, not something `fetch` can check: an owned
+    /// table records no version of its own. Pass what `Projector.projectedVersion()` says.
+    @Test func fetchPassesTheCallersVersionThrough() throws {
         try insert("n1/TypedNote", title: "Hello")
         let version = Version.ID("some-version")
 
         let rows = try table.fetch(TypedNote.self, in: database, atVersion: version)
 
         #expect(rows.first?.version == version)
+    }
+
+    @Test func fetchLeavesTheVersionNilWhenNoneIsGiven() throws {
+        try insert("n1/TypedNote", title: "Hello")
+        #expect(try table.fetch(TypedNote.self, in: database).first?.version == nil)
     }
 
     @Test func fetchReturnsNothingForAnEmptyTable() throws {
