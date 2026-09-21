@@ -101,13 +101,19 @@ From the projection layer, and still true:
 
 With one addition: a rebuild must **drain the changelog first**, or local edits not yet committed to LLVS would be thrown away with the table.
 
-## Open questions, deliberately not answered here
+## The three questions, settled
 
-**Schema migration of an owned table.** Adding a property changes the table. Rebuild handles it, since LLVS has the data — but an owned table may hold undrained local edits, so the order matters and needs specifying.
+These were left open when the design was approved. Each is decided below, with the reasoning, because a plan cannot carry a TBD.
 
-**Deletes and tombstones.** A `DELETE` must become a removal in LLVS, and a removal racing an update on another device is `removedAndUpdated`, which the arbiter already handles. Whether the row returns on merge needs a stated rule.
+**Schema migration of an owned table: drain, then rebuild.** Adding or removing a property changes the table, and rebuild handles it because LLVS holds every value. The order is what matters, and it is forced: drain the changelog into LLVS *first*, then drop and rebuild. Rebuilding first would discard local edits that had never reached the truth. If the drain fails, the migration does not start — better to run on the old schema than to lose a user's unsynced work. The `schemaVersion` bump that triggers a rebuild for index tables therefore means "drain, then rebuild" for owned ones.
 
-**Transaction boundaries.** One drain currently becomes one version. Whether an app's explicit `BEGIN`/`COMMIT` should map to one version instead is worth deciding before apps depend on the default.
+**Deletes: a delete is a removal, and an edit elsewhere brings the row back.** A SQL `DELETE` becomes `.remove` in LLVS. When it races an update on another device the fork is `removedAndUpdated`, which the existing arbiter already resolves, and `MostRecentChangeFavoringArbiter` — the default fallback — favours the update. So the row returns, carrying the other device's edit.
+
+That is the right default for a sync system: a returning row is visible and fixable, while an edit silently thrown away is neither. An app that wants the opposite says so in its arbiter, which is where that decision already lives. What matters is that the rule is stated, because "my note came back" and "my edit vanished" are both surprising, and only one of them is recoverable.
+
+**Transaction boundaries: one drain is one version, and an app's own transaction is respected.** The default stays as specified — a drain becomes a version — because it needs nothing from the app. But SQLite fires triggers inside the app's transaction, and a rollback takes the changelog rows with it, so an app that wraps its writes in `BEGIN`/`COMMIT` already gets exactly one version per committed transaction, and nothing at all from a rolled-back one. This was checked: an update inside a rolled-back transaction leaves no changelog row at all. That falls out of how SQLite works rather than needing a mechanism.
+
+The one case left is an app that writes without an explicit transaction and wants several statements in one version. It can open a transaction. That is ordinary SQLite, which is the point of the design, so no API is added for it.
 
 ## Order of work
 
