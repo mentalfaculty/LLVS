@@ -11,6 +11,8 @@ Three shortcomings were raised: no querying except by object ID, cloud data too 
 
 Snapshots, added earlier, are sometimes mistaken for coalescing. They are not. A snapshot lets a new device start without replaying history, but no old version is ever removed from the cloud. Compaction was removed earlier because independent per-device baselines conflict.
 
+> **Superseded in part, 2026-09-21.** This design is one-way: an app writes through `StoreCoordinator.save` and the SQLite is a read-only index. `2026-09-21-local-first-sqlite-design.md` adds a second, two-way mode where an app writes ordinary SQL and those writes become LLVS versions. Everything below still holds for index tables, and the transaction, rebuild and skip-and-report behaviour is shared by both modes. The one claim that narrows is "the projection never becomes truth": for an owned table it is where a write originates, so a rebuild must drain pending local edits before discarding the table.
+
 ## Decision
 
 LLVS stays the truth. A SQLite database becomes the queryable current-values view, maintained by projecting version diffs into it. This is the shape CloudKit uses over FoundationDB, and roughly what Agenda already does.
