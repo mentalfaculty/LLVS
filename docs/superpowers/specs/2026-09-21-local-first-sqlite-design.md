@@ -72,6 +72,25 @@ The nested case is contained to the property that causes it. `tags` being JSON d
 
 This is the point of the design: the schema is what a developer would have written by hand. Nothing in it announces LLVS except `llvs_id`. Existing SQL works, a database browser shows sensible data, and someone who knows SQLite has nothing to learn.
 
+## Typed reads
+
+An owned table is generated from a Swift model, so reading it back as columns rather than as that model wastes what the declaration already knows. Queries are also where typing helps most — a result set is handled far more often than a write is issued.
+
+**Reads are typed. Writes stay SQL.** A read hydrates rows into the model:
+
+```swift
+let rows = try await follower.fetch(Note.self, where: "updated_at > ?", [cutoff])
+for row in rows {
+    print(row.model.title, row.id, row.version)
+}
+```
+
+Each result carries the model, its `llvs_id`, and the version it was read at, rather than the bare model. The metadata costs one level of nesting and buys two things: a row knows where it came from, and a later typed-write API has what it needs for optimistic concurrency without an API break.
+
+**Writes are deliberately not typed**, and this is a design decision rather than scope-cutting. A SQL `UPDATE notes SET title = ?` says *only the title changed*, and the per-column trigger records exactly that. A `save(note)` writing every column would say *every column changed*, which destroys the column granularity that makes concurrent edits to different columns merge cleanly. A typed write would have to diff the model against the stored row first to recover what a plain `UPDATE` states outright.
+
+That is worth building later, deliberately, with that diff in it. It is not worth getting for free by writing whole rows.
+
 ## What carries over unchanged
 
 From the projection layer, and still true:
@@ -95,4 +114,7 @@ With one addition: a rebuild must **drain the changelog first**, or local edits 
 1. Generate the table and triggers from `@MergeableModel`, with the scalar and JSON mapping.
 2. Drain the changelog into LLVS versions, with suppression on the way back.
 3. Owned tables end to end, against the existing projector.
-4. Settle the three open questions above with tests.
+4. Typed reads, returning model plus row metadata.
+5. Settle the three open questions above with tests.
+
+Typed writes are explicitly not on this list. See "Typed reads" for why they need a diff against the stored row, and why doing them the easy way would cost column-level merge.
