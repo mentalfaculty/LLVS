@@ -214,9 +214,26 @@ struct OuterOptionalModel: StorableModel, Equatable {
 
     @Test func modelValueIDHelpers() {
         let valueId = modelValueID(typeIdentifier: "Contact", instanceIdentifier: "abc-123")
-        #expect(valueId.rawValue == "Contact/abc-123")
+        #expect(valueId.rawValue == "abc-123/Contact")
         #expect(modelTypeIdentifier(from: valueId) == "Contact")
         #expect(instanceIdentifier(from: valueId) == "abc-123")
+    }
+
+    /// The Map buckets by the first two characters of the value ID, so instances of one
+    /// type must not share a prefix, or every save rewrites one node listing them all.
+    @Test func modelValueIDsSpreadAcrossMapBuckets() {
+        let a = modelValueID(typeIdentifier: "Contact", instanceIdentifier: "11111111-aaaa")
+        let b = modelValueID(typeIdentifier: "Contact", instanceIdentifier: "99999999-bbbb")
+        #expect(String(a.rawValue.prefix(2)) != String(b.rawValue.prefix(2)))
+    }
+
+    /// An app may supply an instance identifier containing a slash. The type name is the
+    /// part that must survive, so the split is on the last slash, not the first.
+    @Test func helpersSplitOnTheLastSlash() {
+        let valueId = modelValueID(typeIdentifier: "Contact", instanceIdentifier: "a/b/c")
+        #expect(valueId.rawValue == "a/b/c/Contact")
+        #expect(modelTypeIdentifier(from: valueId) == "Contact")
+        #expect(instanceIdentifier(from: valueId) == "a/b/c")
     }
 
     @Test func helperReturnsNilForNoSlash() {

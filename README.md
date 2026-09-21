@@ -147,7 +147,7 @@ struct Contact: StorableModel, Equatable, Identifiable, Codable {
 }
 ```
 
-`StorableModel` is `Codable` plus a stable `modelTypeIdentifier`. Each instance is stored as JSON in one value, with the identifier `"Contact/<instanceIdentifier>"`.
+`StorableModel` is `Codable` plus a stable `modelTypeIdentifier`. Each instance is stored as JSON in one value, with the identifier `"<instanceIdentifier>/Contact"`. The instance identifier leads so that instances of one type spread across the value map rather than crowding into a single node; see _Upgrading to 0.12_ if you have a store written by an earlier version.
 
 `@MergeableModel` generates a `Mergeable` conformance that does a three-way merge of each stored property. If one device changes `firstName` and another changes `city`, both edits survive. Properties that are themselves `Mergeable` (including optionals of `Mergeable` types) are merged recursively; plain `Equatable` properties are compared against the common ancestor. Nested types only need `@MergeableModel`; `StorableModel` is just for the top-level types you save.
 
@@ -175,6 +175,163 @@ let all = try coordinator.fetchAllModels(Contact.self)
 try coordinator.removeModel(Contact.self, instanceIdentifier: contact.id.uuidString)
 ```
 
+
+## Querying with LLVSProjection
+
+LLVS answers "what is this value at this version". It does not answer "which contacts were edited this week", because every value is an opaque blob keyed by ID.
+
+`LLVSProjection` fills that gap without making LLVS query-aware. It keeps a SQLite table of current values, updated from version diffs, and you query that. The store stays the truth; the table is an index over it.
+
+```swift
+import LLVSProjection
+
+let contacts = ProjectedType(
+    typeIdentifier: Contact.modelTypeIdentifier,
+    tableName: "contacts",
+    columns: [
+        ProjectedColumn(name: "name", declaration: "TEXT"),
+        ProjectedColumn(name: "age", declaration: "INTEGER"),
+    ],
+    extract: { value in
+        let contact = try JSONDecoder().decode(Contact.self, from: value.data)
+        return ["name": .text(contact.name), "age": .integer(Int64(contact.age))]
+    }
+)
+
+let follower = try ProjectionFollower(
+    databaseURL: databaseURL,
+    coordinator: coordinator,
+    types: [contacts],
+    schemaVersion: 1)
+```
+
+Project after a save, then query:
+
+```swift
+try coordinator.save(inserting: [value])
+await follower.projectCurrentVersion()
+
+let names = try await follower.query { database in
+    var names: [String] = []
+    try database.forEach(matchingQuery: "SELECT name FROM contacts WHERE age > 30 ORDER BY name") { row in
+        if let name: String = row.value(inColumnAtIndex: 0) { names.append(name) }
+    }
+    return names
+}
+```
+
+`followUpdates(onResult:)` drives the same thing from the coordinator's version stream, for an app that would rather not await each save.
+
+Four things are worth knowing before building on it.
+
+**The projection is an index, not a copy.** Declare only the columns you query or sort on, and read the whole object from the store once a query has named the IDs. That keeps writes cheap and the database small.
+
+**Changing your columns is a rebuild, not a migration.** Raise `schemaVersion`, and the next pass throws the tables away and re-projects everything from the store. There is no migration to write, because the truth never lived in SQLite. Losing the database entirely is the same event, and equally survivable.
+
+**A value that will not decode is skipped, not fatal.** If `extract` throws, because another device wrote a model this build cannot read, that value is left out and its ID comes back in `ProjectionResult.unreadableIds`. One unreadable value never blocks the rest, and nothing disappears without your app being told. The ID list is capped, since a version-skew event can make every value unreadable at once; `unreadableCount` always gives the true number.
+
+**A pass is all or nothing.** Rows and the version marker are written in one transaction, so a crash part-way leaves the projection on its previous version rather than half-updated. Running again repeats the same work.
+
+`ProjectionFollower` is an actor, and it owns both the projector and the SQLite connection. Neither is thread-safe, so neither is reachable from outside it — which is why the database is opened from a URL rather than handed in, and why queries go through `query`.
+
+That matters most for the SQLite connection, which is not thread-safe and would crash if used from two threads at once. Keeping it inside the actor is what makes `query` and a projection pass safe against each other.
+
+
+## Local-First SQLite
+
+The section above is one-way: LLVS is the truth, the SQLite an index over it, and you write through `StoreCoordinator`. An owned table turns that around. You write ordinary SQL, and those writes become versions that sync and merge.
+
+Think of it as a checkout. The SQLite holds the state at some version, and writing to it makes a new one.
+
+```swift
+@MergeableModel
+struct Note: StorableModel, Codable, Equatable {
+    static let modelTypeIdentifier = "Note"
+    var title: String = ""
+    var body: String = ""
+    var updatedAt: Date = .now
+    var tags: [String] = []
+}
+
+let table = OwnedTable(
+    typeIdentifier: Note.modelTypeIdentifier,
+    tableName: "notes",
+    schema: Note.sqliteSchema)
+for statement in table.createStatements() {
+    try database.execute(statement: statement)
+}
+```
+
+The table is ordinary. Index it however you like:
+
+```swift
+try database.execute(statement: "CREATE INDEX notes_updated ON notes(updated_at)")
+```
+
+Write ordinary SQL. Triggers record what changed, and a drain turns it into a version:
+
+```swift
+try database.execute(statement: "UPDATE notes SET title = ? WHERE llvs_id = ?",
+                     withBindingsList: [["New title", noteId]])
+
+let result = try table.drain(in: database, store: store)
+```
+
+The table records which version it is a working copy of, so you do not have to carry that across a launch. `table.currentVersion(in: database)` reads it back, and `basedOn:` overrides it when you deliberately want to build on something else.
+
+Read rows back as models:
+
+```swift
+let rows = try table.fetch(Note.self, in: database, where: "updated_at > ?", bindings: [cutoff])
+for row in rows { print(row.model.title, row.id) }
+```
+
+And apply what arrives from elsewhere:
+
+```swift
+let changes = try store.valueChanges(updatingFrom: oldVersion, to: newVersion)
+try table.apply(changes, in: database, atVersion: newVersion)
+```
+
+Passing `atVersion` records what those changes brought the table to, in the same transaction as the rows, so the next drain continues from what arrived rather than from what this device last wrote.
+
+### A column per property
+
+`@MergeableModel` generates the schema. A property typed `String`, `Int`, `Double`, `Bool`, `Date`, `UUID` or `Data` — or an optional of one — becomes a real column you can index. Anything else becomes a `TEXT` column holding JSON, still queryable through `json_extract` and `json_each`.
+
+Only the awkward property becomes JSON. A model with an array of tags still gets a plain indexed `TEXT` column for its title.
+
+A `Date` column holds Unix seconds, so `WHERE updated_at > strftime('%s', 'now', '-7 days')` means what it looks like. (`Codable` encodes dates as seconds since 2001; the conversion happens at the boundary so you never see it.)
+
+A property whose type is inferred rather than written down, such as `var count = 0`, gets no column, because a macro sees only syntax and guessing would be wrong. Annotate it — `var count: Int = 0` — and it gets one. Anything skipped is listed in `sqliteSchema.propertiesWithoutColumns`.
+
+Column names are snake_cased, and one that would collide with a SQLite keyword takes a trailing underscore, so `var when: Date` becomes `when_`.
+
+### How conflicts resolve
+
+The merge happens in LLVS. SQLite never sees a conflict.
+
+A row change becomes a value, and values merge the way they always have. Because a column is a property, `MergeableArbiter` merges them independently: if you edit a note's title on your phone while a share extension edits its body, both survive. Register your types and that is what you get.
+
+```swift
+let arbiter = MergeableArbiter()
+arbiter.register(Note.self)
+coordinator.mergeArbiter = arbiter
+```
+
+Two devices changing the *same* column is a real conflict, and it goes to your `MergeArbiter`, which is what it is for.
+
+A delete racing an edit brings the row back carrying the edit, because the default arbiter favours the more recent change. A row that reappears is visible and fixable; an edit that silently vanished is neither. Change it in your arbiter if your app wants the opposite.
+
+### Four rules worth knowing
+
+**Drive one table from one place.** This is the one that loses data if you ignore it. Capture is suppressed while a version from elsewhere is applied, and that suppression is global to the table, so a write from your app *during* an `apply` is swallowed: the row changes, nothing is captured, and the edit never syncs. The row still shows what the user typed, so nothing looks wrong until it fails to arrive on their other device. `apply` takes the write lock first, which makes another connection wait, but nothing can protect a second thread sharing yours. Put the table behind an actor or a serial queue — `SQLiteDatabase` asks the same of you already.
+
+**Writes are SQL, reads are typed.** That is deliberate. `UPDATE notes SET title = ?` says only the title changed, and that is what lets your edit and another device's merge. A `save(note)` writing every column would claim they all changed and throw that away. A typed write is possible, but it has to diff against the stored row first.
+
+**A rebuild drains first.** Rebuilding discards the table, so anything written but not yet drained must reach LLVS before that happens. Register the table with `registerOwnedTable` and call `drainOwnedTables` before rebuilding; a failed drain stops the whole thing rather than losing the work.
+
+**Your own transactions need nothing special.** Triggers fire inside your transaction, so a committed one yields exactly one version and a rolled-back one yields nothing at all.
 
 ## Concepts
 
@@ -416,6 +573,18 @@ The _Samples_ directory has two SwiftUI apps. They are Xcode projects, not part 
 - **TheMessage** is a minimal app that syncs a single shared message via the public CloudKit database. Good for understanding the basics.
 - **LoCo** is a contact book that uses `LLVSModel`, `@MergeableModel`, and `MergeableArbiter`, and syncs via a private CloudKit zone.
 
+
+## Upgrading to 0.12
+
+**`LLVSModel` value IDs changed shape.** They are now `"<instance-id>/<TypeName>"` rather than `"<TypeName>/<instance-id>"`.
+
+The `Map` buckets values by the first two characters of their ID. With the type name leading, every instance of a type landed in one bucket, and each save rewrote a node listing all of them — O(N) per write, which does not hold once a store grows. The instance identifier now leads, so instances spread across buckets.
+
+If you use `modelValueID`, `modelTypeIdentifier(from:)` and `instanceIdentifier(from:)`, nothing in your code changes: the signatures are the same, and both accessors now split on the last slash rather than the first, so an instance identifier may itself contain slashes. If you built or parsed these IDs by hand, adjust.
+
+An existing store keeps its old IDs and goes on working, crowded into one bucket as before. There is no migration, and objects written by this version do not match the IDs written by an earlier one, so do not point two builds at one synced store across the upgrade.
+
+`fetchAllModels` now compares the type identifier rather than matching an ID prefix, so it scans every reference at the version. For a large store, project the type into `LLVSProjection` and query that instead.
 
 ## Upgrading to 0.11
 

@@ -13,6 +13,34 @@ struct MultipleBindingModel: Codable, Equatable {
     var first = 0, second = 0
 }
 
+@MergeableModel
+struct SchemaModel: Codable, Equatable {
+    var title: String = ""
+    var count: Int = 0
+    var ratio: Double = 0
+    var starred: Bool = false
+    var when: Date = .init(timeIntervalSince1970: 0)
+    var identifier: UUID = .init()
+    var payload: Data = .init()
+    var note: String? = nil
+    var tags: [String] = []
+    var updatedAt: Date = .init(timeIntervalSince1970: 0)
+}
+
+typealias AliasedText = String
+
+@MergeableModel
+struct AliasModel: Codable, Equatable {
+    var plain: String = ""
+    var aliased: AliasedText = ""
+}
+
+@MergeableModel
+struct InferredTypeModel: Codable, Equatable {
+    var typed: String = ""
+    var inferred = 0
+}
+
 @Suite struct MergeableModelMacroTests {
 
     @Test func publicStructGetsPublicConformance() throws {
@@ -33,5 +61,70 @@ struct MultipleBindingModel: Codable, Equatable {
         let merged = try dominant.merged(withSubordinate: subordinate, commonAncestor: ancestor)
 
         #expect(merged == MultipleBindingModel(first: 2, second: 3))
+    }
+
+    // MARK: - Generated SQLite schema
+
+    private func columns(of schema: ModelSchema) -> [String: ModelColumn] {
+        Dictionary(uniqueKeysWithValues: schema.columns.map { ($0.propertyName, $0) })
+    }
+
+    @Test func scalarPropertiesBecomeRealColumns() {
+        let byProperty = columns(of: SchemaModel.sqliteSchema)
+        #expect(byProperty["title"]?.declaration == "TEXT")
+        #expect(byProperty["count"]?.declaration == "INTEGER")
+        #expect(byProperty["ratio"]?.declaration == "REAL")
+        #expect(byProperty["starred"]?.declaration == "INTEGER")
+        // A Date is INTEGER, but its own storage case: the column holds Unix seconds while
+        // Codable encodes seconds since 2001, so the two need telling apart.
+        #expect(byProperty["when"]?.declaration == "INTEGER")
+        #expect(byProperty["when"]?.storage == .date)
+        #expect(byProperty["identifier"]?.declaration == "TEXT")
+        #expect(byProperty["payload"]?.declaration == "BLOB")
+        #expect(byProperty["title"]?.storage == .text)
+    }
+
+    @Test func optionalScalarsAreStillScalarColumns() {
+        let byProperty = columns(of: SchemaModel.sqliteSchema)
+        #expect(byProperty["note"]?.declaration == "TEXT")
+        #expect(byProperty["note"]?.storage == .text)
+    }
+
+    @Test func nestedPropertiesBecomeJSONColumns() {
+        let byProperty = columns(of: SchemaModel.sqliteSchema)
+        #expect(byProperty["tags"]?.declaration == "TEXT")
+        #expect(byProperty["tags"]?.storage == .json)
+    }
+
+    @Test func columnNamesAreSnakeCased() {
+        let byProperty = columns(of: SchemaModel.sqliteSchema)
+        #expect(byProperty["updatedAt"]?.columnName == "updated_at")
+    }
+
+    /// `when` is a SQLite keyword, so a bare column of that name would be a syntax error.
+    @Test func aKeywordColumnNameIsEscaped() {
+        let byProperty = columns(of: SchemaModel.sqliteSchema)
+        #expect(byProperty["when"]?.columnName == "when_")
+    }
+
+    @Test func propertiesStoredAsJSONAreReportedWithTheirType() {
+        #expect(SchemaModel.sqliteSchema.propertiesStoredAsJSON == ["tags": "[String]"])
+    }
+
+    /// A macro cannot resolve a typealias — that needs type checking, and a macro sees only
+    /// syntax — so an aliased String becomes a JSON column rather than an indexable TEXT one.
+    /// It cannot be fixed here, so it is reported rather than left as a silent demotion.
+    @Test func anAliasedTypeIsStoredAsJSONAndReported() {
+        let byProperty = Dictionary(uniqueKeysWithValues: AliasModel.sqliteSchema.columns.map { ($0.propertyName, $0.storage) })
+        #expect(byProperty["plain"] == .text)
+        #expect(byProperty["aliased"] == .json)
+        #expect(AliasModel.sqliteSchema.propertiesStoredAsJSON == ["aliased": "AliasedText"])
+    }
+
+    @Test func aPropertyWithNoTypeAnnotationGetsNoColumn() {
+        // A macro sees only syntax, so an inferred type is invisible. Omitted, not guessed.
+        let names = InferredTypeModel.sqliteSchema.columns.map(\.propertyName)
+        #expect(names == ["typed"])
+        #expect(InferredTypeModel.sqliteSchema.propertiesWithoutColumns == ["inferred"])
     }
 }

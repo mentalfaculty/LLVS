@@ -40,6 +40,9 @@ let package = Package(
         .library(
             name: "LLVSOneDrive",
             targets: ["LLVSOneDrive"]),
+        .library(
+            name: "LLVSProjection",
+            targets: ["LLVSProjection"]),
     ],
     // The LLVSBox and LLVSPCloud products are empty unless the consumer enables the matching trait,
     // e.g. .package(url: "...", from: "0.11.0", traits: ["Box"]). This keeps the vendor SDKs out of other apps.
@@ -113,6 +116,14 @@ let package = Package(
         .target(
             name: "LLVSOneDrive",
             dependencies: ["LLVS"],
+            swiftSettings: [.swiftLanguageMode(.v6)]),
+        .target(
+            name: "LLVSProjection",
+            dependencies: ["LLVS", "LLVSSQLite", "LLVSModel"],
+            swiftSettings: [.swiftLanguageMode(.v6)]),
+        .testTarget(
+            name: "LLVSProjectionTests",
+            dependencies: ["LLVS", "LLVSSQLite", "LLVSProjection", "LLVSModel"],
             swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(
             name: "LLVSNetworkTests",

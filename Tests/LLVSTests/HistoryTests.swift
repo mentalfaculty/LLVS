@@ -225,3 +225,82 @@ import Foundation
         #expect(common == version3.id)
     }
 }
+
+@Suite class AncestryTests {
+
+    let store: Store
+    let rootURL: URL
+
+    init() throws {
+        rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        store = try Store(rootDirectoryURL: rootURL)
+    }
+
+    deinit {
+        try? FileManager.default.removeItem(at: rootURL)
+    }
+
+    private func value(_ id: String) -> Value {
+        Value(id: .init(id), data: "x".data(using: .utf8)!)
+    }
+
+    @Test func findsADirectPredecessor() throws {
+        let v1 = try store.makeVersion(basedOnPredecessor: nil, inserting: [value("a")])
+        let v2 = try store.makeVersion(basedOnPredecessor: v1.id, inserting: [value("b")])
+        store.queryHistory { history in
+            #expect(history.isAncestor(v1.id, ofVersionIdentifiedBy: v2.id))
+        }
+    }
+
+    @Test func findsAnAncestorSeveralStepsBack() throws {
+        var head = try store.makeVersion(basedOnPredecessor: nil, inserting: [value("a")])
+        let root = head.id
+        for i in 0..<10 {
+            head = try store.makeVersion(basedOnPredecessor: head.id, inserting: [value("v\(i)")])
+        }
+        let tip = head.id
+        store.queryHistory { history in
+            #expect(history.isAncestor(root, ofVersionIdentifiedBy: tip))
+        }
+    }
+
+    @Test func aVersionIsNotItsOwnAncestor() throws {
+        let v1 = try store.makeVersion(basedOnPredecessor: nil, inserting: [value("a")])
+        store.queryHistory { history in
+            #expect(!history.isAncestor(v1.id, ofVersionIdentifiedBy: v1.id))
+        }
+    }
+
+    @Test func aSidewaysVersionIsNotAnAncestor() throws {
+        let base = try store.makeVersion(basedOnPredecessor: nil, inserting: [value("a")])
+        let left = try store.makeVersion(basedOnPredecessor: base.id, inserting: [value("l")])
+        let right = try store.makeVersion(basedOnPredecessor: base.id, inserting: [value("r")])
+        store.queryHistory { history in
+            #expect(!history.isAncestor(left.id, ofVersionIdentifiedBy: right.id))
+            #expect(!history.isAncestor(right.id, ofVersionIdentifiedBy: left.id))
+        }
+    }
+
+    @Test func aDescendantIsNotAnAncestor() throws {
+        let v1 = try store.makeVersion(basedOnPredecessor: nil, inserting: [value("a")])
+        let v2 = try store.makeVersion(basedOnPredecessor: v1.id, inserting: [value("b")])
+        store.queryHistory { history in
+            #expect(!history.isAncestor(v2.id, ofVersionIdentifiedBy: v1.id))
+        }
+    }
+
+    /// Beyond the limit the answer is "not found", not "not an ancestor". Callers must treat a
+    /// false as inconclusive, which is why the diff falls back to the full search on one.
+    @Test func stopsSearchingAtTheLimit() throws {
+        var head = try store.makeVersion(basedOnPredecessor: nil, inserting: [value("a")])
+        let root = head.id
+        for i in 0..<30 {
+            head = try store.makeVersion(basedOnPredecessor: head.id, inserting: [value("v\(i)")])
+        }
+        let tip = head.id
+        store.queryHistory { history in
+            #expect(history.isAncestor(root, ofVersionIdentifiedBy: tip, searchLimit: 100))
+            #expect(!history.isAncestor(root, ofVersionIdentifiedBy: tip, searchLimit: 5))
+        }
+    }
+}

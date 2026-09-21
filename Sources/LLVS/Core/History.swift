@@ -94,6 +94,39 @@ public class History {
         }
     }
     
+    /// Whether `ancestorId` is an ancestor of `versionId`, searching no further than
+    /// `searchLimit` versions back.
+    ///
+    /// Returns `false` when the answer is not reached within the limit, so a `true` is
+    /// definite and a `false` means "not found nearby" rather than "certainly not".
+    /// The limit is what makes this cheap: it walks back from `versionId` alone and stops
+    /// on a hit, rather than building the full ancestor set that
+    /// `greatestCommonAncestor(ofVersionsIdentifiedBy:)` needs.
+    ///
+    /// Use it to skip that full search in the common case of two versions on one line.
+    public func isAncestor(_ ancestorId: Version.ID, ofVersionIdentifiedBy versionId: Version.ID, searchLimit: Int = 100) -> Bool {
+        guard ancestorId != versionId else { return false }
+
+        var visited = Set<Version.ID>([versionId])
+        var front: Set<Version.ID> = [versionId]
+
+        while !front.isEmpty, visited.count <= searchLimit {
+            var nextFront = Set<Version.ID>()
+            for identifier in front {
+                guard let version = self.version(identifiedBy: identifier) else { continue }
+                for predecessorId in version.predecessors?.ids ?? [] {
+                    if predecessorId == ancestorId { return true }
+                    if visited.insert(predecessorId).inserted {
+                        nextFront.insert(predecessorId)
+                    }
+                }
+            }
+            front = nextFront
+        }
+
+        return false
+    }
+
     public func greatestCommonAncestor(ofVersionsIdentifiedBy ids: (Version.ID, Version.ID)) throws -> Version.ID? {
         // Find all ancestors of first Version.
         // Note that fronts are filtered, rather than using subtract, which iterates the (large) set passed.

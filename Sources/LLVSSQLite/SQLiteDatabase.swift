@@ -82,7 +82,34 @@ public final class SQLiteDatabase {
         self.database = nil
     }
     
-    /// Execute a SQLite statement with bindings provided by an array of arrays. 
+    /// Run `block` inside a SQLite transaction, committing when it returns and rolling
+    /// back when it throws. The block's value is returned.
+    ///
+    /// Use this when several writes must land together or not at all — for example
+    /// applying a set of rows and recording the version they came from, where a partial
+    /// result would leave no way to tell what had been applied.
+    ///
+    /// Not reentrant. SQLite does not nest plain transactions, so calling this from
+    /// inside another `inTransaction` block fails on the inner `BEGIN`.
+    ///
+    /// Pass `immediate: true` to take the database's write lock up front rather than at the
+    /// first write. A plain transaction is deferred, so another connection can write in the
+    /// gap before it starts; an immediate one makes that other writer wait instead.
+    public func inTransaction<T>(immediate: Bool = false, _ block: () throws -> T) throws -> T {
+        try execute(statement: immediate ? "BEGIN IMMEDIATE TRANSACTION" : "BEGIN TRANSACTION")
+        let result: T
+        do {
+            result = try block()
+        } catch {
+            // The caller's error is the one worth reporting; a rollback failure would mask it.
+            try? execute(statement: "ROLLBACK")
+            throw error
+        }
+        try execute(statement: "COMMIT")
+        return result
+    }
+
+    /// Execute a SQLite statement with bindings provided by an array of arrays.
     /// Each entry in the outer array is an array holding the bindings for one statement.
     /// The statement will be executed multiple times with different values.
     /// Passing nothing for the bindings can be used to execute a statement that has no bound values.
