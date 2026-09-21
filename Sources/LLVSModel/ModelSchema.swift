@@ -94,8 +94,22 @@ public struct ModelSchema: Sendable, Equatable {
     /// Annotate it — `var count: Int = 0` — to get a column.
     public let propertiesWithoutColumns: [String]
 
-    public init(columns: [ModelColumn], propertiesWithoutColumns: [String] = []) {
+    /// Properties stored as JSON, with the type name as written, keyed by property.
+    ///
+    /// For an array, a dictionary or a nested struct this is expected and correct. It is
+    /// worth checking for one surprise: a macro cannot resolve a `typealias`, because that
+    /// needs type checking and a macro sees only syntax. So `typealias Title = String` with
+    /// `var title: Title` lands here rather than in a `TEXT` column that could be indexed.
+    /// Write the underlying type if you want the column.
+    public let propertiesStoredAsJSON: [String: String]
+
+    public init(
+        columns: [ModelColumn],
+        propertiesWithoutColumns: [String] = [],
+        propertiesStoredAsJSON: [String: String] = [:]
+    ) {
         self.columns = columns
         self.propertiesWithoutColumns = propertiesWithoutColumns
+        self.propertiesStoredAsJSON = propertiesStoredAsJSON
     }
 }

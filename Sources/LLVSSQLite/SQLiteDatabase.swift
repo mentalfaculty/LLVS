@@ -91,8 +91,12 @@ public final class SQLiteDatabase {
     ///
     /// Not reentrant. SQLite does not nest plain transactions, so calling this from
     /// inside another `inTransaction` block fails on the inner `BEGIN`.
-    public func inTransaction<T>(_ block: () throws -> T) throws -> T {
-        try execute(statement: "BEGIN TRANSACTION")
+    ///
+    /// Pass `immediate: true` to take the database's write lock up front rather than at the
+    /// first write. A plain transaction is deferred, so another connection can write in the
+    /// gap before it starts; an immediate one makes that other writer wait instead.
+    public func inTransaction<T>(immediate: Bool = false, _ block: () throws -> T) throws -> T {
+        try execute(statement: immediate ? "BEGIN IMMEDIATE TRANSACTION" : "BEGIN TRANSACTION")
         let result: T
         do {
             result = try block()

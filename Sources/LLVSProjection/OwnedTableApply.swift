@@ -23,8 +23,13 @@ extension OwnedTable {
     @discardableResult
     public func apply(_ changes: [Value.Change], in database: SQLiteDatabase) throws -> Int {
         var applied = 0
-        try whileApplyingRemoteChanges(in: database) {
-            try database.inTransaction {
+        // The write lock is taken first, then suppression is set inside it. The other order
+        // leaves a window in which the app's own write is swallowed by the flag: the row
+        // changes, nothing is captured, and the edit never becomes a version — data loss the
+        // UI cannot show, because the row looks right. An immediate transaction makes a
+        // concurrent writer on another connection wait rather than fall into that window.
+        try database.inTransaction(immediate: true) {
+            try self.whileApplyingRemoteChanges(in: database) {
                 for change in changes {
                     switch change {
                     case let .insert(value), let .update(value):

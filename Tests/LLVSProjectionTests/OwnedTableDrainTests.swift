@@ -176,4 +176,49 @@ import Foundation
         // An absent property decodes as nil for an optional, which a null would not.
         #expect(object["body"] == nil)
     }
+
+    /// A row deleted and reinserted between drains has `.insert` as its last operation but
+    /// still exists in the store, so it must go out as an update or the insert fails. This is
+    /// why the drain asks the store what exists rather than inferring it from the changelog.
+    @Test func aRowDeletedAndReinsertedBecomesAnUpdate() throws {
+        try insertNote("n1/Note", title: "First", body: "a")
+        let first = try table.drain(in: database, store: store, basedOn: nil)
+
+        try database.execute(statement: "DELETE FROM notes WHERE llvs_id = ?", withBindingsList: [["n1/Note"]])
+        try insertNote("n1/Note", title: "Reborn", body: "b")
+        let second = try table.drain(in: database, store: store, basedOn: first.version)
+
+        let versionId = try #require(second.version)
+        let object = try json(of: "n1/Note", at: versionId)
+        #expect(object["title"] as? String == "Reborn")
+    }
+
+    @Test func aRowUpdatedThenDeletedThenReinsertedTakesItsFinalState() throws {
+        try insertNote("n1/Note", title: "First", body: "a")
+        let first = try table.drain(in: database, store: store, basedOn: nil)
+
+        try database.execute(statement: "UPDATE notes SET title = ? WHERE llvs_id = ?",
+            withBindingsList: [["Middle", "n1/Note"]])
+        try database.execute(statement: "DELETE FROM notes WHERE llvs_id = ?", withBindingsList: [["n1/Note"]])
+        try insertNote("n1/Note", title: "Final", body: "c")
+        let second = try table.drain(in: database, store: store, basedOn: first.version)
+
+        let versionId = try #require(second.version)
+        let object = try json(of: "n1/Note", at: versionId)
+        #expect(object["title"] as? String == "Final")
+    }
+
+    /// The reverse: inserted then deleted within one window, for a row the store already has.
+    @Test func aRowUpdatedThenDeletedBecomesARemoval() throws {
+        try insertNote("n1/Note", title: "First", body: "a")
+        let first = try table.drain(in: database, store: store, basedOn: nil)
+
+        try database.execute(statement: "UPDATE notes SET title = ? WHERE llvs_id = ?",
+            withBindingsList: [["Edited", "n1/Note"]])
+        try database.execute(statement: "DELETE FROM notes WHERE llvs_id = ?", withBindingsList: [["n1/Note"]])
+        let second = try table.drain(in: database, store: store, basedOn: first.version)
+
+        let versionId = try #require(second.version)
+        #expect(try store.value(id: .init("n1/Note"), at: versionId) == nil)
+    }
 }

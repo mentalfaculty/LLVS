@@ -319,7 +319,9 @@ Two devices changing the *same* column is a real conflict, and it goes to your `
 
 A delete racing an edit brings the row back carrying the edit, because the default arbiter favours the more recent change. A row that reappears is visible and fixable; an edit that silently vanished is neither. Change it in your arbiter if your app wants the opposite.
 
-### Three rules worth knowing
+### Four rules worth knowing
+
+**Drive one table from one place.** This is the one that loses data if you ignore it. Capture is suppressed while a version from elsewhere is applied, and that suppression is global to the table, so a write from your app *during* an `apply` is swallowed: the row changes, nothing is captured, and the edit never syncs. The row still shows what the user typed, so nothing looks wrong until it fails to arrive on their other device. `apply` takes the write lock first, which makes another connection wait, but nothing can protect a second thread sharing yours. Put the table behind an actor or a serial queue — `SQLiteDatabase` asks the same of you already.
 
 **Writes are SQL, reads are typed.** That is deliberate. `UPDATE notes SET title = ?` says only the title changed, and that is what lets your edit and another device's merge. A `save(note)` writing every column would claim they all changed and throw that away. A typed write is possible, but it has to diff against the stored row first.
 

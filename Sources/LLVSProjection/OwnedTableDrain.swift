@@ -42,6 +42,11 @@ extension OwnedTable {
 
         var changes: [Value.Change] = []
         for (valueId, operation) in operationsByValueId {
+            // Asked of the store rather than inferred from the changelog, and that matters.
+            // A row deleted and reinserted between drains has `.insert` as its last operation
+            // but still exists in the store, so it must go out as an `.update` or the insert
+            // fails. The pairing of the last operation with a fresh read of the current row,
+            // rather than a remembered payload, is what makes the collapse above correct.
             let existedBefore = try predecessor.flatMap { try store.valueReference(id: valueId, at: $0) } != nil
 
             switch operation {

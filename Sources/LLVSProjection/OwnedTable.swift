@@ -39,6 +39,15 @@ public struct ChangelogEntry: Sendable, Equatable {
 /// Three triggers record what changes into a changelog: per row, and for an update, per
 /// column. That granularity is what lets two devices editing different columns of one row
 /// both keep their edit.
+///
+/// **Drive one table from one place.** Capture is suppressed while a version from elsewhere
+/// is applied, and that suppression is a row in the database, so it is global to the table
+/// rather than per-connection or per-thread. An app writing while `apply` runs therefore has
+/// its write swallowed: the row changes, nothing is captured, and the edit never becomes a
+/// version. The row still shows the edit, so nothing looks wrong until the data fails to
+/// sync. `apply` takes the write lock before suppressing, which makes a writer on another
+/// connection wait, but nothing can protect a second thread sharing this one. Serialise
+/// access — an actor, a queue, or simply one owner — as `SQLiteDatabase` already requires.
 public struct OwnedTable: Sendable {
 
     public let typeIdentifier: String
@@ -174,6 +183,10 @@ public struct OwnedTable: Sendable {
     /// Without this, an applied change would be recorded as a local edit and sent straight
     /// back out, and two devices would trade it indefinitely. The flag is lifted even when
     /// the block throws, or capture would stay off for good.
+    ///
+    /// The flag is global to the table, so any write from anywhere during `block` is
+    /// swallowed, not only the ones this made. Call it with the write lock already held, as
+    /// `apply` does, and never from two places at once.
     public func whileApplyingRemoteChanges(in database: SQLiteDatabase, _ block: () throws -> Void) throws {
         try database.execute(statement: "UPDATE \(suppressionName) SET flag = 1")
         defer {

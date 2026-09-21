@@ -27,6 +27,14 @@ struct SchemaModel: Codable, Equatable {
     var updatedAt: Date = .init(timeIntervalSince1970: 0)
 }
 
+typealias AliasedText = String
+
+@MergeableModel
+struct AliasModel: Codable, Equatable {
+    var plain: String = ""
+    var aliased: AliasedText = ""
+}
+
 @MergeableModel
 struct InferredTypeModel: Codable, Equatable {
     var typed: String = ""
@@ -97,6 +105,20 @@ struct InferredTypeModel: Codable, Equatable {
     @Test func aKeywordColumnNameIsEscaped() {
         let byProperty = columns(of: SchemaModel.sqliteSchema)
         #expect(byProperty["when"]?.columnName == "when_")
+    }
+
+    @Test func propertiesStoredAsJSONAreReportedWithTheirType() {
+        #expect(SchemaModel.sqliteSchema.propertiesStoredAsJSON == ["tags": "[String]"])
+    }
+
+    /// A macro cannot resolve a typealias — that needs type checking, and a macro sees only
+    /// syntax — so an aliased String becomes a JSON column rather than an indexable TEXT one.
+    /// It cannot be fixed here, so it is reported rather than left as a silent demotion.
+    @Test func anAliasedTypeIsStoredAsJSONAndReported() {
+        let byProperty = Dictionary(uniqueKeysWithValues: AliasModel.sqliteSchema.columns.map { ($0.propertyName, $0.storage) })
+        #expect(byProperty["plain"] == .text)
+        #expect(byProperty["aliased"] == .json)
+        #expect(AliasModel.sqliteSchema.propertiesStoredAsJSON == ["aliased": "AliasedText"])
     }
 
     @Test func aPropertyWithNoTypeAnnotationGetsNoColumn() {

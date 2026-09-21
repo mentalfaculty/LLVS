@@ -167,19 +167,26 @@ public struct MergeableModelMacro: ExtensionMacro {
         // gets no column, because a macro sees only syntax and guessing would be wrong.
         var columnLiterals: [String] = []
         var propertiesWithoutColumns: [String] = []
+        var jsonProperties: [String] = []
         for property in storedProperties {
             let column = columnName(forProperty: property.name)
             guard let declaredType = property.declaredType else {
                 propertiesWithoutColumns.append(property.name)
                 continue
             }
-            let storage = storageCase(forSwiftType: declaredType) ?? "json"
+            let storage = storageCase(forSwiftType: declaredType)
+            if storage == nil {
+                // Expected for an array or a nested struct; a surprise for a typealias, which
+                // a macro cannot resolve. Reported so the surprise is visible.
+                jsonProperties.append("\"\(property.name)\": \"\(declaredType)\"")
+            }
             columnLiterals.append("""
-                LLVSModel.ModelColumn(propertyName: "\(property.name)", columnName: "\(column)", storage: .\(storage))
+                LLVSModel.ModelColumn(propertyName: "\(property.name)", columnName: "\(column)", storage: .\(storage ?? "json"))
                 """)
         }
         let columnsLiteral = columnLiterals.joined(separator: ",\n                ")
         let withoutColumnsLiteral = propertiesWithoutColumns.map { "\"\($0)\"" }.joined(separator: ", ")
+        let jsonPropertiesLiteral = jsonProperties.isEmpty ? ":" : jsonProperties.joined(separator: ", ")
 
         let extensionDecl: DeclSyntax = """
         extension \(type.trimmed): LLVSModel.Mergeable {
@@ -194,7 +201,8 @@ public struct MergeableModelMacro: ExtensionMacro {
                     columns: [
                 \(raw: columnsLiteral)
                     ],
-                    propertiesWithoutColumns: [\(raw: withoutColumnsLiteral)])
+                    propertiesWithoutColumns: [\(raw: withoutColumnsLiteral)],
+                    propertiesStoredAsJSON: [\(raw: jsonPropertiesLiteral)])
             }
         }
         """
