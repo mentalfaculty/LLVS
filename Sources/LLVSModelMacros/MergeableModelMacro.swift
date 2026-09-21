@@ -44,13 +44,13 @@ private func columnName(forProperty property: String) -> String {
     return sqliteKeywords.contains(result) ? result + "_" : result
 }
 
-/// The SQLite type for a declared Swift type, or nil when the type has no column shape and
+/// The storage case for a declared Swift type, or nil when the type has no column shape and
 /// the property should be stored as JSON.
 ///
-/// An optional is the same column, nullable, so the wrapped type decides. `Bool` is
-/// `INTEGER`, holding 0 or 1. `Date` is handled separately, because its column holds Unix
-/// seconds while Codable encodes seconds since 2001.
-private func sqliteDeclaration(forSwiftType swiftType: String) -> String? {
+/// An optional is the same column, nullable, so the wrapped type decides. The case names the
+/// semantic type rather than the SQLite one, because `Int`, `Bool` and `Date` are all
+/// INTEGER and each converts differently at the boundary.
+private func storageCase(forSwiftType swiftType: String) -> String? {
     var bare = swiftType.trimmingCharacters(in: .whitespaces)
     if bare.hasSuffix("?") { bare = String(bare.dropLast()).trimmingCharacters(in: .whitespaces) }
     if bare.hasPrefix("Optional<") && bare.hasSuffix(">") {
@@ -62,27 +62,15 @@ private func sqliteDeclaration(forSwiftType swiftType: String) -> String? {
     }
 
     switch bare {
-    case "String": return "TEXT"
-    case "Int", "Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32": return "INTEGER"
-    case "Double", "Float": return "REAL"
-    case "Bool": return "INTEGER"
-    case "UUID": return "TEXT"
-    case "Data": return "BLOB"
+    case "String": return "text"
+    case "Int", "Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32": return "integer"
+    case "Double", "Float": return "real"
+    case "Bool": return "boolean"
+    case "Date": return "date"
+    case "UUID": return "uuid"
+    case "Data": return "blob"
     default: return nil
     }
-}
-
-/// Whether a declared type is `Date`, optional or qualified.
-private func isDate(_ swiftType: String) -> Bool {
-    var bare = swiftType.trimmingCharacters(in: .whitespaces)
-    if bare.hasSuffix("?") { bare = String(bare.dropLast()).trimmingCharacters(in: .whitespaces) }
-    if bare.hasPrefix("Optional<") && bare.hasSuffix(">") {
-        bare = String(bare.dropFirst("Optional<".count).dropLast()).trimmingCharacters(in: .whitespaces)
-    }
-    if let lastDot = bare.lastIndex(of: ".") {
-        bare = String(bare[bare.index(after: lastDot)...])
-    }
-    return bare == "Date"
 }
 
 /// A stored property, with its declared type when one is written down. The type is nil for
@@ -183,19 +171,10 @@ public struct MergeableModelMacro: ExtensionMacro {
                 propertiesWithoutColumns.append(property.name)
                 continue
             }
-            if isDate(declaredType) {
-                columnLiterals.append("""
-                    LLVSModel.ModelColumn(propertyName: "\(property.name)", columnName: "\(column)", declaration: "INTEGER", storage: .date)
-                    """)
-            } else if let declaration = sqliteDeclaration(forSwiftType: declaredType) {
-                columnLiterals.append("""
-                    LLVSModel.ModelColumn(propertyName: "\(property.name)", columnName: "\(column)", declaration: "\(declaration)", storage: .scalar)
-                    """)
-            } else {
-                columnLiterals.append("""
-                    LLVSModel.ModelColumn(propertyName: "\(property.name)", columnName: "\(column)", declaration: "TEXT", storage: .json)
-                    """)
-            }
+            let storage = storageCase(forSwiftType: declaredType) ?? "json"
+            columnLiterals.append("""
+                LLVSModel.ModelColumn(propertyName: "\(property.name)", columnName: "\(column)", storage: .\(storage))
+                """)
         }
         let columnsLiteral = columnLiterals.joined(separator: ",\n                ")
         let withoutColumnsLiteral = propertiesWithoutColumns.map { "\"\($0)\"" }.joined(separator: ", ")

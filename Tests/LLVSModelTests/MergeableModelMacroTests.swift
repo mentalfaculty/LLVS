@@ -73,13 +73,13 @@ struct InferredTypeModel: Codable, Equatable {
         #expect(byProperty["when"]?.storage == .date)
         #expect(byProperty["identifier"]?.declaration == "TEXT")
         #expect(byProperty["payload"]?.declaration == "BLOB")
-        #expect(byProperty["title"]?.storage == .scalar)
+        #expect(byProperty["title"]?.storage == .text)
     }
 
     @Test func optionalScalarsAreStillScalarColumns() {
         let byProperty = columns(of: SchemaModel.sqliteSchema)
         #expect(byProperty["note"]?.declaration == "TEXT")
-        #expect(byProperty["note"]?.storage == .scalar)
+        #expect(byProperty["note"]?.storage == .text)
     }
 
     @Test func nestedPropertiesBecomeJSONColumns() {

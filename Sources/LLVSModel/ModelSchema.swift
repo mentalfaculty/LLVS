@@ -7,24 +7,57 @@
 
 import Foundation
 
-/// How a model property is stored in its SQLite column.
+/// How a model property is stored in its SQLite column, and what has to happen at the
+/// boundary to turn one into the other.
+///
+/// Every case names the *semantic* type rather than just the SQLite one, because the SQLite
+/// type is not enough to convert by. `Int`, `Bool` and `Date` are all `INTEGER`, and each
+/// needs different handling: a `Bool` must reach `Codable` as `true`, not `1`, and a `Date`
+/// column holds Unix seconds while `Codable` wants seconds since 2001. Keying the conversion
+/// on the declaration string got both of those wrong, silently, because a wrong conversion
+/// still produces a number.
+///
+/// Switching on this enum instead means a type that needs new handling is a compile error
+/// rather than a wrong answer.
 public enum ColumnStorage: Sendable, Equatable {
-    /// A real column of the value's own type, which an ordinary `CREATE INDEX` can index.
-    case scalar
+    /// `TEXT`, holding the string itself.
+    case text
 
-    /// A `TEXT` column holding JSON, for a property whose type has no column shape — an
-    /// array, a dictionary, a nested struct. Still queryable through `json_extract` and
-    /// `json_each`, and an expression index can be built over it.
+    /// `INTEGER`, holding a whole number.
+    case integer
+
+    /// `REAL`, holding a floating-point number.
+    case real
+
+    /// `BLOB`, holding the bytes. `Codable` carries these as base64, so the boundary converts.
+    case blob
+
+    /// `INTEGER`, holding 0 or 1. Distinct from `integer` because `Codable` requires a JSON
+    /// `true`/`false` and rejects a number.
+    case boolean
+
+    /// `INTEGER`, holding Unix seconds. Distinct from `integer` because `Codable` encodes a
+    /// `Date` as seconds since 2001, while `strftime('%s')` and every other SQLite tool mean
+    /// seconds since 1970. The column holds Unix seconds so ordinary SQL means what it says.
+    case date
+
+    /// `TEXT`, holding the UUID string.
+    case uuid
+
+    /// `TEXT` holding JSON, for a property whose type has no column shape — an array, a
+    /// dictionary, a nested struct. Still queryable through `json_extract` and `json_each`,
+    /// and an expression index can be built over it.
     case json
 
-    /// An `INTEGER` column holding Unix seconds, for a `Date`.
-    ///
-    /// This needs its own case because `Codable` encodes a `Date` as seconds since 2001,
-    /// while every SQLite tool and every other app means seconds since 1970. Storing
-    /// Codable's number would make `strftime('%s', 'now')` — the obvious thing to write —
-    /// silently 31 years wrong. The column holds Unix seconds and the conversion happens at
-    /// the boundary, so ordinary SQL means what it says.
-    case date
+    /// The SQLite column type this is stored in.
+    public var declaration: String {
+        switch self {
+        case .text, .uuid, .json: return "TEXT"
+        case .integer, .boolean, .date: return "INTEGER"
+        case .real: return "REAL"
+        case .blob: return "BLOB"
+        }
+    }
 }
 
 /// One column of the table a model maps to.
@@ -38,15 +71,15 @@ public struct ModelColumn: Sendable, Equatable {
     /// would otherwise collide with a SQLite keyword.
     public let columnName: String
 
-    /// The SQLite type, for example `"TEXT"` or `"INTEGER"`.
-    public let declaration: String
-
     public let storage: ColumnStorage
 
-    public init(propertyName: String, columnName: String, declaration: String, storage: ColumnStorage) {
+    /// The SQLite type, for example `"TEXT"` or `"INTEGER"`. Derived from `storage`, so the
+    /// two cannot disagree.
+    public var declaration: String { storage.declaration }
+
+    public init(propertyName: String, columnName: String, storage: ColumnStorage) {
         self.propertyName = propertyName
         self.columnName = columnName
-        self.declaration = declaration
         self.storage = storage
     }
 }

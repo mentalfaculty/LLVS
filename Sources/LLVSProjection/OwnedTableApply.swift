@@ -77,31 +77,32 @@ extension OwnedTable {
     private func binding(for propertyValue: Any?, column: ModelColumn) -> Any? {
         guard let propertyValue, !(propertyValue is NSNull) else { return nil }
 
+        // Switching on the storage case, not the SQLite type: Int, Bool and Date are all
+        // INTEGER and each converts differently on the way in as well as out.
         switch column.storage {
+        case .text, .uuid:
+            return propertyValue as? String
+        case .integer:
+            return (propertyValue as? NSNumber)?.int64Value
+        case .real:
+            return (propertyValue as? NSNumber)?.doubleValue
+        case .boolean:
+            // JSONSerialization gives a Bool as an NSNumber, so read it as one and store 0/1.
+            guard let number = propertyValue as? NSNumber else { return nil }
+            return number.boolValue ? Int64(1) : Int64(0)
         case .date:
             // Codable gives seconds since 2001; the column holds Unix seconds, so that
-            // `strftime('%s', 'now')` and every other SQLite tool mean what they say.
+            // strftime('%s', 'now') and every other SQLite tool mean what they say.
             guard let referenceSeconds = (propertyValue as? NSNumber)?.doubleValue else { return nil }
             return Int64(Date(timeIntervalSinceReferenceDate: referenceSeconds).timeIntervalSince1970)
+        case .blob:
+            // Codable encodes Data as base64, which is what the stored JSON carries.
+            return (propertyValue as? String).flatMap { Data(base64Encoded: $0) }
         case .json:
             guard let data = try? JSONSerialization.data(withJSONObject: propertyValue, options: [.sortedKeys]) else {
                 return nil
             }
             return String(decoding: data, as: UTF8.self)
-        case .scalar:
-            switch column.declaration {
-            case "TEXT":
-                return propertyValue as? String
-            case "INTEGER":
-                return (propertyValue as? NSNumber)?.int64Value
-            case "REAL":
-                return (propertyValue as? NSNumber)?.doubleValue
-            case "BLOB":
-                // Codable encodes Data as base64, which is what the stored JSON carries.
-                return (propertyValue as? String).flatMap { Data(base64Encoded: $0) }
-            default:
-                return nil
-            }
         }
     }
 }

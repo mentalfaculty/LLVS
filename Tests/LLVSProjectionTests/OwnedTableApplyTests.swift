@@ -25,8 +25,8 @@ import Foundation
             typeIdentifier: "Note",
             tableName: "notes",
             schema: ModelSchema(columns: [
-                ModelColumn(propertyName: "title", columnName: "title", declaration: "TEXT", storage: .scalar),
-                ModelColumn(propertyName: "body", columnName: "body", declaration: "TEXT", storage: .scalar),
+                ModelColumn(propertyName: "title", columnName: "title", storage: .text),
+                ModelColumn(propertyName: "body", columnName: "body", storage: .text),
             ]))
         for statement in table.createStatements() {
             try database.execute(statement: statement)

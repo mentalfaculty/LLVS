@@ -105,30 +105,34 @@ extension OwnedTable {
     /// Reads one column into the value the stored JSON should carry for its property.
     /// Shared with the typed read, which needs the same mapping in the same direction.
     static func propertyValue(from row: SQLiteDatabase.Row, at index: Int, column: ModelColumn) -> Any? {
+        // Switching on the storage case rather than the SQLite type is what keeps this
+        // honest: Int, Bool and Date are all INTEGER and each converts differently. A new
+        // case here is a compile error rather than a silently wrong number.
         switch column.storage {
+        case .text:
+            return row.value(inColumnAtIndex: index) as String?
+        case .integer:
+            return row.value(inColumnAtIndex: index) as Int64?
+        case .real:
+            return row.value(inColumnAtIndex: index) as Double?
+        case .boolean:
+            // Codable requires a JSON true/false and rejects a number.
+            guard let number: Int64 = row.value(inColumnAtIndex: index) else { return nil }
+            return number != 0
         case .date:
             // The column holds Unix seconds, because that is what SQL means by a timestamp.
             // Codable wants seconds since 2001, so convert here rather than storing a number
-            // that ordinary SQL would read as 31 years out.
+            // ordinary SQL would read as 31 years out.
             guard let unixSeconds: Int64 = row.value(inColumnAtIndex: index) else { return nil }
             return Date(timeIntervalSince1970: TimeInterval(unixSeconds)).timeIntervalSinceReferenceDate
+        case .uuid:
+            return row.value(inColumnAtIndex: index) as String?
+        case .blob:
+            // Codable encodes Data as base64, so that is what it decodes from.
+            return (row.value(inColumnAtIndex: index) as Data?)?.base64EncodedString()
         case .json:
             guard let text: String = row.value(inColumnAtIndex: index) else { return nil }
             return try? JSONSerialization.jsonObject(with: Data(text.utf8))
-        case .scalar:
-            switch column.declaration {
-            case "TEXT":
-                return row.value(inColumnAtIndex: index) as String?
-            case "INTEGER":
-                return row.value(inColumnAtIndex: index) as Int64?
-            case "REAL":
-                return row.value(inColumnAtIndex: index) as Double?
-            case "BLOB":
-                // Codable encodes Data as base64, so that is what it decodes from.
-                return (row.value(inColumnAtIndex: index) as Data?)?.base64EncodedString()
-            default:
-                return nil
-            }
         }
     }
 }

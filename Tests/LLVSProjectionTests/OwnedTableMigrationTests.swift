@@ -31,7 +31,7 @@ import Foundation
             typeIdentifier: "Note",
             tableName: "notes",
             schema: ModelSchema(columns: [
-                ModelColumn(propertyName: "title", columnName: "title", declaration: "TEXT", storage: .scalar),
+                ModelColumn(propertyName: "title", columnName: "title", storage: .text),
             ]))
         for statement in table.createStatements() {
             try database.execute(statement: statement)
@@ -90,7 +90,7 @@ import Foundation
             typeIdentifier: "Tag",
             tableName: "tags",
             schema: ModelSchema(columns: [
-                ModelColumn(propertyName: "label", columnName: "label", declaration: "TEXT", storage: .scalar),
+                ModelColumn(propertyName: "label", columnName: "label", storage: .text),
             ]))
         for statement in second.createStatements() { try database.execute(statement: statement) }
 

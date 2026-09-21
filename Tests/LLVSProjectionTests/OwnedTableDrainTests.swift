@@ -29,8 +29,8 @@ import Foundation
             typeIdentifier: "Note",
             tableName: "notes",
             schema: ModelSchema(columns: [
-                ModelColumn(propertyName: "title", columnName: "title", declaration: "TEXT", storage: .scalar),
-                ModelColumn(propertyName: "body", columnName: "body", declaration: "TEXT", storage: .scalar),
+                ModelColumn(propertyName: "title", columnName: "title", storage: .text),
+                ModelColumn(propertyName: "body", columnName: "body", storage: .text),
             ]))
         for statement in table.createStatements() {
             try database.execute(statement: statement)
@@ -71,7 +71,7 @@ import Foundation
             typeIdentifier: "Note",
             tableName: "notes2",
             schema: ModelSchema(columns: [
-                ModelColumn(propertyName: "updatedAt", columnName: "updated_at", declaration: "INTEGER", storage: .scalar),
+                ModelColumn(propertyName: "updatedAt", columnName: "updated_at", storage: .integer),
             ]))
         for statement in other.createStatements() { try database.execute(statement: statement) }
         try database.execute(statement: "INSERT INTO notes2 (llvs_id, updated_at) VALUES (?, ?)",
