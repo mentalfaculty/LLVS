@@ -39,6 +39,17 @@ import Foundation
             schemaVersion: 1)
     }
 
+    /// Polls for an expected result rather than sleeping a fixed time, which is only long
+    /// enough while the machine is idle.
+    private func waitForTitles(_ expected: [String], in follower: ProjectionFollower) async throws -> [String] {
+        for _ in 0..<200 {
+            let current = try await titles(in: follower)
+            if current == expected { return current }
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        return try await titles(in: follower)
+    }
+
     private func titles(in follower: ProjectionFollower) async throws -> [String] {
         try await follower.query { database in
             var result: [String] = []
@@ -125,14 +136,17 @@ import Foundation
         try coordinator.save(inserting: [ProjectionTestSupport.note("a", "Alpha")])
         let follower = try makeFollower()
 
-        // Run the loop until its first result arrives, then stop: the stream itself never
+        // Run the loop until its first pass lands, then stop: the stream itself never
         // finishes, so the task must be cancelled rather than awaited to completion.
         let task = Task {
             await follower.followUpdates { _ in }
         }
-        try await Task.sleep(for: .milliseconds(200))
-        task.cancel()
+        defer { task.cancel() }
 
-        #expect(try await titles(in: follower) == ["Alpha"])
+        // Wait for the row rather than for a fixed time. A sleep long enough on an idle
+        // machine is not long enough on a busy one, and this failed exactly that way in a
+        // full-suite run while passing ten times on its own.
+        let titles = try await waitForTitles(["Alpha"], in: follower)
+        #expect(titles == ["Alpha"])
     }
 }
