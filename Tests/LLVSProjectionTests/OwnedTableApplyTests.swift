@@ -152,4 +152,43 @@ import Foundation
         #expect(title == "Round trip")
         #expect(body == "intact")
     }
+
+    /// A change set carries every type in the store, so a table must take only its own rows.
+    /// Without this, two owned tables each end up holding every value: rows with null
+    /// columns, or — where property names collide — real but wrong data.
+    @Test func aChangeForAnotherTypeIsNotApplied() throws {
+        let changes: [Value.Change] = [
+            .insert(try value("n1/Note", ["title": "A note", "body": "b"])),
+            .insert(try value("t1/Tag", ["label": "A tag"])),
+        ]
+
+        let applied = try table.apply(changes, in: database)
+
+        #expect(applied == 1)
+        #expect(try title(of: "n1/Note") == "A note")
+        var ids: [String] = []
+        try database.forEach(matchingQuery: "SELECT llvs_id FROM notes") { row in
+            if let id: String = row.value(inColumnAtIndex: 0) { ids.append(id) }
+        }
+        #expect(ids == ["n1/Note"])
+    }
+
+    @Test func aRemovalForAnotherTypeIsNotApplied() throws {
+        try database.execute(statement: "INSERT INTO notes (llvs_id, title, body) VALUES (?, ?, ?)",
+            withBindingsList: [["n1/Note", "Kept", "b"]])
+        try table.clearChangelog(in: database)
+
+        // Same instance identifier, different type: it must not match.
+        let applied = try table.apply([.remove(.init("n1/Tag"))], in: database)
+
+        #expect(applied == 0)
+        #expect(try title(of: "n1/Note") == "Kept")
+    }
+
+    @Test func aValueWithNoTypeSuffixIsNotApplied() throws {
+        let applied = try table.apply([.insert(try value("noslash", ["title": "Odd", "body": "b"]))],
+            in: database)
+
+        #expect(applied == 0)
+    }
 }

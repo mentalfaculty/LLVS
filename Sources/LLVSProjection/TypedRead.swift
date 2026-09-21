@@ -31,6 +31,8 @@ extension OwnedTable {
     ///
     /// A row that cannot be decoded is left out rather than throwing, so one bad row does not
     /// blank a list. This mirrors how the read-only projection treats a value it cannot read.
+    /// Skipped rows are logged, because otherwise a schema mismatch is indistinguishable from
+    /// an empty table — which is exactly how a `Bool` column that could not decode hid itself.
     ///
     /// Writes stay ordinary SQL on purpose. An `UPDATE` naming one column says only that
     /// column changed, and the capture triggers record exactly that; a whole-row typed write
@@ -47,6 +49,7 @@ extension OwnedTable {
         if let clause { query += " WHERE \(clause)" }
 
         var rows: [ModelRow<Model>] = []
+        var skipped: [Value.ID] = []
         let decoder = JSONDecoder()
 
         try database.forEach(matchingQuery: query, withBindings: bindings) { row in
@@ -62,9 +65,17 @@ extension OwnedTable {
 
             guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
                   let model = try? decoder.decode(Model.self, from: data) else {
+                // A row the model cannot decode is left out, so one bad row does not blank a
+                // list. Silence would make a schema mismatch look like an empty table, so say
+                // so once per query rather than per row.
+                skipped.append(Value.ID(rawId))
                 return
             }
             rows.append(ModelRow(model: model, id: .init(rawId), version: version))
+        }
+
+        if !skipped.isEmpty {
+            log.error("\(tableName): \(skipped.count) row(s) could not be decoded as \(Model.self) and were left out, starting with \(skipped[0].rawValue). The table's columns and the model may disagree; a rebuild would resolve it.")
         }
 
         return rows

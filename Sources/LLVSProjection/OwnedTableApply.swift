@@ -14,6 +14,9 @@ extension OwnedTable {
 
     /// Writes changes from LLVS into the table, without recording them as local edits.
     ///
+    /// Only changes whose value ID names this table's type are applied; a change set from
+    /// `Store.valueChanges(updatingFrom:to:)` carries every type in the store.
+    ///
     /// Returns how many rows were written or deleted. A value that is not a JSON object is
     /// skipped rather than throwing, because one value this build cannot read must not stop
     /// the rest — the same rule the read-only projection follows.
@@ -25,12 +28,16 @@ extension OwnedTable {
                 for change in changes {
                     switch change {
                     case let .insert(value), let .update(value):
+                        // A change set carries every type in the store, so each table takes
+                        // only its own. Without this every value lands in every table.
+                        guard self.owns(value.id) else { continue }
                         guard let object = try? JSONSerialization.jsonObject(with: value.data) as? [String: Any] else {
                             continue
                         }
                         try self.upsert(object, id: value.id, in: database)
                         applied += 1
                     case let .remove(valueId):
+                        guard self.owns(valueId) else { continue }
                         try database.execute(
                             statement: "DELETE FROM \(self.tableName) WHERE llvs_id = ?",
                             withBindingsList: [[valueId.rawValue]])

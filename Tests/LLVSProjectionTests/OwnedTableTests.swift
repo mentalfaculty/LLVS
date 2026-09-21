@@ -198,4 +198,36 @@ import Foundation
         #expect(remaining.count == 1)
         #expect(remaining.first?.valueId.rawValue == "n2")
     }
+
+    /// A marker type with no properties beyond its identifier is legal, and SQLite rejects a
+    /// trigger with an empty body, so the update trigger must be left out rather than built
+    /// empty. Reachable from a tombstone type, or one whose properties all have inferred types.
+    @Test func aTableWithNoColumnsCanBeCreated() throws {
+        let marker = OwnedTable(typeIdentifier: "Marker", tableName: "markers",
+            schema: ModelSchema(columns: []))
+
+        for statement in marker.createStatements() {
+            try database.execute(statement: statement)
+        }
+
+        try database.execute(statement: "INSERT INTO markers (llvs_id) VALUES (?)",
+            withBindingsList: [["m1/Marker"]])
+        let captured = try marker.changelogEntries(in: database)
+        #expect(captured.count == 1)
+        #expect(captured.first?.operation == .insert)
+    }
+
+    @Test func aTableWithNoColumnsStillCapturesDeletes() throws {
+        let marker = OwnedTable(typeIdentifier: "Marker", tableName: "markers",
+            schema: ModelSchema(columns: []))
+        for statement in marker.createStatements() { try database.execute(statement: statement) }
+        try database.execute(statement: "INSERT INTO markers (llvs_id) VALUES (?)",
+            withBindingsList: [["m1/Marker"]])
+        try marker.clearChangelog(in: database)
+
+        try database.execute(statement: "DELETE FROM markers WHERE llvs_id = ?",
+            withBindingsList: [["m1/Marker"]])
+
+        #expect(try marker.changelogEntries(in: database).first?.operation == .remove)
+    }
 }

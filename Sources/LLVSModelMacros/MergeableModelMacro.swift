@@ -27,6 +27,8 @@ private let sqliteKeywords: Set<String> = [
     "right", "rollback", "row", "savepoint", "select", "set", "table", "temp", "temporary",
     "then", "to", "transaction", "trigger", "union", "unique", "update", "using",
     "vacuum", "values", "view", "virtual", "when", "where", "window", "with", "without",
+    // Not a keyword, but it shadows SQLite's implicit rowid alias.
+    "rowid",
 ]
 
 /// A property name in camelCase becomes a conventional snake_case column, escaped if it
@@ -63,7 +65,7 @@ private func storageCase(forSwiftType swiftType: String) -> String? {
 
     switch bare {
     case "String": return "text"
-    case "Int", "Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32": return "integer"
+    case "Int", "Int8", "Int16", "Int32", "Int64", "UInt", "UInt8", "UInt16", "UInt32": return "integer"
     case "Double", "Float": return "real"
     case "Bool": return "boolean"
     case "Date": return "date"

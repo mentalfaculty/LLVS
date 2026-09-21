@@ -94,7 +94,7 @@ private final class Device {
 
     /// Copies every version device A has into device B's store, so B can merge against it.
     /// Stands in for a sync, without needing an exchange for a test about merging.
-    private func copyVersions(from source: Device, to destination: Device, upTo version: Version.ID) throws {
+    private func copyVersions(from source: Device, to destination: Device) throws {
         var toCopy: [Version] = []
         try source.store.queryHistory { history in
             for candidate in history {
@@ -107,7 +107,6 @@ private final class Device {
             let changes = try source.store.valueChanges(madeInVersionIdentifiedBy: candidate.id)
             try destination.store.addVersion(candidate, storing: changes)
         }
-        _ = version
     }
 
     @Test func aWriteSurvivesTheRoundTrip() throws {
@@ -127,7 +126,7 @@ private final class Device {
         try deviceA.execute("INSERT INTO notes (llvs_id, title, body) VALUES (?, ?, ?)",
             ["n1/RoundTripNote", "Original", "Original body"])
         let base = try #require(try deviceA.drain())
-        try copyVersions(from: deviceA, to: deviceB, upTo: base)
+        try copyVersions(from: deviceA, to: deviceB)
         deviceB.head = base
         try deviceB.table.apply(try deviceA.store.valueChanges(madeInVersionIdentifiedBy: base), in: deviceB.database)
 
@@ -140,7 +139,7 @@ private final class Device {
         let versionB = try #require(try deviceB.drain())
 
         // B receives A's version and merges.
-        try copyVersions(from: deviceA, to: deviceB, upTo: versionA)
+        try copyVersions(from: deviceA, to: deviceB)
         let merged = try deviceB.store.merge(version: versionB, with: versionA, resolvingWith: arbiter())
 
         let note = try #require(try deviceB.note("n1/RoundTripNote", at: merged.id))
@@ -153,7 +152,7 @@ private final class Device {
         try deviceA.execute("INSERT INTO notes (llvs_id, title, body) VALUES (?, ?, ?)",
             ["n1/RoundTripNote", "Original", "Original body"])
         let base = try #require(try deviceA.drain())
-        try copyVersions(from: deviceA, to: deviceB, upTo: base)
+        try copyVersions(from: deviceA, to: deviceB)
         deviceB.head = base
         try deviceB.table.apply(try deviceA.store.valueChanges(madeInVersionIdentifiedBy: base), in: deviceB.database)
 
@@ -163,7 +162,7 @@ private final class Device {
         try deviceB.execute("UPDATE notes SET body = ? WHERE llvs_id = ?", ["B's body", "n1/RoundTripNote"])
         let versionB = try #require(try deviceB.drain())
 
-        try copyVersions(from: deviceA, to: deviceB, upTo: versionA)
+        try copyVersions(from: deviceA, to: deviceB)
         let merged = try deviceB.store.merge(version: versionB, with: versionA, resolvingWith: arbiter())
 
         let changes = try deviceB.store.valueChanges(updatingFrom: versionB, to: merged.id)
@@ -182,7 +181,7 @@ private final class Device {
         try deviceA.execute("INSERT INTO notes (llvs_id, title, body) VALUES (?, ?, ?)",
             ["n1/RoundTripNote", "Original", "Original body"])
         let base = try #require(try deviceA.drain())
-        try copyVersions(from: deviceA, to: deviceB, upTo: base)
+        try copyVersions(from: deviceA, to: deviceB)
         deviceB.head = base
         try deviceB.table.apply(try deviceA.store.valueChanges(madeInVersionIdentifiedBy: base), in: deviceB.database)
 
@@ -194,7 +193,7 @@ private final class Device {
         try deviceB.execute("UPDATE notes SET body = ? WHERE llvs_id = ?", ["Edited", "n1/RoundTripNote"])
         let edited = try #require(try deviceB.drain())
 
-        try copyVersions(from: deviceA, to: deviceB, upTo: deleted)
+        try copyVersions(from: deviceA, to: deviceB)
         let merged = try deviceB.store.merge(version: edited, with: deleted, resolvingWith: arbiter())
 
         let note = try deviceB.note("n1/RoundTripNote", at: merged.id)
@@ -208,7 +207,7 @@ private final class Device {
         try deviceA.execute("INSERT INTO notes (llvs_id, title, body) VALUES (?, ?, ?)",
             ["n1/RoundTripNote", "Original", "Original body"])
         let base = try #require(try deviceA.drain())
-        try copyVersions(from: deviceA, to: deviceB, upTo: base)
+        try copyVersions(from: deviceA, to: deviceB)
         deviceB.head = base
         try deviceB.table.apply(try deviceA.store.valueChanges(madeInVersionIdentifiedBy: base), in: deviceB.database)
 
@@ -218,7 +217,7 @@ private final class Device {
         try deviceB.execute("UPDATE notes SET title = ? WHERE llvs_id = ?", ["B's title", "n1/RoundTripNote"])
         let versionB = try #require(try deviceB.drain())
 
-        try copyVersions(from: deviceA, to: deviceB, upTo: versionA)
+        try copyVersions(from: deviceA, to: deviceB)
         let merged = try deviceB.store.merge(version: versionB, with: versionA, resolvingWith: arbiter())
 
         let note = try #require(try deviceB.note("n1/RoundTripNote", at: merged.id))

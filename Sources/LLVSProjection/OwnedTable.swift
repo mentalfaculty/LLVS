@@ -106,12 +106,16 @@ public struct OwnedTable: Sendable {
 
                 """
         }
-        statements.append("""
-            CREATE TRIGGER IF NOT EXISTS \(tableName)_capture_update AFTER UPDATE ON \(tableName)
-            WHEN \(notSuppressed)
-            BEGIN
-            \(updateBody)END
-            """)
+        // A table with no columns beyond the identifier has nothing an update could change,
+        // and SQLite rejects a trigger with an empty body.
+        if !schema.columns.isEmpty {
+            statements.append("""
+                CREATE TRIGGER IF NOT EXISTS \(tableName)_capture_update AFTER UPDATE ON \(tableName)
+                WHEN \(notSuppressed)
+                BEGIN
+                \(updateBody)END
+                """)
+        }
 
         statements.append("""
             CREATE TRIGGER IF NOT EXISTS \(tableName)_capture_delete AFTER DELETE ON \(tableName)
@@ -122,6 +126,16 @@ public struct OwnedTable: Sendable {
             """)
 
         return statements
+    }
+
+    /// Whether a value belongs to this table, by the type suffix of its ID.
+    ///
+    /// A change set from `Store.valueChanges(updatingFrom:to:)` carries every type in the
+    /// store, so without this each owned table would write every value, landing rows with
+    /// null columns or — where property names collide — real but wrong data.
+    func owns(_ valueId: Value.ID) -> Bool {
+        guard let slashIndex = valueId.rawValue.lastIndex(of: "/") else { return false }
+        return valueId.rawValue[valueId.rawValue.index(after: slashIndex)...] == typeIdentifier
     }
 
     /// Everything captured so far, oldest first.
@@ -162,7 +176,15 @@ public struct OwnedTable: Sendable {
     /// the block throws, or capture would stay off for good.
     public func whileApplyingRemoteChanges(in database: SQLiteDatabase, _ block: () throws -> Void) throws {
         try database.execute(statement: "UPDATE \(suppressionName) SET flag = 1")
-        defer { try? database.execute(statement: "UPDATE \(suppressionName) SET flag = 0") }
+        defer {
+            do {
+                try database.execute(statement: "UPDATE \(suppressionName) SET flag = 0")
+            } catch {
+                // Leaving the flag set silently discards every later local write, so this is
+                // worth saying out loud even though there is nothing to be done about it here.
+                log.error("Could not lift capture suppression on \(tableName): \(error). Local writes will not be captured until it is cleared.")
+            }
+        }
         try block()
     }
 }
